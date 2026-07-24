@@ -1,0 +1,12 @@
+.env
+.idea/
+.vscode/
+.DS_Store
+web/node_modules/
+internal/webassets/dist/*
+!internal/webassets/dist/index.html
+data/*
+!data/.gitkeep
+*.db
+*.db-shm
+*.db-wal
