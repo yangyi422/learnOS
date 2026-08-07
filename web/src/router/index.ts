@@ -2,6 +2,10 @@ import { createRouter, createWebHistory } from 'vue-router'
 import DashboardView from '@/views/DashboardView.vue'
 import CoursesView from '@/views/CoursesView.vue'
 import SettingsView from '@/views/SettingsView.vue'
+import LearningView from '@/views/LearningView.vue'
+import CourseArchiveView from '@/views/CourseArchiveView.vue'
+import KnowledgeGraphView from '@/views/KnowledgeGraphView.vue'
+import MisconceptionNetworkView from '@/views/MisconceptionNetworkView.vue'
 
 export default createRouter({
   history: createWebHistory(),
@@ -15,6 +19,26 @@ export default createRouter({
       path: '/courses',
       component: CoursesView,
       meta: { title: '课程档案' },
+    },
+    {
+      path: '/courses/:id/learn',
+      component: LearningView,
+      meta: { title: '正在学习' },
+    },
+    {
+      path: '/courses/:id/archive',
+      component: CourseArchiveView,
+      meta: { title: '课程档案' },
+    },
+    {
+      path: '/courses/:id/map',
+      component: KnowledgeGraphView,
+      meta: { title: '知识结构' },
+    },
+    {
+      path: '/courses/:id/misconceptions',
+      component: MisconceptionNetworkView,
+      meta: { title: '误区网络' },
     },
     {
       path: '/settings',

@@ -22,7 +22,7 @@
           <span class="eyebrow">PERSONAL LEARNING AGENT</span>
           <h1>{{ routeTitle }}</h1>
         </div>
-        <el-tag effect="plain" type="success">MVP · Phase 1</el-tag>
+        <el-tag effect="plain" type="success">MVP · Phase 4</el-tag>
       </el-header>
 
       <el-main class="main-content">

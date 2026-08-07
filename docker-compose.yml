@@ -6,6 +6,12 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      AI_PROVIDER: ${AI_PROVIDER:-mock}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-v4-flash}
+      AI_TIMEOUT_SECONDS: ${AI_TIMEOUT_SECONDS:-45}
     ports:
       - "127.0.0.1:${APP_PORT:-8080}:8080"
     volumes:

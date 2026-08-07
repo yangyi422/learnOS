@@ -15,17 +15,28 @@
 
     <el-progress :percentage="course.progress" :stroke-width="8" />
 
-    <el-button type="primary" class="course-card__action" disabled>
-      学习页将在下一阶段实现
-    </el-button>
+    <div class="course-card__actions">
+      <el-button type="primary" @click="goToLearning">继续学习</el-button>
+      <el-button @click="goToMap">查看知识结构</el-button>
+    </div>
   </article>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import type { Course } from '@/types/course'
 
 const props = defineProps<{ course: Course }>()
+const router = useRouter()
+
+function goToLearning() {
+  router.push(`/courses/${props.course.id}/learn`)
+}
+
+function goToMap() {
+  router.push(`/courses/${props.course.id}/map`)
+}
 
 const statusText = computed(() => ({
   initializing: '初始化中',

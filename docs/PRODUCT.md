@@ -27,3 +27,19 @@ LearnOS 将长期记忆、课程状态和流程控制放在程序中，按当前
 5. 保存正确点、缺失点、误区和掌握度；
 6. 更新当前进度；
 7. 下次进入时准确继续。
+
+## Phase 4 知识世界
+
+课程中的 Lesson 同时作为静态知识节点。课程结构可以表达基础、核心、应用和扩展，以及前置、深化、应用和关联关系。Phase 4 展示人工定义的知识世界结构。
+
+## Phase 5 个人认知状态
+
+个人认知状态独立于 Lesson 的静态角色、课程状态和 MasteryRecord。系统通过本次结构化评价中的 `demonstrated_level`、`user_understanding_summary` 和 `cognitive_evidence`，维护 `unseen` 到 `transfer` 的最高已验证层级、当前稳定状态和可追溯演化事件。没有真实证据的旧学习记录不会自动回填为高级认知状态。
+
+本阶段提供认知状态与详情 API 和学习页展示，但不实现自动解锁、路线推荐、迁移测试生成器、误区网络或 Agent 导航。
+
+## Phase 6 迁移与误区修正
+
+Phase 6 将“理解”与“能迁移”分开验证。只有独立的新场景 Transfer Challenge 返回 `correct` / `mostly_correct`、`demonstrated_level=transfer`、transfer 支持证据且没有矛盾时，才会把 CognitiveState 提升到 transfer。迁移失败本身不会降低已有层级或自动设置待复习；明确矛盾或 active misconception 再次出现才会触发 `needs_review`。
+
+Misconception 保留 active / resolved 生命周期，通过 `MisconceptionEvent` 记录 observed、resolved、reopened。普通 Lesson 正确不会直接解决误区，只有针对目标误区的 Recheck 在新任务中明确修正且无矛盾才允许 resolved。固定 reasoning pattern 以最多两个 taxonomy 关联到具体误区，不使用 Embedding 或聚类。

@@ -5,10 +5,12 @@
         <span class="eyebrow">CURRENT FOCUS</span>
         <h2>先完成一条真实学习闭环</h2>
         <p>
-          当前版本负责课程持久化与基础展示。下一阶段将实现“读取当前问题 → 提交回答 → DeepSeek 评估 → 更新课程状态”。
+          从当前知识点开始，提交你的理解，查看结构化学习反馈并留下可追溯的学习记录。
         </p>
       </div>
-      <el-button type="primary" size="large" disabled>继续学习</el-button>
+      <el-button type="primary" size="large" :disabled="loading || courses.length === 0" @click="continueLearning">
+        继续学习
+      </el-button>
     </div>
 
     <div class="section-heading">
@@ -28,6 +30,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import CourseCard from '@/components/CourseCard.vue'
 import { listCourses } from '@/api/courses'
 import type { Course } from '@/types/course'
@@ -35,6 +38,14 @@ import type { Course } from '@/types/course'
 const courses = ref<Course[]>([])
 const loading = ref(false)
 const error = ref('')
+const router = useRouter()
+
+function continueLearning() {
+  const course = courses.value[0]
+  if (course) {
+    router.push(`/courses/${course.id}/learn`)
+  }
+}
 
 async function loadCourses() {
   loading.value = true

@@ -28,6 +28,17 @@ func NewRouter(cfg config.Config, handler *Handler, webFS fs.FS) *gin.Engine {
 	api := router.Group("/api/v1")
 	{
 		api.GET("/courses", handler.ListCourses)
+		api.GET("/courses/:id/current-lesson", handler.GetCurrentLesson)
+		api.POST("/courses/:id/answers", handler.SubmitAnswer)
+		api.GET("/courses/:id/learning-turns", handler.ListLearningTurns)
+		api.GET("/courses/:id/knowledge-graph", handler.GetKnowledgeGraph)
+		api.GET("/courses/:id/lessons/:lessonId/relations", handler.GetLessonRelations)
+		api.GET("/courses/:id/cognitive-states", handler.GetCourseCognitiveStates)
+		api.GET("/courses/:id/lessons/:lessonId/cognitive-state", handler.GetLessonCognitiveState)
+		api.POST("/courses/:id/lessons/:lessonId/challenges", handler.CreateChallenge)
+		api.POST("/courses/:id/challenges/:challengeId/answers", handler.AnswerChallenge)
+		api.GET("/courses/:id/misconception-network", handler.GetMisconceptionNetwork)
+		api.GET("/courses/:id/lessons/:lessonId/misconceptions", handler.ListLessonMisconceptions)
 	}
 
 	fileServer := http.FileServer(http.FS(webFS))

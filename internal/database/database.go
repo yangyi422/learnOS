@@ -31,7 +31,23 @@ func Open(cfg config.Config) (*gorm.DB, error) {
 		return nil, fmt.Errorf("open sqlite database: %w", err)
 	}
 
-	if err := db.AutoMigrate(&model.Course{}); err != nil {
+	if err := db.AutoMigrate(
+		&model.Course{},
+		&model.CourseUnit{},
+		&model.Lesson{},
+		&model.LessonRelation{},
+		&model.LearningTurn{},
+		&model.MasteryRecord{},
+		&model.Misconception{},
+		&model.AIEvaluationRun{},
+		&model.CognitiveState{},
+		&model.CognitiveEvidence{},
+		&model.CognitiveStateEvent{},
+		&model.AssessmentChallenge{},
+		&model.ChallengeAttempt{},
+		&model.MisconceptionEvent{},
+		&model.MisconceptionPatternLink{},
+	); err != nil {
 		return nil, fmt.Errorf("migrate database: %w", err)
 	}
 
