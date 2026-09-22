@@ -97,7 +97,7 @@ jobs:
           set -euo pipefail
           deploy_path="$1"
           cd "$deploy_path"
-          test "$(git branch --show-current)" = "main"
+          test "$(git symbolic-ref --short HEAD)" = "main"
           git fetch origin main
           target_commit="$(git rev-parse origin/main)"
           git merge --ff-only origin/main
