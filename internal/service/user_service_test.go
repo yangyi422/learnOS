@@ -19,7 +19,7 @@ func newUserServiceTest(t *testing.T) *UserService {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.User{}, &model.Session{}, &model.Course{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.Session{}, &model.Course{}, &model.DomainInitializationDraft{}); err != nil {
 		t.Fatal(err)
 	}
 	return NewUserService(repository.NewUserRepository(db))
