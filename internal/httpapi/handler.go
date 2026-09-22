@@ -127,6 +127,10 @@ func (h *Handler) CurrentUser(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
 		return
 	}
+	if principal.UserID == 0 && principal.Username == "development" {
+		c.JSON(http.StatusOK, gin.H{"data": service.UserView{Username: "development", DisplayName: "开发用户", Role: model.UserRoleAdmin, Status: model.UserStatusActive}})
+		return
+	}
 	user, err := h.users.Get(c.Request.Context(), principal.UserID)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})

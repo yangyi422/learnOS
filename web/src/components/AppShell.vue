@@ -15,7 +15,10 @@
       </RouterLink>
       </nav>
 
-      <div class="sidebar-footer">v0.1</div>
+      <div class="sidebar-footer">
+        <span>v0.1</span>
+        <el-button text size="small" @click="signOut">退出登录</el-button>
+      </div>
     </el-aside>
 
     <el-container class="app-content">
@@ -54,22 +57,27 @@
           {{ item.label }}
         </RouterLink>
       </nav>
+      <el-button class="mobile-logout" text @click="signOut">退出登录</el-button>
     </el-drawer>
   </el-container>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { currentUser, logout, type User } from '@/api/auth'
 
 const route = useRoute()
-const navigation = [
+const router = useRouter()
+const current = ref<User | null>(null)
+const baseNavigation = [
   { to: '/', label: '学习首页' },
   { to: '/courses', label: '课程档案' },
   { to: '/exploration/questions', label: '探索空间' },
   { to: '/settings', label: '系统设置' },
   { to: '/users', label: '用户管理' },
 ]
+const navigation = computed(() => current.value?.role === 'admin' ? baseNavigation : baseNavigation.filter(item => item.to !== '/users'))
 const drawerOpen = ref(false)
 const mobileMenuButton = ref<HTMLElement | { $el: HTMLElement } | null>(null)
 let focusAfterClose: 'button' | 'heading' = 'button'
@@ -85,6 +93,14 @@ function openDrawer() {
   focusAfterClose = 'button'
   drawerOpen.value = true
 }
+
+async function signOut() {
+  try { await logout() } finally { current.value = null; await router.replace('/login') }
+}
+
+onMounted(async () => {
+  try { current.value = await currentUser() } catch { current.value = null }
+})
 
 function focusDrawer() {
   void nextTick(() => document.querySelector<HTMLElement>('.mobile-nav-drawer .nav-link')?.focus())

@@ -31,7 +31,9 @@ func NewRouter(cfg config.Config, handler *Handler, webFS fs.FS, userServices ..
 	}
 
 	api := router.Group("/api/v1")
-	if !cfg.Development() {
+	if cfg.Development() {
+		api.Use(middleware.DevelopmentPrincipal())
+	} else {
 		if userService != nil {
 			api.Use(middleware.SessionAuth(userService.AuthenticateSession))
 		} else {

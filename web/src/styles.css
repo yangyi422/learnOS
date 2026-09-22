@@ -146,6 +146,9 @@ p {
   font-size: 12px;
 }
 
+.sidebar-footer .el-button { display: block; width: 100%; margin-top: 8px; padding: 4px 0; color: #64748b; text-align: left; }
+.mobile-logout { width: 100%; margin-top: 20px; color: #64748b; text-align: left; }
+
 .mobile-topbar {
   display: none;
   height: 52px;

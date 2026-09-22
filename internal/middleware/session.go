@@ -45,3 +45,10 @@ func RequireAdmin() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+func DevelopmentPrincipal() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Request = c.Request.WithContext(auth.WithPrincipal(c.Request.Context(), auth.Principal{Username: "development", Role: "admin"}))
+		c.Next()
+	}
+}
