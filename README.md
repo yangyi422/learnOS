@@ -1,6 +1,6 @@
 # LearnOS Starter
 
-LearnOS 是一个单用户、自托管的个人 AI 学习系统。本仓库是第一阶段可运行骨架。
+LearnOS 是一个自托管的个人 AI 学习系统，支持管理员创建多个相互隔离的学习用户。本仓库是持续演进中的可运行版本。
 
 ## 当前能力
 
@@ -19,7 +19,7 @@ LearnOS 是一个单用户、自托管的个人 AI 学习系统。本仓库是�
 - Phase 10 运行诊断、SQLite 备份/恢复、JSON/Markdown 导出、数据库一致性检查与优雅停机
 - Progressive Empty World Bootstrap：从空世界分三阶段建立领域骨架、起步蓝图和首批 Lesson
 - 认知层级、掌握证据和认知演化时间线持久化
-- 单用户 Basic Auth
+- 管理员创建用户、会话登录和课程级数据隔离
 - Docker Compose 与可选 Caddy HTTPS
 
 ## 环境要求
@@ -46,7 +46,7 @@ npm run dev
 
 访问：`http://127.0.0.1:5173`
 
-开发环境的 Vite 与 Go 服务分别只监听 `127.0.0.1:5173` 和 `127.0.0.1:8080`，并跳过 Basic Auth，便于本机预览与自动化检查。配置为 `APP_ENV=development` 时，`APP_ADDR` 若不是 `127.0.0.1` 会拒绝启动。生产及其他环境仍启用已配置的 Basic Auth。
+开发环境的 Vite 与 Go 服务分别只监听 `127.0.0.1:5173` 和 `127.0.0.1:8080`，并跳过登录认证，便于本机预览与自动化检查。配置为 `APP_ENV=development` 时，`APP_ADDR` 若不是 `127.0.0.1` 会拒绝启动。生产及其他环境使用数据库会话认证。
 
 ## Docker 运行
 
@@ -98,8 +98,9 @@ Caddy 将反向代理到应用并自动处理域名证书。
 
 ```bash
 curl http://127.0.0.1:8888/health
-curl -u admin:change-me http://127.0.0.1:8888/api/v1/courses
-curl -u admin:change-me http://127.0.0.1:8888/api/v1/courses/1/current-lesson
+curl -c cookies.txt -H 'Content-Type: application/json' -d '{"username":"admin","password":"change-me"}' http://127.0.0.1:8888/api/v1/auth/login
+curl -b cookies.txt http://127.0.0.1:8888/api/v1/courses
+curl -b cookies.txt http://127.0.0.1:8888/api/v1/auth/me
 ```
 
 ## Phase 3 AI 配置

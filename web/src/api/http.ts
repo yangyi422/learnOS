@@ -37,6 +37,9 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
+    if (response.status === 401 && window.location.pathname !== '/login') {
+      window.location.assign('/login')
+    }
     let payload: unknown = null
     try { payload = await response.json() } catch { /* keep status fallback */ }
     const rawError = (payload as { error?: unknown } | null)?.error

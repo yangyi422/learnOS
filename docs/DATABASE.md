@@ -1,10 +1,17 @@
 # 数据库演进草案
 
+## 用户与数据归属
+
+`users` 保存登录账号、角色和状态，`sessions` 只保存会话令牌哈希。`courses.user_id` 是个人知识世界的归属边界，课程下的学习和认知数据通过 `course_id` 隔离。首个管理员由环境变量引导创建，迁移时没有归属人的旧课程会自动归属该管理员；管理员创建的新用户默认没有课程。
+
+Schema 15 增加 `users`、`sessions`，并为 `courses` 和领域初始化草稿增加用户归属。启动时若配置了 `APP_USERNAME` / `APP_PASSWORD_HASH`，会幂等创建首个管理员并把没有归属人的旧课程迁移给该管理员；密码只保存 bcrypt 哈希，会话只保存令牌哈希。
+
 ## 当前已实现
 
 ### courses
 
 - id
+- user_id
 - name
 - description
 - goal

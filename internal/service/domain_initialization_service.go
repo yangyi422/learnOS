@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"learnos/internal/ai"
+	"learnos/internal/auth"
 	"learnos/internal/model"
 	"learnos/internal/repository"
 
@@ -223,6 +224,9 @@ func (s *DomainInitializationService) Apply(ctx context.Context, id uint) (*Doma
 			return ErrDomainDraftInvalid
 		}
 		course := &model.Course{Name: current.DomainName, Description: skeleton.Course.Description, Goal: current.LearningGoal, Status: model.CourseStatusInitializing, Progress: 0}
+		if principal, ok := auth.PrincipalFromContext(ctx); ok {
+			course.UserID = principal.UserID
+		}
 		if err := tx.Create(course).Error; err != nil {
 			return fmt.Errorf("create initialized course: %w", err)
 		}

@@ -12,7 +12,7 @@ BACKUP_HOST_DIR=./backups
 
 开发环境可使用 `DATA_HOST_DIR=./data`，不要把开发库目录和生产目录共用。应用启动时会执行可重复的 GORM AutoMigrate；检测到旧 schema 时先创建一次 SQLite 备份，再迁移并写入 `system_metadata.schema_version`。
 
-本地开发模式固定使用回环地址：Go API 为 `127.0.0.1:8080`，Vite 开发服务器为 `127.0.0.1:5173`，Vite Preview 为 `127.0.0.1:4173`。`APP_ENV=development` 会跳过 Basic Auth，且拒绝绑定 `0.0.0.0` 或其他非 `127.0.0.1` 地址；production 及其他环境继续使用 Basic Auth。
+本地开发模式固定使用回环地址：Go API 为 `127.0.0.1:8080`，Vite 开发服务器为 `127.0.0.1:5173`，Vite Preview 为 `127.0.0.1:4173`。`APP_ENV=development` 会跳过登录认证，且拒绝绑定 `0.0.0.0` 或其他非 `127.0.0.1` 地址；production 及其他环境使用数据库会话认证。
 
 生产 Docker 部署使用端口映射 `宿主机 8888 → 容器 8080`：直接通过服务器 IP 访问时将 `APP_BIND_HOST` 配为 `0.0.0.0`，仅经 Caddy 访问时可配为 `127.0.0.1`；容器内 Docker healthcheck 和 Caddy 到应用的连接使用 `app:8080`。不要把容器内健康检查端口改为宿主机端口。
 
@@ -33,10 +33,11 @@ curl --fail http://127.0.0.1:8888/health
 应用设置页可以创建备份、下载 JSON/Markdown 导出并运行一致性检查。API 为：
 
 ```bash
-curl -u "$APP_USERNAME:$PASSWORD" -X POST http://127.0.0.1:8888/api/v1/system/backups
-curl -u "$APP_USERNAME:$PASSWORD" http://127.0.0.1:8888/api/v1/system/backups
-curl -u "$APP_USERNAME:$PASSWORD" -X POST 'http://127.0.0.1:8888/api/v1/system/export?format=json' -o learnos-export.json
-curl -u "$APP_USERNAME:$PASSWORD" -X POST 'http://127.0.0.1:8888/api/v1/system/export?format=markdown' -o learnos-export.md
+curl -c cookies.txt -H 'Content-Type: application/json' -d '{"username":"admin","password":"change-me"}' http://127.0.0.1:8888/api/v1/auth/login
+curl -b cookies.txt -X POST http://127.0.0.1:8888/api/v1/system/backups
+curl -b cookies.txt http://127.0.0.1:8888/api/v1/system/backups
+curl -b cookies.txt -X POST 'http://127.0.0.1:8888/api/v1/system/export?format=json' -o learnos-export.json
+curl -b cookies.txt -X POST 'http://127.0.0.1:8888/api/v1/system/export?format=markdown' -o learnos-export.md
 ```
 
 设置页还可以选择服务端备份并恢复。该操作要求输入 `恢复 <备份文件名>`，确认后固定所选快照、优雅停止应用，并依赖 Docker `restart: unless-stopped` 或等价进程管理器重新启动。启动阶段会先备份当前数据库，再恢复固定快照；页面和接口不会接受任意文件路径。
@@ -59,8 +60,8 @@ curl --fail http://127.0.0.1:8888/health
 设置页或以下接口可查看：
 
 ```bash
-curl -u "$APP_USERNAME:$PASSWORD" http://127.0.0.1:8888/api/v1/system/diagnostics
-curl -u "$APP_USERNAME:$PASSWORD" http://127.0.0.1:8888/api/v1/system/consistency
+curl -b cookies.txt http://127.0.0.1:8888/api/v1/system/diagnostics
+curl -b cookies.txt http://127.0.0.1:8888/api/v1/system/consistency
 ```
 
 `/health` 只执行轻量数据库连接检查，适合 Docker healthcheck；完整 SQLite `integrity_check` 在 diagnostics 中执行，避免每个探活请求扫描数据库。一致性检查是只读的，会检查 Course/Unit/Lesson 归属、关系端点与 DAG、节点类型、掌握分数/归属、认知证据与回答范围、误区/挑战、探索和来源关联；不会修复、删除或重写学习数据。

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"learnos/internal/auth"
 	"learnos/internal/model"
 
 	"gorm.io/gorm"
@@ -31,17 +32,32 @@ func NewCourseRepository(db *gorm.DB) *CourseRepository {
 	return &CourseRepository{db: db}
 }
 
+func courseScope(ctx context.Context, db *gorm.DB) *gorm.DB {
+	if principal, ok := auth.PrincipalFromContext(ctx); ok {
+		return db.Where("user_id = ?", principal.UserID)
+	}
+	return db
+}
+
 func (r *CourseRepository) List(ctx context.Context) ([]model.Course, error) {
 	var courses []model.Course
-	if err := r.db.WithContext(ctx).Order("updated_at DESC").Find(&courses).Error; err != nil {
+	if err := courseScope(ctx, r.db.WithContext(ctx)).Order("updated_at DESC").Find(&courses).Error; err != nil {
 		return nil, fmt.Errorf("list courses: %w", err)
+	}
+	return courses, nil
+}
+
+func (r *CourseRepository) ListForUser(ctx context.Context, userID uint) ([]model.Course, error) {
+	var courses []model.Course
+	if err := r.db.WithContext(ctx).Where("user_id = ?", userID).Order("updated_at DESC").Find(&courses).Error; err != nil {
+		return nil, fmt.Errorf("list user courses: %w", err)
 	}
 	return courses, nil
 }
 
 func (r *CourseRepository) Count(ctx context.Context) (int64, error) {
 	var count int64
-	if err := r.db.WithContext(ctx).Model(&model.Course{}).Count(&count).Error; err != nil {
+	if err := courseScope(ctx, r.db.WithContext(ctx).Model(&model.Course{})).Count(&count).Error; err != nil {
 		return 0, fmt.Errorf("count courses: %w", err)
 	}
 	return count, nil
@@ -118,7 +134,7 @@ func (r *CourseRepository) ReconcileCourseStatuses(ctx context.Context) (int64, 
 
 func (r *CourseRepository) FindByID(ctx context.Context, id uint) (*model.Course, error) {
 	var course model.Course
-	if err := r.db.WithContext(ctx).First(&course, id).Error; err != nil {
+	if err := courseScope(ctx, r.db.WithContext(ctx)).First(&course, id).Error; err != nil {
 		return nil, fmt.Errorf("find course by id: %w", err)
 	}
 	return &course, nil
@@ -127,13 +143,16 @@ func (r *CourseRepository) FindByID(ctx context.Context, id uint) (*model.Course
 func (r *CourseRepository) FindByName(ctx context.Context, name string) (*model.Course, error) {
 	var course model.Course
 	name = strings.TrimSpace(name)
-	if err := r.db.WithContext(ctx).Where("LOWER(TRIM(name)) = LOWER(?)", name).First(&course).Error; err != nil {
+	if err := courseScope(ctx, r.db.WithContext(ctx)).Where("LOWER(TRIM(name)) = LOWER(?)", name).First(&course).Error; err != nil {
 		return nil, fmt.Errorf("find course by name: %w", err)
 	}
 	return &course, nil
 }
 
 func (r *CourseRepository) Create(ctx context.Context, course *model.Course) error {
+	if principal, ok := auth.PrincipalFromContext(ctx); ok && course.UserID == 0 {
+		course.UserID = principal.UserID
+	}
 	if err := r.db.WithContext(ctx).Create(course).Error; err != nil {
 		return fmt.Errorf("create course: %w", err)
 	}
@@ -148,7 +167,11 @@ func (r *CourseRepository) SetCurrentLesson(ctx context.Context, courseID, lesso
 		if err := tx.Where("id = ? AND course_id = ?", lessonID, courseID).First(&lesson).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&model.Course{}).Where("id = ?", courseID).Updates(map[string]interface{}{
+		courseQuery := tx.Model(&model.Course{}).Where("id = ?", courseID)
+		if principal, ok := auth.PrincipalFromContext(ctx); ok {
+			courseQuery = courseQuery.Where("user_id = ?", principal.UserID)
+		}
+		if err := courseQuery.Updates(map[string]interface{}{
 			"current_unit":      "",
 			"current_unit_id":   lesson.UnitID,
 			"current_lesson_id": lesson.ID,
@@ -174,7 +197,11 @@ func (r *CourseRepository) SetCurrentLesson(ctx context.Context, courseID, lesso
 func (r *CourseRepository) Delete(ctx context.Context, courseID uint) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var course model.Course
-		if err := tx.First(&course, courseID).Error; err != nil {
+		courseQuery := tx
+		if principal, ok := auth.PrincipalFromContext(ctx); ok {
+			courseQuery = courseQuery.Where("user_id = ?", principal.UserID)
+		}
+		if err := courseQuery.First(&course, courseID).Error; err != nil {
 			return err
 		}
 

@@ -8,10 +8,13 @@ import KnowledgeGraphView from '@/views/KnowledgeGraphView.vue'
 import MisconceptionNetworkView from '@/views/MisconceptionNetworkView.vue'
 import ExplorationView from '@/views/ExplorationView.vue'
 import DomainInitializationView from '@/views/DomainInitializationView.vue'
+import LoginView from '@/views/LoginView.vue'
+import UsersView from '@/views/UsersView.vue'
 
 export default createRouter({
   history: createWebHistory(),
   routes: [
+    { path: '/login', component: LoginView, meta: { title: '登录' } },
     {
       path: '/',
       component: DashboardView,
@@ -48,6 +51,7 @@ export default createRouter({
       component: SettingsView,
       meta: { title: '系统设置' },
     },
+    { path: '/users', component: UsersView, meta: { title: '用户管理' } },
     {
       path: '/exploration/questions',
       component: ExplorationView,

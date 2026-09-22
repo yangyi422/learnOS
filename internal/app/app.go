@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"learnos/internal/ai"
+	"learnos/internal/auth"
 	"learnos/internal/config"
 	"learnos/internal/database"
 	"learnos/internal/httpapi"
@@ -39,6 +40,17 @@ func New(cfg config.Config) (*App, error) {
 	db, err := database.Open(cfg)
 	if err != nil {
 		return nil, err
+	}
+	userRepository := repository.NewUserRepository(db)
+	userService := service.NewUserService(userRepository)
+	bootstrapContext := context.Background()
+	if cfg.Username != "" && cfg.PasswordHash != "" {
+		bootstrapUser, err := userService.EnsureBootstrap(context.Background(), cfg.Username, cfg.PasswordHash)
+		if err != nil {
+			_ = closeDatabase(db)
+			return nil, fmt.Errorf("initialize bootstrap user: %w", err)
+		}
+		bootstrapContext = auth.WithPrincipal(bootstrapContext, auth.Principal{UserID: bootstrapUser.ID, Username: bootstrapUser.Username, Role: string(bootstrapUser.Role)})
 	}
 
 	courseRepository := repository.NewCourseRepository(db)
@@ -97,7 +109,7 @@ func New(cfg config.Config) (*App, error) {
 	exportService := service.NewExportService(db)
 	consistencyService := service.NewConsistencyService(db)
 	if cfg.DemoSeedEnabled {
-		if err := courseService.SeedStarterCourse(context.Background()); err != nil {
+		if err := courseService.SeedStarterCourse(bootstrapContext); err != nil {
 			_ = closeDatabase(db)
 			return nil, fmt.Errorf("seed demo world: %w", err)
 		}
@@ -109,8 +121,8 @@ func New(cfg config.Config) (*App, error) {
 		return nil, fmt.Errorf("load embedded web assets: %w", err)
 	}
 
-	handler := httpapi.NewHandler(courseService, knowledgeGraphService, cognitiveStateService, challengeService, misconceptionService, explorationService, curriculumService, groundingService, backupService, databaseHealthService, exportService, consistencyService, domainInitializationService, aiConfigurationService, nextLessonService)
-	router := httpapi.NewRouter(cfg, handler, dist)
+	handler := httpapi.NewHandler(courseService, knowledgeGraphService, cognitiveStateService, challengeService, misconceptionService, explorationService, curriculumService, groundingService, backupService, databaseHealthService, exportService, consistencyService, domainInitializationService, aiConfigurationService, nextLessonService, userService)
+	router := httpapi.NewRouter(cfg, handler, dist, userService)
 
 	return &App{
 		cfg:              cfg,

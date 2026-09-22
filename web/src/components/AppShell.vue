@@ -11,8 +11,8 @@
 
       <nav class="nav-menu" aria-label="主要导航">
         <RouterLink v-for="item in navigation" :key="item.to" :to="item.to" class="nav-link" :aria-current="activePath === item.to ? 'page' : undefined">
-          {{ item.label }}
-        </RouterLink>
+        {{ item.label }}
+      </RouterLink>
       </nav>
 
       <div class="sidebar-footer">v0.1</div>
@@ -68,6 +68,7 @@ const navigation = [
   { to: '/courses', label: '课程档案' },
   { to: '/exploration/questions', label: '探索空间' },
   { to: '/settings', label: '系统设置' },
+  { to: '/users', label: '用户管理' },
 ]
 const drawerOpen = ref(false)
 const mobileMenuButton = ref<HTMLElement | { $el: HTMLElement } | null>(null)
@@ -76,6 +77,7 @@ const activePath = computed(() => {
   if (route.path.startsWith('/courses')) return '/courses'
   if (route.path.startsWith('/exploration')) return '/exploration/questions'
   if (route.path.startsWith('/settings')) return '/settings'
+  if (route.path.startsWith('/users')) return '/users'
   return '/'
 })
 

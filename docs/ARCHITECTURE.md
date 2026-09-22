@@ -10,7 +10,9 @@ Browser
 Vue 3 SPA
   ↓ /api/v1
   Go + Gin
-  ├── Course Service
+  ├── User Service
+  │   └── Session authentication / administrator user management
+  ├── Course Service (user-scoped)
   ├── Learning Workflow Service
   │   └── AI Provider Interface
   │       ├── MockProvider
@@ -49,7 +51,8 @@ SQLite
 - 当前知识点、回答提交和最近学习记录 API；
 - Vue 学习页与结构化 AI / Mock 反馈；
 - Vue 首页读取并展示课程；
-- production 及非 development 环境使用单用户 Basic Auth；development 仅监听 `127.0.0.1` 并跳过认证；
+- production 及非 development 环境使用数据库用户会话认证；首个管理员由 `APP_USERNAME` / `APP_PASSWORD_HASH` 引导创建；管理员手动创建普通用户；development 仅监听 `127.0.0.1` 并跳过认证；
+- Course 保存 `user_id` 作为个人知识世界的边界；课程下的 Lesson、学习记录、掌握度、认知状态、挑战和探索记录通过 `course_id` 继承隔离；旧课程首次迁移时归属引导管理员；
 - Docker 与 Caddy 部署基础。
 
 Phase 4 增加静态 Curriculum Graph：Lesson 直接作为知识节点，LessonRelation 表达 prerequisite、extends、application 和 related。Knowledge Graph Service 负责 DTO、关系约束、prerequisite DAG 校验、拓扑排序和图统计；它不读取掌握度来解锁节点，不调用 AI，也不自动切换当前 Lesson。

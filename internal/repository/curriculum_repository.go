@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"learnos/internal/auth"
+
 	"learnos/internal/model"
 
 	"gorm.io/gorm"
@@ -139,7 +141,11 @@ func (r *CurriculumRepository) UpdateBlueprintLessonMapping(ctx context.Context,
 
 func (r *CurriculumRepository) FindCourse(ctx context.Context, courseID uint) (*model.Course, error) {
 	var course model.Course
-	if err := r.db.WithContext(ctx).First(&course, courseID).Error; err != nil {
+	query := r.db.WithContext(ctx)
+	if principal, ok := auth.PrincipalFromContext(ctx); ok {
+		query = query.Where("user_id = ?", principal.UserID)
+	}
+	if err := query.First(&course, courseID).Error; err != nil {
 		return nil, fmt.Errorf("find course for curriculum: %w", err)
 	}
 	return &course, nil

@@ -7,11 +7,12 @@ import (
 
 	"learnos/internal/config"
 	"learnos/internal/middleware"
+	"learnos/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-func NewRouter(cfg config.Config, handler *Handler, webFS fs.FS) *gin.Engine {
+func NewRouter(cfg config.Config, handler *Handler, webFS fs.FS, userServices ...*service.UserService) *gin.Engine {
 	if cfg.Production() {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -22,15 +23,28 @@ func NewRouter(cfg config.Config, handler *Handler, webFS fs.FS) *gin.Engine {
 	// Keep health checks public so Docker and reverse proxies can probe the app.
 	router.GET("/healthz", handler.Health)
 	router.GET("/health", handler.Health)
+	router.POST("/api/v1/auth/login", handler.Login)
 
-	// Local development is loopback-only and intentionally skips browser auth.
-	// Every other environment keeps the single-user authentication middleware.
-	if !cfg.Development() {
-		router.Use(middleware.BasicAuth(cfg.Username, cfg.PasswordHash))
+	var userService *service.UserService
+	if len(userServices) > 0 {
+		userService = userServices[0]
 	}
+	if !cfg.Development() {
+		if userService != nil {
+			router.Use(middleware.SessionAuth(userService.AuthenticateSession))
+		} else {
+			router.Use(middleware.BasicAuth(cfg.Username, cfg.PasswordHash))
+		}
+	}
+	router.POST("/api/v1/auth/logout", handler.Logout)
+	router.GET("/api/v1/auth/me", handler.CurrentUser)
 
 	api := router.Group("/api/v1")
 	{
+		api.GET("/users", middleware.RequireAdmin(), handler.ListUsers)
+		api.POST("/users", middleware.RequireAdmin(), handler.CreateUser)
+		api.PATCH("/users/:id/status", middleware.RequireAdmin(), handler.SetUserStatus)
+		api.GET("/users/:id/courses", middleware.RequireAdmin(), handler.ListUserCourses)
 		api.GET("/courses", handler.ListCourses)
 		api.DELETE("/courses/:id", handler.DeleteCourse)
 		api.POST("/domains/drafts", handler.CreateDomainDraft)
@@ -95,15 +109,16 @@ func NewRouter(cfg config.Config, handler *Handler, webFS fs.FS) *gin.Engine {
 		api.POST("/sources/:sourceId/credibility/:assessmentId/review", handler.ReviewSourceCredibility)
 		api.GET("/grounding/targets/:targetType/:targetId", handler.GetGroundingTarget)
 		api.GET("/courses/:id/grounding/coverage", handler.GetGroundingCoverage)
-		api.POST("/system/backups", handler.CreateBackup)
-		api.GET("/system/backups", handler.ListBackups)
-		api.POST("/system/backups/restore", handler.RequestBackupRestore)
-		api.POST("/system/export", handler.ExportData)
-		api.GET("/system/diagnostics", handler.GetDiagnostics)
-		api.GET("/system/consistency", handler.GetConsistency)
-		api.GET("/system/ai-config", handler.GetAIConfiguration)
-		api.PATCH("/system/ai-config", handler.UpdateAIConfiguration)
-		api.POST("/system/ai-config/test", handler.TestAIConnection)
+		system := api.Group("/system", middleware.RequireAdmin())
+		system.POST("/backups", handler.CreateBackup)
+		system.GET("/backups", handler.ListBackups)
+		system.POST("/backups/restore", handler.RequestBackupRestore)
+		system.POST("/export", handler.ExportData)
+		system.GET("/diagnostics", handler.GetDiagnostics)
+		system.GET("/consistency", handler.GetConsistency)
+		system.GET("/ai-config", handler.GetAIConfiguration)
+		system.PATCH("/ai-config", handler.UpdateAIConfiguration)
+		system.POST("/ai-config/test", handler.TestAIConnection)
 	}
 
 	fileServer := http.FileServer(http.FS(webFS))

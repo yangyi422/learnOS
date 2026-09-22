@@ -9,6 +9,8 @@ import (
 	"strconv"
 
 	"learnos/internal/ai"
+	"learnos/internal/auth"
+	"learnos/internal/middleware"
 	"learnos/internal/model"
 	"learnos/internal/service"
 
@@ -31,6 +33,7 @@ type Handler struct {
 	domainInit     *service.DomainInitializationService
 	aiConfig       *service.AIConfigurationService
 	nextLesson     *service.NextLessonService
+	users          *service.UserService
 }
 
 func NewHandler(courses *service.CourseService, graph *service.KnowledgeGraphService, optional ...interface{}) *Handler {
@@ -47,6 +50,7 @@ func NewHandler(courses *service.CourseService, graph *service.KnowledgeGraphSer
 	var domainInitService *service.DomainInitializationService
 	var aiConfigurationService *service.AIConfigurationService
 	var nextLessonService *service.NextLessonService
+	var userService *service.UserService
 	for _, item := range optional {
 		switch value := item.(type) {
 		case *service.CognitiveStateService:
@@ -75,9 +79,112 @@ func NewHandler(courses *service.CourseService, graph *service.KnowledgeGraphSer
 			aiConfigurationService = value
 		case *service.NextLessonService:
 			nextLessonService = value
+		case *service.UserService:
+			userService = value
 		}
 	}
-	return &Handler{courses: courses, graph: graph, cognitive: cognitiveService, challenges: challengeService, misconceptions: misconceptionService, exploration: explorationService, curriculum: curriculumService, grounding: groundingService, backups: backupService, databaseHealth: databaseHealthService, export: exportService, consistency: consistencyService, domainInit: domainInitService, aiConfig: aiConfigurationService, nextLesson: nextLessonService}
+	return &Handler{courses: courses, graph: graph, cognitive: cognitiveService, challenges: challengeService, misconceptions: misconceptionService, exploration: explorationService, curriculum: curriculumService, grounding: groundingService, backups: backupService, databaseHealth: databaseHealthService, export: exportService, consistency: consistencyService, domainInit: domainInitService, aiConfig: aiConfigurationService, nextLesson: nextLessonService, users: userService}
+}
+
+func (h *Handler) Login(c *gin.Context) {
+	if h.users == nil {
+		c.JSON(http.StatusNotImplemented, gin.H{"error": "user system is not configured"})
+		return
+	}
+	var request struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid login request"})
+		return
+	}
+	token, user, err := h.users.Login(c.Request.Context(), request.Username, request.Password)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid username or password"})
+		return
+	}
+	http.SetCookie(c.Writer, &http.Cookie{Name: middleware.SessionCookieName, Value: token, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: c.Request.TLS != nil, MaxAge: 7 * 24 * 60 * 60})
+	c.JSON(http.StatusOK, gin.H{"data": user})
+}
+
+func (h *Handler) Logout(c *gin.Context) {
+	if token, err := c.Cookie(middleware.SessionCookieName); err == nil && h.users != nil {
+		_ = h.users.Logout(c.Request.Context(), token)
+	}
+	http.SetCookie(c.Writer, &http.Cookie{Name: middleware.SessionCookieName, Value: "", Path: "/", HttpOnly: true, MaxAge: -1, SameSite: http.SameSiteLaxMode})
+	c.Status(http.StatusNoContent)
+}
+
+func (h *Handler) CurrentUser(c *gin.Context) {
+	principal, ok := auth.PrincipalFromContext(c.Request.Context())
+	if !ok || h.users == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return
+	}
+	user, err := h.users.Get(c.Request.Context(), principal.UserID)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": user})
+}
+
+func (h *Handler) ListUsers(c *gin.Context) {
+	users, err := h.users.List(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list users"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": users})
+}
+
+func (h *Handler) CreateUser(c *gin.Context) {
+	var request service.CreateUserRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user request"})
+		return
+	}
+	user, err := h.users.Create(c.Request.Context(), request)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"data": user})
+}
+
+func (h *Handler) SetUserStatus(c *gin.Context) {
+	id, ok := parseID(c.Param("id"))
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
+	var request struct {
+		Status model.UserStatus `json:"status"`
+	}
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid status request"})
+		return
+	}
+	if err := h.users.SetStatus(c.Request.Context(), id, request.Status); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+func (h *Handler) ListUserCourses(c *gin.Context) {
+	id, ok := parseID(c.Param("id"))
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
+	courses, err := h.courses.ListForUser(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list user courses"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": courses})
 }
 
 func (h *Handler) GetAIConfiguration(c *gin.Context) {

@@ -157,6 +157,22 @@ func (s *CourseService) List(ctx context.Context) ([]CourseView, error) {
 	return result, nil
 }
 
+func (s *CourseService) ListForUser(ctx context.Context, userID uint) ([]CourseView, error) {
+	courses, err := s.courses.ListForUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]CourseView, 0, len(courses))
+	for _, course := range courses {
+		facts, factsErr := s.courses.ProgressFacts(ctx, course.ID)
+		if factsErr != nil {
+			return nil, factsErr
+		}
+		result = append(result, buildCourseView(course, facts))
+	}
+	return result, nil
+}
+
 func buildCourseView(course model.Course, facts repository.CourseProgressFacts) CourseView {
 	generationProgress := 0
 	if facts.BlueprintLessonCount > 0 {

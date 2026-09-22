@@ -13,6 +13,7 @@ const (
 
 type Course struct {
 	ID              uint         `json:"id" gorm:"primaryKey"`
+	UserID          uint         `json:"user_id" gorm:"not null;index"`
 	Name            string       `json:"name" gorm:"size:120;not null"`
 	Description     string       `json:"description" gorm:"type:text"`
 	Goal            string       `json:"goal" gorm:"type:text"`

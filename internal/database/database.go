@@ -74,6 +74,8 @@ func Open(cfg config.Config) (*gorm.DB, error) {
 		&model.SystemMetadata{},
 		&model.AIConfiguration{},
 		&model.DomainInitializationDraft{},
+		&model.User{},
+		&model.Session{},
 	); err != nil {
 		if preMigrationBackup.Path != "" {
 			return nil, fmt.Errorf("migrate database: %w (pre-migration backup: %s)", err, preMigrationBackup.Path)
