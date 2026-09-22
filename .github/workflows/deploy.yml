@@ -97,8 +97,14 @@ jobs:
           set -euo pipefail
           deploy_path="$1"
           cd "$deploy_path"
+          test "$(git branch --show-current)" = "main"
           git fetch origin main
+          target_commit="$(git rev-parse origin/main)"
           git merge --ff-only origin/main
-          docker compose --profile production up -d --build
+          deployed_commit="$(git rev-parse HEAD)"
+          test "$deployed_commit" = "$target_commit"
+          echo "deploy_path=$deploy_path"
+          echo "deployed_commit=$deployed_commit"
+          docker compose --profile production up -d --build --force-recreate
           docker compose --profile production ps
           REMOTE
