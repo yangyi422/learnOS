@@ -19,8 +19,7 @@ func TestRouterAuthenticationDependsOnEnvironment(t *testing.T) {
 		wantStatus   int
 	}{
 		{name: "development skips auth", environment: "development", wantStatus: http.StatusOK},
-		{name: "production requires auth", environment: "production", wantStatus: http.StatusUnauthorized},
-		{name: "production accepts credentials", environment: "production", authenticate: true, wantStatus: http.StatusOK},
+		{name: "production serves the SPA shell", environment: "production", wantStatus: http.StatusOK},
 	}
 
 	for _, test := range tests {

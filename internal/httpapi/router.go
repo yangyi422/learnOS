@@ -29,18 +29,18 @@ func NewRouter(cfg config.Config, handler *Handler, webFS fs.FS, userServices ..
 	if len(userServices) > 0 {
 		userService = userServices[0]
 	}
-	if !cfg.Development() {
-		if userService != nil {
-			router.Use(middleware.SessionAuth(userService.AuthenticateSession))
-		} else {
-			router.Use(middleware.BasicAuth(cfg.Username, cfg.PasswordHash))
-		}
-	}
-	router.POST("/api/v1/auth/logout", handler.Logout)
-	router.GET("/api/v1/auth/me", handler.CurrentUser)
 
 	api := router.Group("/api/v1")
+	if !cfg.Development() {
+		if userService != nil {
+			api.Use(middleware.SessionAuth(userService.AuthenticateSession))
+		} else {
+			api.Use(middleware.BasicAuth(cfg.Username, cfg.PasswordHash))
+		}
+	}
 	{
+		api.POST("/auth/logout", handler.Logout)
+		api.GET("/auth/me", handler.CurrentUser)
 		api.GET("/users", middleware.RequireAdmin(), handler.ListUsers)
 		api.POST("/users", middleware.RequireAdmin(), handler.CreateUser)
 		api.PATCH("/users/:id/status", middleware.RequireAdmin(), handler.SetUserStatus)
