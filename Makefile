@@ -1,7 +1,7 @@
 .PHONY: dev-api dev-web build-web build-api fmt docker-up docker-prod hash-password
 
 dev-api:
-	APP_ENV=development APP_DATA_DIR=./data go run ./cmd/server
+	APP_ENV=development APP_ADDR=127.0.0.1:8080 APP_DATA_DIR=./data go run ./cmd/server
 
 dev-web:
 	cd web && npm run dev

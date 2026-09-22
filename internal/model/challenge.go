@@ -37,10 +37,21 @@ const (
 	MisconceptionEventObserved  = "observed"
 	MisconceptionEventResolved  = "resolved"
 	MisconceptionEventReopened  = "reopened"
+	MisconceptionEventConfirmed = "user_confirmed"
+	MisconceptionEventCorrected = "user_corrected"
+	MisconceptionEventIgnored   = "ignored"
+)
+
+const (
+	MisconceptionReviewAIInferred    = "ai_inferred"
+	MisconceptionReviewUserConfirmed = "user_confirmed"
+	MisconceptionReviewUserCorrected = "user_corrected"
+	MisconceptionReviewIgnored       = "ignored"
 )
 
 type AssessmentChallenge struct {
 	ID                     uint      `gorm:"primaryKey" json:"id"`
+	IdempotencyKey         *string   `gorm:"size:128;uniqueIndex" json:"-"`
 	CourseID               uint      `gorm:"not null;index" json:"course_id"`
 	LessonID               uint      `gorm:"not null;index" json:"lesson_id"`
 	ChallengeType          string    `gorm:"size:32;not null;index" json:"challenge_type"`
@@ -61,6 +72,7 @@ type AssessmentChallenge struct {
 
 type ChallengeAttempt struct {
 	ID                          uint      `gorm:"primaryKey" json:"id"`
+	IdempotencyKey              *string   `gorm:"size:128;uniqueIndex" json:"-"`
 	CourseID                    uint      `gorm:"not null;index" json:"course_id"`
 	LessonID                    uint      `gorm:"not null;index" json:"lesson_id"`
 	ChallengeID                 uint      `gorm:"not null;uniqueIndex" json:"challenge_id"`
@@ -70,6 +82,7 @@ type ChallengeAttempt struct {
 	DemonstratedLevel           string    `gorm:"size:32;not null" json:"demonstrated_level"`
 	Passed                      bool      `gorm:"not null;default:false" json:"passed"`
 	Feedback                    string    `gorm:"type:text" json:"feedback"`
+	Explanation                 string    `gorm:"type:text" json:"explanation"`
 	EvidenceJSON                string    `gorm:"type:text" json:"evidence"`
 	MisconceptionValidationJSON string    `gorm:"type:text" json:"misconception_validation"`
 	CreatedAt                   time.Time `json:"created_at"`

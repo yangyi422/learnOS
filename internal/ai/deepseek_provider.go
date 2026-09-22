@@ -15,14 +15,21 @@ import (
 const maxAttempts = 2
 
 type DeepSeekProvider struct {
-	client  *http.Client
-	baseURL string
-	apiKey  string
-	model   string
-	timeout time.Duration
+	client                     *http.Client
+	baseURL                    string
+	apiKey                     string
+	model                      string
+	timeout                    time.Duration
+	challengeGenerationTimeout time.Duration
+	curriculumDraftTimeout     time.Duration
+	domainSkeletonTimeout      time.Duration
+	domainStarterTimeout       time.Duration
+	domainInitialWorldTimeout  time.Duration
 }
 
-func NewDeepSeekProvider(client *http.Client, baseURL, apiKey, model string, timeout time.Duration) *DeepSeekProvider {
+// NewDeepSeekProvider keeps the ordinary AI timeout as its fifth argument.
+// The optional sixth and seventh arguments are independent Challenge and Curriculum Draft budgets.
+func NewDeepSeekProvider(client *http.Client, baseURL, apiKey, model string, timeout time.Duration, challengeGenerationTimeout ...time.Duration) *DeepSeekProvider {
 	if client == nil {
 		client = &http.Client{}
 	}
@@ -32,12 +39,37 @@ func NewDeepSeekProvider(client *http.Client, baseURL, apiKey, model string, tim
 	if strings.TrimSpace(model) == "" {
 		model = DefaultModel
 	}
+	generationTimeout := 60 * time.Second
+	if len(challengeGenerationTimeout) > 0 && challengeGenerationTimeout[0] > 0 {
+		generationTimeout = challengeGenerationTimeout[0]
+	}
+	curriculumTimeout := 60 * time.Second
+	if len(challengeGenerationTimeout) > 1 && challengeGenerationTimeout[1] > 0 {
+		curriculumTimeout = challengeGenerationTimeout[1]
+	}
+	domainSkeletonTimeout := 120 * time.Second
+	if len(challengeGenerationTimeout) > 2 && challengeGenerationTimeout[2] > 0 {
+		domainSkeletonTimeout = challengeGenerationTimeout[2]
+	}
+	domainStarterTimeout := 60 * time.Second
+	if len(challengeGenerationTimeout) > 3 && challengeGenerationTimeout[3] > 0 {
+		domainStarterTimeout = challengeGenerationTimeout[3]
+	}
+	domainInitialWorldTimeout := 180 * time.Second
+	if len(challengeGenerationTimeout) > 4 && challengeGenerationTimeout[4] > 0 {
+		domainInitialWorldTimeout = challengeGenerationTimeout[4]
+	}
 	return &DeepSeekProvider{
-		client:  client,
-		baseURL: strings.TrimRight(baseURL, "/"),
-		apiKey:  strings.TrimSpace(apiKey),
-		model:   model,
-		timeout: timeout,
+		client:                     client,
+		baseURL:                    strings.TrimRight(baseURL, "/"),
+		apiKey:                     strings.TrimSpace(apiKey),
+		model:                      model,
+		timeout:                    timeout,
+		challengeGenerationTimeout: generationTimeout,
+		curriculumDraftTimeout:     curriculumTimeout,
+		domainSkeletonTimeout:      domainSkeletonTimeout,
+		domainStarterTimeout:       domainStarterTimeout,
+		domainInitialWorldTimeout:  domainInitialWorldTimeout,
 	}
 }
 
@@ -94,10 +126,8 @@ func (p *DeepSeekProvider) EvaluateLessonAnswer(ctx context.Context, req Evaluat
 		if !retry || attempt == maxAttempts {
 			break
 		}
-		select {
-		case <-requestContext.Done():
+		if !waitForRetry(requestContext) {
 			break
-		case <-time.After(100 * time.Millisecond):
 		}
 	}
 	meta.LatencyMS = time.Since(started).Milliseconds()
@@ -110,6 +140,15 @@ func (p *DeepSeekProvider) EvaluateLessonAnswer(ctx context.Context, req Evaluat
 	return EvaluationResult{}, meta, lastErr
 }
 
+func waitForRetry(ctx context.Context) bool {
+	select {
+	case <-ctx.Done():
+		return false
+	case <-time.After(100 * time.Millisecond):
+		return true
+	}
+}
+
 func (p *DeepSeekProvider) evaluateOnce(ctx context.Context, req EvaluationRequest) (EvaluationResult, ProviderMeta, bool, error) {
 	body, err := json.Marshal(chatCompletionRequest{
 		Model: p.model,
@@ -119,7 +158,7 @@ func (p *DeepSeekProvider) evaluateOnce(ctx context.Context, req EvaluationReque
 		},
 		ResponseFormat: responseFormat{Type: "json_object"},
 		Temperature:    0.2,
-		MaxTokens:      2000,
+		MaxTokens:      20000,
 	})
 	if err != nil {
 		return EvaluationResult{}, ProviderMeta{}, false, newProviderError(ErrProvider, err)
@@ -138,7 +177,7 @@ func (p *DeepSeekProvider) evaluateOnce(ctx context.Context, req EvaluationReque
 		if errors.Is(ctx.Err(), context.Canceled) {
 			return EvaluationResult{}, ProviderMeta{}, false, ctx.Err()
 		}
-		return EvaluationResult{}, ProviderMeta{}, true, newProviderError(ErrProvider, err)
+		return EvaluationResult{}, ProviderMeta{}, true, newProviderError(ErrNetworkError, err)
 	}
 	responseBody, readErr := io.ReadAll(io.LimitReader(response.Body, 2<<20))
 	closeErr := response.Body.Close()
@@ -147,7 +186,11 @@ func (p *DeepSeekProvider) evaluateOnce(ctx context.Context, req EvaluationReque
 	}
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		retry := response.StatusCode == http.StatusTooManyRequests || response.StatusCode >= 500
-		return EvaluationResult{}, ProviderMeta{}, retry, &ProviderError{Code: ErrProvider, StatusCode: response.StatusCode}
+		code := ErrProvider
+		if response.StatusCode == http.StatusTooManyRequests {
+			code = ErrRateLimited
+		}
+		return EvaluationResult{}, ProviderMeta{}, retry, &ProviderError{Code: code, StatusCode: response.StatusCode}
 	}
 	var completion chatCompletionResponse
 	if err := json.Unmarshal(responseBody, &completion); err != nil {

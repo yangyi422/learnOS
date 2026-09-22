@@ -2,8 +2,12 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"learnos/internal/ai"
@@ -13,14 +17,25 @@ import (
 	"learnos/internal/repository"
 	"learnos/internal/service"
 	"learnos/internal/webassets"
+
+	"gorm.io/gorm"
 )
 
 type App struct {
-	cfg    config.Config
-	server *http.Server
+	cfg              config.Config
+	db               *gorm.DB
+	server           *http.Server
+	restoreRequested chan struct{}
 }
 
+var ErrRestartAfterRestore = errors.New("restart after database restore request")
+
 func New(cfg config.Config) (*App, error) {
+	if restored, restoreErr := service.ApplyPendingRestore(cfg); restoreErr != nil {
+		return nil, fmt.Errorf("apply pending database restore: %w", restoreErr)
+	} else if restored {
+		fmt.Printf("restored LearnOS database from confirmed backup request\n")
+	}
 	db, err := database.Open(cfg)
 	if err != nil {
 		return nil, err
@@ -32,37 +47,81 @@ func New(cfg config.Config) (*App, error) {
 	cognitiveRepository := repository.NewCognitiveRepository(db)
 	challengeRepository := repository.NewChallengeRepository(db)
 	misconceptionRepository := repository.NewMisconceptionRepository(db)
+	explorationRepository := repository.NewExplorationRepository(db)
+	curriculumRepository := repository.NewCurriculumRepository(db)
+	groundingRepository := repository.NewGroundingRepository(db)
+	domainInitializationRepository := repository.NewDomainInitializationRepository(db)
 	provider := ai.AIProvider(ai.NewMockProvider())
 	if cfg.AIProvider == "deepseek" {
-		provider = ai.NewDeepSeekProvider(&http.Client{}, cfg.DeepSeekBaseURL, cfg.DeepSeekAPIKey, cfg.DeepSeekModel, time.Duration(cfg.AITimeoutSeconds)*time.Second)
+		provider = ai.NewDeepSeekProvider(
+			&http.Client{},
+			cfg.DeepSeekBaseURL,
+			cfg.DeepSeekAPIKey,
+			cfg.DeepSeekModel,
+			time.Duration(cfg.AITimeoutSeconds)*time.Second,
+			time.Duration(cfg.ChallengeGenerationTimeoutSeconds)*time.Second,
+			time.Duration(cfg.CurriculumDraftTimeoutSeconds)*time.Second,
+			time.Duration(cfg.DomainSkeletonTimeoutSeconds)*time.Second,
+			time.Duration(cfg.DomainStarterBlueprintTimeoutSeconds)*time.Second,
+			time.Duration(cfg.DomainInitialWorldTimeoutSeconds)*time.Second,
+		)
 	}
-	courseService := service.NewCourseService(courseRepository, learningRepository, provider)
-	knowledgeGraphService := service.NewKnowledgeGraphService(courseRepository, knowledgeGraphRepository)
+	runtimeProvider := ai.NewRuntimeProvider(provider)
+	aiConfigurationRepository := repository.NewAIConfigurationRepository(db)
+	aiConfigurationService := service.NewAIConfigurationService(aiConfigurationRepository, cfg, runtimeProvider)
+	if err := aiConfigurationService.LoadPersisted(context.Background()); err != nil {
+		_ = closeDatabase(db)
+		return nil, fmt.Errorf("load AI configuration: %w", err)
+	}
+	courseService := service.NewCourseService(courseRepository, learningRepository, runtimeProvider)
+	knowledgeGraphService := service.NewKnowledgeGraphService(courseRepository, knowledgeGraphRepository, curriculumRepository)
 	cognitiveStateService := service.NewCognitiveStateService(courseRepository, knowledgeGraphRepository, cognitiveRepository)
 	courseService.SetCognitiveStateService(cognitiveStateService)
-	misconceptionService := service.NewMisconceptionService(courseRepository, knowledgeGraphRepository, misconceptionRepository)
-	challengeProvider, _ := provider.(ai.ChallengeProvider)
+	misconceptionService := service.NewMisconceptionService(courseRepository, knowledgeGraphRepository, misconceptionRepository, learningRepository)
+	explorationService := service.NewExplorationService(courseRepository, knowledgeGraphRepository, learningRepository, cognitiveRepository, misconceptionRepository, explorationRepository)
+	explorationService.SetExplorationProvider(runtimeProvider)
+	challengeProvider := ai.ChallengeProvider(runtimeProvider)
 	challengeService := service.NewChallengeService(courseRepository, learningRepository, knowledgeGraphRepository, challengeRepository, misconceptionRepository, cognitiveStateService, challengeProvider)
-	if err := courseService.SeedStarterCourse(context.Background()); err != nil {
-		return nil, fmt.Errorf("seed starter course: %w", err)
+	curriculumService := service.NewCurriculumService(courseRepository, curriculumRepository)
+	curriculumService.SetCurriculumDraftProvider(runtimeProvider)
+	curriculumService.SetDomainInitializationProvider(runtimeProvider)
+	nextLessonService := service.NewNextLessonService(courseRepository, knowledgeGraphRepository, curriculumRepository, cognitiveRepository, learningRepository)
+	groundingService := service.NewGroundingService(groundingRepository, curriculumRepository, courseRepository)
+	domainInitializationService := service.NewDomainInitializationService(domainInitializationRepository)
+	domainInitializationService.SetProvider(runtimeProvider)
+	backupService := service.NewBackupService(db, cfg)
+	restoreRequested := make(chan struct{}, 1)
+	backupService.SetRestartSignal(restoreRequested)
+	databaseHealthService := service.NewDatabaseHealthService(db, cfg, backupService)
+	databaseHealthService.SetAIConfigurationService(aiConfigurationService)
+	exportService := service.NewExportService(db)
+	consistencyService := service.NewConsistencyService(db)
+	if cfg.DemoSeedEnabled {
+		if err := courseService.SeedStarterCourse(context.Background()); err != nil {
+			_ = closeDatabase(db)
+			return nil, fmt.Errorf("seed demo world: %w", err)
+		}
 	}
 
 	dist, err := webassets.Dist()
 	if err != nil {
+		_ = closeDatabase(db)
 		return nil, fmt.Errorf("load embedded web assets: %w", err)
 	}
 
-	handler := httpapi.NewHandler(courseService, knowledgeGraphService, cognitiveStateService, challengeService, misconceptionService)
+	handler := httpapi.NewHandler(courseService, knowledgeGraphService, cognitiveStateService, challengeService, misconceptionService, explorationService, curriculumService, groundingService, backupService, databaseHealthService, exportService, consistencyService, domainInitializationService, aiConfigurationService, nextLessonService)
 	router := httpapi.NewRouter(cfg, handler, dist)
 
 	return &App{
-		cfg: cfg,
+		cfg:              cfg,
+		db:               db,
+		restoreRequested: restoreRequested,
 		server: &http.Server{
 			Addr:              cfg.Address,
 			Handler:           router,
 			ReadHeaderTimeout: 10 * time.Second,
 			ReadTimeout:       30 * time.Second,
-			WriteTimeout:      60 * time.Second,
+			WriteTimeout:      180 * time.Second,
 			IdleTimeout:       120 * time.Second,
 		},
 	}, nil
@@ -70,5 +129,37 @@ func New(cfg config.Config) (*App, error) {
 
 func (a *App) Run() error {
 	fmt.Printf("%s listening on %s\n", a.cfg.AppName, a.cfg.Address)
-	return a.server.ListenAndServe()
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(stop)
+	serverErr := make(chan error, 1)
+	go func() { serverErr <- a.server.ListenAndServe() }()
+	select {
+	case err := <-serverErr:
+		closeErr := closeDatabase(a.db)
+		if errors.Is(err, http.ErrServerClosed) {
+			return closeErr
+		}
+		return errors.Join(err, closeErr)
+	case <-stop:
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		shutdownErr := a.server.Shutdown(ctx)
+		closeErr := closeDatabase(a.db)
+		return errors.Join(shutdownErr, closeErr)
+	case <-a.restoreRequested:
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		shutdownErr := a.server.Shutdown(ctx)
+		closeErr := closeDatabase(a.db)
+		return errors.Join(ErrRestartAfterRestore, shutdownErr, closeErr)
+	}
+}
+
+func closeDatabase(db *gorm.DB) error {
+	sqlDB, err := db.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.Close()
 }

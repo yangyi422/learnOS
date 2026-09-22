@@ -47,6 +47,46 @@ func (r *LearningRepository) ListLearningTurns(ctx context.Context, courseID uin
 	return turns, nil
 }
 
+func (r *LearningRepository) FindLearningTurnByIdempotencyKey(ctx context.Context, courseID uint, key string) (*model.LearningTurn, error) {
+	var turn model.LearningTurn
+	if err := r.db.WithContext(ctx).Where("course_id = ? AND idempotency_key = ?", courseID, key).First(&turn).Error; err != nil {
+		return nil, fmt.Errorf("find learning turn by idempotency key: %w", err)
+	}
+	return &turn, nil
+}
+
+func (r *LearningRepository) FindLearningTurnByID(ctx context.Context, id uint) (*model.LearningTurn, error) {
+	var turn model.LearningTurn
+	if err := r.db.WithContext(ctx).First(&turn, id).Error; err != nil {
+		return nil, fmt.Errorf("find learning turn by id: %w", err)
+	}
+	return &turn, nil
+}
+
+func (r *LearningRepository) FindCognitiveStateEventByTurnID(ctx context.Context, turnID uint) (*model.CognitiveStateEvent, error) {
+	var event model.CognitiveStateEvent
+	if err := r.db.WithContext(ctx).Where("learning_turn_id = ?", turnID).Order("id DESC").First(&event).Error; err != nil {
+		return nil, fmt.Errorf("find cognitive state event by turn: %w", err)
+	}
+	return &event, nil
+}
+
+func (r *LearningRepository) ListAnsweredLessonIDs(ctx context.Context, courseID uint) (map[uint]struct{}, error) {
+	var lessonIDs []uint
+	if err := r.db.WithContext(ctx).
+		Model(&model.LearningTurn{}).
+		Where("course_id = ?", courseID).
+		Distinct("lesson_id").
+		Pluck("lesson_id", &lessonIDs).Error; err != nil {
+		return nil, fmt.Errorf("list answered lesson ids: %w", err)
+	}
+	result := make(map[uint]struct{}, len(lessonIDs))
+	for _, lessonID := range lessonIDs {
+		result[lessonID] = struct{}{}
+	}
+	return result, nil
+}
+
 func (r *LearningRepository) FindMasteryRecord(ctx context.Context, lessonID uint) (*model.MasteryRecord, error) {
 	var mastery model.MasteryRecord
 	if err := r.db.WithContext(ctx).Where("lesson_id = ?", lessonID).First(&mastery).Error; err != nil {

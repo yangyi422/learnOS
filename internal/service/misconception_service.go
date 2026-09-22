@@ -27,18 +27,32 @@ type MisconceptionService struct {
 	courses        *repository.CourseRepository
 	graphs         *repository.KnowledgeGraphRepository
 	misconceptions *repository.MisconceptionRepository
+	learning       *repository.LearningRepository
 }
 
-func NewMisconceptionService(courses *repository.CourseRepository, graphs *repository.KnowledgeGraphRepository, misconceptions *repository.MisconceptionRepository) *MisconceptionService {
-	return &MisconceptionService{courses: courses, graphs: graphs, misconceptions: misconceptions}
+func NewMisconceptionService(courses *repository.CourseRepository, graphs *repository.KnowledgeGraphRepository, misconceptions *repository.MisconceptionRepository, learning ...*repository.LearningRepository) *MisconceptionService {
+	service := &MisconceptionService{courses: courses, graphs: graphs, misconceptions: misconceptions}
+	if len(learning) > 0 {
+		service.learning = learning[0]
+	}
+	return service
+}
+
+type MisconceptionEventView struct {
+	model.MisconceptionEvent
+	Question   string `json:"question,omitempty"`
+	UserAnswer string `json:"user_answer,omitempty"`
+	TurnKind   string `json:"turn_kind,omitempty"`
 }
 
 type MisconceptionView struct {
 	model.Misconception
-	LessonTitle     string                     `json:"lesson_title"`
-	PatternKeys     []string                   `json:"pattern_keys"`
-	OccurrenceCount int                        `json:"occurrence_count"`
-	Events          []model.MisconceptionEvent `json:"events"`
+	LessonTitle     string                   `json:"lesson_title"`
+	PatternKeys     []string                 `json:"pattern_keys"`
+	OccurrenceCount int                      `json:"occurrence_count"`
+	Events          []MisconceptionEventView `json:"events"`
+	ReviewStatus    string                   `json:"review_status"`
+	StableEvidence  bool                     `json:"stable_pattern_evidence"`
 }
 
 type PatternView struct {
@@ -92,6 +106,9 @@ func (s *MisconceptionService) GetNetwork(ctx context.Context, courseID uint) (*
 	}{}}
 	counts := map[string]*PatternView{}
 	for _, item := range views {
+		if !item.StableEvidence {
+			continue
+		}
 		for _, key := range item.PatternKeys {
 			if counts[key] == nil {
 				counts[key] = &PatternView{Key: key, Name: allowedReasoningPatternKeys[key]}
@@ -158,9 +175,76 @@ func (s *MisconceptionService) toViews(ctx context.Context, items []model.Miscon
 				occurrences++
 			}
 		}
-		result = append(result, MisconceptionView{Misconception: item, LessonTitle: lesson.Title, PatternKeys: keys, OccurrenceCount: occurrences, Events: events})
+		eventViews := make([]MisconceptionEventView, 0, len(events))
+		for _, event := range events {
+			view := MisconceptionEventView{MisconceptionEvent: event}
+			if event.LearningTurnID != nil && s.learning != nil {
+				turn, turnErr := s.learning.FindLearningTurnByID(ctx, *event.LearningTurnID)
+				if turnErr == nil {
+					view.Question, view.UserAnswer, view.TurnKind = turn.Question, turn.UserAnswer, turn.TurnKind
+				}
+			}
+			eventViews = append(eventViews, view)
+		}
+		reviewStatus := item.ReviewStatus
+		if reviewStatus == "" {
+			reviewStatus = model.MisconceptionReviewAIInferred
+		}
+		stable := reviewStatus == model.MisconceptionReviewUserConfirmed || occurrences >= 2
+		if reviewStatus == model.MisconceptionReviewIgnored || reviewStatus == model.MisconceptionReviewUserCorrected {
+			stable = false
+		}
+		result = append(result, MisconceptionView{Misconception: item, LessonTitle: lesson.Title, PatternKeys: keys, OccurrenceCount: occurrences, Events: eventViews, ReviewStatus: reviewStatus, StableEvidence: stable})
 	}
 	return result, nil
+}
+
+func (s *MisconceptionService) Review(ctx context.Context, courseID, misconceptionID uint, action, note string) (*MisconceptionView, error) {
+	if courseID == 0 {
+		return nil, ErrInvalidCourseID
+	}
+	item, err := s.misconceptions.FindByCourseID(ctx, courseID, misconceptionID)
+	if err != nil {
+		if repository.IsNotFound(err) {
+			return nil, ErrLessonNotInCourse
+		}
+		return nil, err
+	}
+	note = strings.TrimSpace(note)
+	reviewStatus, eventType := "", ""
+	switch action {
+	case "confirm":
+		reviewStatus, eventType = model.MisconceptionReviewUserConfirmed, model.MisconceptionEventConfirmed
+		if note == "" {
+			note = "用户确认该误区"
+		}
+	case "correct":
+		if note == "" {
+			return nil, ErrInvalidAnswer
+		}
+		reviewStatus, eventType = model.MisconceptionReviewUserCorrected, model.MisconceptionEventCorrected
+	case "ignore":
+		reviewStatus, eventType = model.MisconceptionReviewIgnored, model.MisconceptionEventIgnored
+		if note == "" {
+			note = "用户选择忽略该 AI 推测"
+		}
+	default:
+		return nil, ErrInvalidAnswer
+	}
+	if err := s.misconceptions.Review(ctx, item, reviewStatus, note, eventType); err != nil {
+		return nil, err
+	}
+	items, err := s.toViews(ctx, []model.Misconception{*item})
+	if err != nil {
+		return nil, err
+	}
+	if len(items) == 0 {
+		return nil, ErrLessonNotInCourse
+	}
+	items[0].ReviewStatus = reviewStatus
+	items[0].UserNote = note
+	items[0].StableEvidence = reviewStatus == model.MisconceptionReviewUserConfirmed || (items[0].OccurrenceCount >= 2 && reviewStatus != model.MisconceptionReviewIgnored && reviewStatus != model.MisconceptionReviewUserCorrected)
+	return &items[0], nil
 }
 
 func sortPatterns(patterns []PatternView) {

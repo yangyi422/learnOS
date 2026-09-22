@@ -41,6 +41,7 @@ const (
 	maxMisconceptions     = 5
 	maxBoundaryConditions = 6
 	maxMasteryEvidence    = 8
+	maxEvidenceUsed       = 8
 	maxCognitiveEvidence  = 8
 	maxReasoningPatterns  = 2
 	maxStringLength       = 4000
@@ -86,6 +87,9 @@ func NormalizeAndValidateForTarget(result EvaluationResult, target string) (Eval
 	}
 	result.BoundaryConditions = normalizeStrings(result.BoundaryConditions)
 	result.MasteryEvidence = normalizeStrings(result.MasteryEvidence)
+	result.EvidenceUsed = normalizeStrings(result.EvidenceUsed)
+	result.Uncertainty = strings.TrimSpace(result.Uncertainty)
+	result.RecommendedNextAction = strings.TrimSpace(result.RecommendedNextAction)
 	result.DemonstratedLevel = strings.TrimSpace(result.DemonstratedLevel)
 	result.UserUnderstandingSummary = strings.TrimSpace(result.UserUnderstandingSummary)
 	if result.CognitiveEvidence == nil {
@@ -123,6 +127,15 @@ func NormalizeAndValidateForTarget(result EvaluationResult, target string) (Eval
 	if result.MasteryScore < 0 || result.MasteryScore > 1 {
 		return EvaluationResult{}, fmt.Errorf("mastery_score must be between 0 and 1")
 	}
+	if result.Confidence <= 0 || result.Confidence > 1 {
+		return EvaluationResult{}, fmt.Errorf("confidence must be greater than 0 and at most 1")
+	}
+	if result.Uncertainty == "" || result.RecommendedNextAction == "" {
+		return EvaluationResult{}, fmt.Errorf("uncertainty and recommended_next_action are required")
+	}
+	if len(result.Uncertainty) > maxArrayItemLength || len(result.RecommendedNextAction) > maxArrayItemLength {
+		return EvaluationResult{}, fmt.Errorf("uncertainty or recommended_next_action is too long")
+	}
 	if len(result.Feedback) > maxStringLength || len(result.Explanation) > maxStringLength {
 		return EvaluationResult{}, fmt.Errorf("feedback or explanation is too long")
 	}
@@ -138,6 +151,14 @@ func NormalizeAndValidateForTarget(result EvaluationResult, target string) (Eval
 	if err := validateStrings("mastery_evidence", result.MasteryEvidence, maxMasteryEvidence); err != nil {
 		return EvaluationResult{}, err
 	}
+	if err := validateStrings("evidence_used", result.EvidenceUsed, maxEvidenceUsed); err != nil {
+		return EvaluationResult{}, err
+	}
+	if len(result.EvidenceUsed) == 0 {
+		return EvaluationResult{}, fmt.Errorf("evidence_used is required")
+	}
+	eligible := (result.Result == "correct" || result.Result == "mostly_correct") && cognitiveRank(result.DemonstratedLevel) >= cognitiveRank("understand")
+	result.TransferChallengeEligible = eligible
 	if len(result.Misconceptions) > maxMisconceptions {
 		return EvaluationResult{}, fmt.Errorf("too many misconceptions")
 	}

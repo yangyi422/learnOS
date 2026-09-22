@@ -30,9 +30,19 @@ type ContentRole string
 const (
 	ContentRoleFoundation  ContentRole = "foundation"
 	ContentRoleCore        ContentRole = "core"
+	ContentRoleDeepening   ContentRole = "deepening"
 	ContentRoleApplication ContentRole = "application"
 	ContentRoleExtension   ContentRole = "extension"
 )
+
+func (role ContentRole) Valid() bool {
+	switch role {
+	case ContentRoleFoundation, ContentRoleCore, ContentRoleDeepening, ContentRoleApplication, ContentRoleExtension:
+		return true
+	default:
+		return false
+	}
+}
 
 type LessonRelationType string
 
@@ -44,14 +54,17 @@ const (
 )
 
 type CourseUnit struct {
-	ID        uint             `gorm:"primaryKey" json:"id"`
-	CourseID  uint             `gorm:"not null;index" json:"course_id"`
-	Title     string           `gorm:"size:255;not null" json:"title"`
-	Objective string           `gorm:"type:text" json:"objective"`
-	SortOrder int              `gorm:"not null;default:0" json:"sort_order"`
-	Status    CourseUnitStatus `gorm:"size:32;not null;default:'pending'" json:"status"`
-	CreatedAt time.Time        `json:"created_at"`
-	UpdatedAt time.Time        `json:"updated_at"`
+	ID       uint `gorm:"primaryKey" json:"id"`
+	CourseID uint `gorm:"not null;index" json:"course_id"`
+	// A blueprint area may span multiple course units; keep this association
+	// indexed, but do not enforce a one-to-one database constraint.
+	BlueprintUnitID *uint            `gorm:"index" json:"blueprint_unit_id"`
+	Title           string           `gorm:"size:255;not null" json:"title"`
+	Objective       string           `gorm:"type:text" json:"objective"`
+	SortOrder       int              `gorm:"not null;default:0" json:"sort_order"`
+	Status          CourseUnitStatus `gorm:"size:32;not null;default:'pending'" json:"status"`
+	CreatedAt       time.Time        `json:"created_at"`
+	UpdatedAt       time.Time        `json:"updated_at"`
 }
 
 type Lesson struct {
@@ -67,6 +80,7 @@ type Lesson struct {
 	ContentRole           ContentRole  `gorm:"size:32;not null;default:'core'" json:"content_role"`
 	DepthLevel            int          `gorm:"not null;default:1" json:"depth_level"`
 	AssessmentTargetLevel string       `gorm:"size:32;not null;default:'understand'" json:"assessment_target_level"`
+	GroundingStatus       string       `gorm:"size:32;not null;default:'ungrounded';index" json:"grounding_status"`
 	CreatedAt             time.Time    `json:"created_at"`
 	UpdatedAt             time.Time    `json:"updated_at"`
 }
@@ -81,32 +95,40 @@ type LessonRelation struct {
 }
 
 type LearningTurn struct {
-	ID                       uint      `gorm:"primaryKey" json:"id"`
-	CourseID                 uint      `gorm:"not null;index" json:"course_id"`
-	UnitID                   uint      `gorm:"not null;index" json:"unit_id"`
-	LessonID                 uint      `gorm:"not null;index" json:"lesson_id"`
-	TurnKind                 string    `gorm:"size:32;not null;default:'lesson_answer';index" json:"turn_kind"`
-	ChallengeID              *uint     `gorm:"index" json:"challenge_id"`
-	Question                 string    `gorm:"type:text;not null" json:"question"`
-	UserAnswer               string    `gorm:"type:text;not null" json:"user_answer"`
-	Result                   string    `gorm:"size:32;not null" json:"result"`
-	Feedback                 string    `gorm:"type:text" json:"feedback"`
-	Explanation              string    `gorm:"type:text" json:"explanation"`
-	CorrectParts             string    `gorm:"type:text" json:"correct_parts"`
-	MissingParts             string    `gorm:"type:text" json:"missing_parts"`
-	MisconceptionsJSON       string    `gorm:"type:text" json:"misconceptions"`
-	BoundaryConditions       string    `gorm:"type:text" json:"boundary_conditions"`
-	MasteryEvidence          string    `gorm:"type:text" json:"mastery_evidence"`
-	EvaluationSource         string    `gorm:"size:32;not null;default:'mock'" json:"evaluation_source"`
-	Provider                 string    `gorm:"size:64" json:"provider"`
-	Model                    string    `gorm:"size:128" json:"model"`
-	PromptVersion            string    `gorm:"size:128" json:"prompt_version"`
-	DemonstratedLevel        string    `gorm:"size:32" json:"demonstrated_level"`
-	UserUnderstandingSummary string    `gorm:"type:text" json:"user_understanding_summary"`
-	CognitiveEvidenceJSON    string    `gorm:"type:text" json:"cognitive_evidence"`
-	MasteryScore             float64   `gorm:"not null;default:0" json:"mastery_score"`
-	NeedsReview              bool      `gorm:"not null;default:false" json:"needs_review"`
-	CreatedAt                time.Time `json:"created_at"`
+	ID                        uint      `gorm:"primaryKey" json:"id"`
+	IdempotencyKey            *string   `gorm:"size:128;uniqueIndex" json:"-"`
+	CourseID                  uint      `gorm:"not null;index" json:"course_id"`
+	UnitID                    uint      `gorm:"not null;index" json:"unit_id"`
+	LessonID                  uint      `gorm:"not null;index" json:"lesson_id"`
+	TurnKind                  string    `gorm:"size:32;not null;default:'lesson_answer';index" json:"turn_kind"`
+	ChallengeID               *uint     `gorm:"index" json:"challenge_id"`
+	Question                  string    `gorm:"type:text;not null" json:"question"`
+	UserAnswer                string    `gorm:"type:text;not null" json:"user_answer"`
+	Result                    string    `gorm:"size:32;not null" json:"result"`
+	Feedback                  string    `gorm:"type:text" json:"feedback"`
+	Explanation               string    `gorm:"type:text" json:"explanation"`
+	CorrectParts              string    `gorm:"type:text" json:"correct_parts"`
+	MissingParts              string    `gorm:"type:text" json:"missing_parts"`
+	MisconceptionsJSON        string    `gorm:"type:text" json:"misconceptions"`
+	BoundaryConditions        string    `gorm:"type:text" json:"boundary_conditions"`
+	MasteryEvidence           string    `gorm:"type:text" json:"mastery_evidence"`
+	EvidenceUsedJSON          string    `gorm:"type:text" json:"evidence_used"`
+	Confidence                float64   `gorm:"not null;default:0" json:"confidence"`
+	Uncertainty               string    `gorm:"type:text" json:"uncertainty"`
+	RecommendedNextAction     string    `gorm:"type:text" json:"recommended_next_action"`
+	TransferChallengeEligible bool      `gorm:"not null;default:false" json:"transfer_challenge_eligible"`
+	EvaluationSource          string    `gorm:"size:32;not null;default:'mock'" json:"evaluation_source"`
+	Provider                  string    `gorm:"size:64" json:"provider"`
+	Model                     string    `gorm:"size:128" json:"model"`
+	PromptVersion             string    `gorm:"size:128" json:"prompt_version"`
+	DemonstratedLevel         string    `gorm:"size:32" json:"demonstrated_level"`
+	UserUnderstandingSummary  string    `gorm:"type:text" json:"user_understanding_summary"`
+	CognitiveEvidenceJSON     string    `gorm:"type:text" json:"cognitive_evidence"`
+	MasteryScore              float64   `gorm:"not null;default:0" json:"mastery_score"`
+	MasteryScoreBefore        float64   `gorm:"not null;default:0" json:"mastery_score_before"`
+	MasteryScoreAfter         float64   `gorm:"not null;default:0" json:"mastery_score_after"`
+	NeedsReview               bool      `gorm:"not null;default:false" json:"needs_review"`
+	CreatedAt                 time.Time `json:"created_at"`
 }
 
 type MasteryRecord struct {
@@ -130,6 +152,8 @@ type Misconception struct {
 	CorrectUnderstanding     string     `gorm:"type:text" json:"correct_understanding"`
 	BoundaryNotes            string     `gorm:"type:text" json:"boundary_notes"`
 	Status                   string     `gorm:"size:32;not null;default:'active'" json:"status"`
+	ReviewStatus             string     `gorm:"size:32;not null;default:'ai_inferred';index" json:"review_status"`
+	UserNote                 string     `gorm:"type:text" json:"user_note"`
 	ResolvedAt               *time.Time `json:"resolved_at"`
 	ResolvedByLearningTurnID *uint      `gorm:"index" json:"resolved_by_learning_turn_id"`
 	ResolvedByChallengeID    *uint      `gorm:"index" json:"resolved_by_challenge_id"`

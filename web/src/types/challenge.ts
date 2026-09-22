@@ -26,6 +26,9 @@ export interface ChallengeAnswerResult {
   passed: boolean
   feedback: string
   explanation: string
+  mastery_score_before: number
+  mastery_score_after: number
+  mastery_impact: string
   cognitive_evidence: Array<{
     evidence_type: string
     cognitive_level: string

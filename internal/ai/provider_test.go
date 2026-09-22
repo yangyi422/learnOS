@@ -14,7 +14,7 @@ import (
 )
 
 func validEvaluationJSON() string {
-	return `{"result":"mostly_correct","feedback":"反馈","explanation":"解释","correct_parts":["正确点"],"missing_parts":["缺失点"],"misconceptions":[],"boundary_conditions":["边界"],"mastery_evidence":["证据"],"mastery_score":0.75,"needs_review":true,"demonstrated_level":"understand","user_understanding_summary":"用户能够解释核心含义和边界。","cognitive_evidence":[{"evidence_type":"concept_explanation","cognitive_level":"understand","polarity":"support","description":"能够解释核心含义"}]}`
+	return `{"result":"mostly_correct","feedback":"反馈","explanation":"解释","correct_parts":["正确点"],"missing_parts":["缺失点"],"misconceptions":[],"boundary_conditions":["边界"],"mastery_evidence":["证据"],"evidence_used":["用户回答中的正确点"],"confidence":0.8,"uncertainty":"仍缺少边界说明","recommended_next_action":"补充边界案例","transfer_challenge_eligible":true,"mastery_score":0.75,"needs_review":true,"demonstrated_level":"understand","user_understanding_summary":"用户能够解释核心含义和边界。","cognitive_evidence":[{"evidence_type":"concept_explanation","cognitive_level":"understand","polarity":"support","description":"能够解释核心含义"}]}`
 }
 
 func TestPromptContainsEvaluationContextAndJSONRules(t *testing.T) {
@@ -30,7 +30,7 @@ func TestPromptContainsEvaluationContextAndJSONRules(t *testing.T) {
 	if !strings.Contains(userPrompt, req.ExpectedUnderstanding) || !strings.Contains(userPrompt, req.AssessmentTargetLevel) || !strings.Contains(userPrompt, req.UserAnswer) {
 		t.Fatal("user prompt must contain evaluation context")
 	}
-	if PromptVersion != "learnos-evaluator-v3" || Phase5PromptVersion != "learnos-evaluator-v2" || LegacyPromptVersion != "learnos-evaluator-v1" {
+	if PromptVersion != "learnos-evaluator-v4" || PreviousPromptVersion != "learnos-evaluator-v3" || Phase5PromptVersion != "learnos-evaluator-v2" || LegacyPromptVersion != "learnos-evaluator-v1" {
 		t.Fatalf("unexpected prompt version: %s", PromptVersion)
 	}
 	systemPrompt := BuildEvaluationSystemPrompt()
@@ -42,7 +42,7 @@ func TestPromptContainsEvaluationContextAndJSONRules(t *testing.T) {
 }
 
 func TestParseAndValidateNormalizesArrays(t *testing.T) {
-	result, err := ParseAndValidate(`{"result":"correct","feedback":"  好  ","explanation":"解释","correct_parts":null,"missing_parts":null,"misconceptions":null,"boundary_conditions":null,"mastery_evidence":null,"mastery_score":1,"needs_review":false,"demonstrated_level":"understand","user_understanding_summary":"总结","cognitive_evidence":null}`)
+	result, err := ParseAndValidate(`{"result":"correct","feedback":"  好  ","explanation":"解释","correct_parts":null,"missing_parts":null,"misconceptions":null,"boundary_conditions":null,"mastery_evidence":null,"evidence_used":["用户给出了核心解释"],"confidence":0.9,"uncertainty":"尚未验证迁移","recommended_next_action":"完成迁移挑战","transfer_challenge_eligible":true,"mastery_score":1,"needs_review":false,"demonstrated_level":"understand","user_understanding_summary":"总结","cognitive_evidence":null}`)
 	if err != nil {
 		t.Fatalf("parse valid evaluation: %v", err)
 	}
@@ -56,6 +56,22 @@ func TestParseAndValidateRejectsInvalidResultAndScore(t *testing.T) {
 		"result": `{"result":"unknown","feedback":"反馈","explanation":"解释","mastery_score":0.5}`,
 		"score":  `{"result":"correct","feedback":"反馈","explanation":"解释","mastery_score":1.1}`,
 	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := ParseAndValidate(content); !errors.Is(err, ErrInvalidResponse) {
+				t.Fatalf("expected invalid response, got %v", err)
+			}
+		})
+	}
+}
+
+func TestParseAndValidateRequiresTrustExplanationFields(t *testing.T) {
+	tests := map[string]string{
+		"evidence used":           strings.Replace(validEvaluationJSON(), `"evidence_used":["用户回答中的正确点"]`, `"evidence_used":[]`, 1),
+		"confidence":              strings.Replace(validEvaluationJSON(), `"confidence":0.8`, `"confidence":0`, 1),
+		"uncertainty":             strings.Replace(validEvaluationJSON(), `"uncertainty":"仍缺少边界说明"`, `"uncertainty":""`, 1),
+		"recommended next action": strings.Replace(validEvaluationJSON(), `"recommended_next_action":"补充边界案例"`, `"recommended_next_action":""`, 1),
+	}
+	for name, content := range tests {
 		t.Run(name, func(t *testing.T) {
 			if _, err := ParseAndValidate(content); !errors.Is(err, ErrInvalidResponse) {
 				t.Fatalf("expected invalid response, got %v", err)
@@ -195,6 +211,16 @@ func TestDeepSeekProviderTimeout(t *testing.T) {
 	_, _, err := provider.EvaluateLessonAnswer(context.Background(), EvaluationRequest{})
 	if !errors.Is(err, ErrTimeout) {
 		t.Fatalf("expected timeout error, got %v", err)
+	}
+}
+
+func TestDeepSeekProviderKeepsEvaluationAndChallengeGenerationTimeoutsIndependent(t *testing.T) {
+	provider := NewDeepSeekProvider(nil, "http://provider.invalid", "test-key", DefaultModel, 45*time.Second, 60*time.Second)
+	if provider.evaluationTimeout() != 45*time.Second {
+		t.Fatalf("ordinary evaluation timeout = %s, want 45s", provider.evaluationTimeout())
+	}
+	if provider.challengeGenerationTimeoutDuration() != 60*time.Second {
+		t.Fatalf("challenge generation timeout = %s, want 60s", provider.challengeGenerationTimeoutDuration())
 	}
 }
 

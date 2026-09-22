@@ -84,14 +84,33 @@ type ChallengeAnswerResult struct {
 	Passed                  bool                        `json:"passed"`
 	Feedback                string                      `json:"feedback"`
 	Explanation             string                      `json:"explanation"`
+	MasteryScoreBefore      float64                     `json:"mastery_score_before"`
+	MasteryScoreAfter       float64                     `json:"mastery_score_after"`
+	MasteryImpact           string                      `json:"mastery_impact"`
 	CognitiveEvidence       []ai.EvaluationEvidence     `json:"cognitive_evidence"`
 	CognitiveState          *CognitiveAnswerState       `json:"cognitive_state"`
 	MisconceptionValidation *ai.MisconceptionValidation `json:"misconception_validation"`
 }
 
-func (s *ChallengeService) Generate(ctx context.Context, courseID, lessonID uint, challengeType string, misconceptionID *uint) (*ChallengeView, error) {
+func (s *ChallengeService) Generate(ctx context.Context, courseID, lessonID uint, challengeType string, misconceptionID *uint, idempotencyKeys ...string) (*ChallengeView, error) {
 	if challengeType != model.ChallengeTypeTransfer && challengeType != model.ChallengeTypeMisconceptionRecheck {
 		return nil, ErrChallengeInvalid
+	}
+	idempotencyKey, err := normalizeIdempotencyKey(idempotencyKeys...)
+	if err != nil {
+		return nil, err
+	}
+	if idempotencyKey != nil {
+		existing, findErr := s.challenges.FindByIdempotencyKey(ctx, courseID, *idempotencyKey)
+		if findErr == nil {
+			if existing.LessonID != lessonID || existing.ChallengeType != challengeType || !sameOptionalUint(existing.TargetMisconceptionID, misconceptionID) {
+				return nil, ErrIdempotencyConflict
+			}
+			return challengeView(existing), nil
+		}
+		if !errors.Is(findErr, gorm.ErrRecordNotFound) {
+			return nil, findErr
+		}
 	}
 	course, lesson, unit, err := s.courseLesson(ctx, courseID, lessonID)
 	if err != nil {
@@ -161,7 +180,7 @@ func (s *ChallengeService) Generate(ctx context.Context, courseID, lessonID uint
 	}
 	criteriaJSON, _ := json.Marshal(generated.EvaluationCriteria)
 	conceptsJSON, _ := json.Marshal(generated.SourceConcepts)
-	challenge := &model.AssessmentChallenge{CourseID: courseID, LessonID: lessonID, ChallengeType: challengeType, Prompt: generated.Prompt, ScenarioContext: generated.ScenarioContext, EvaluationCriteriaJSON: string(criteriaJSON), WhyThisIsTransfer: generated.WhyThisIsTransfer, SourceConceptsJSON: string(conceptsJSON), TargetLevel: generated.TargetLevel, Status: model.ChallengeStatusPending, Provider: meta.Provider, Model: meta.Model, PromptVersion: meta.PromptVersion}
+	challenge := &model.AssessmentChallenge{IdempotencyKey: idempotencyKey, CourseID: courseID, LessonID: lessonID, ChallengeType: challengeType, Prompt: generated.Prompt, ScenarioContext: generated.ScenarioContext, EvaluationCriteriaJSON: string(criteriaJSON), WhyThisIsTransfer: generated.WhyThisIsTransfer, SourceConceptsJSON: string(conceptsJSON), TargetLevel: generated.TargetLevel, Status: model.ChallengeStatusPending, Provider: meta.Provider, Model: meta.Model, PromptVersion: meta.PromptVersion}
 	if target != nil {
 		challenge.TargetMisconceptionID = &target.ID
 	}
@@ -172,10 +191,26 @@ func (s *ChallengeService) Generate(ctx context.Context, courseID, lessonID uint
 	return challengeView(challenge), nil
 }
 
-func (s *ChallengeService) Answer(ctx context.Context, courseID, challengeID uint, answer string) (*ChallengeAnswerResult, error) {
+func (s *ChallengeService) Answer(ctx context.Context, courseID, challengeID uint, answer string, idempotencyKeys ...string) (*ChallengeAnswerResult, error) {
 	answer = strings.TrimSpace(answer)
 	if answer == "" || len([]rune(answer)) > 5000 {
 		return nil, ErrInvalidAnswer
+	}
+	idempotencyKey, err := normalizeIdempotencyKey(idempotencyKeys...)
+	if err != nil {
+		return nil, err
+	}
+	if idempotencyKey != nil {
+		existing, findErr := s.challenges.FindAttemptByIdempotencyKey(ctx, courseID, *idempotencyKey)
+		if findErr == nil {
+			if existing.ChallengeID != challengeID || existing.UserAnswer != answer {
+				return nil, ErrIdempotencyConflict
+			}
+			return s.challengeAnswerResultFromAttempt(ctx, existing)
+		}
+		if !errors.Is(findErr, gorm.ErrRecordNotFound) {
+			return nil, findErr
+		}
 	}
 	challenge, err := s.challenges.FindByID(ctx, courseID, challengeID)
 	if err != nil {
@@ -245,9 +280,26 @@ func (s *ChallengeService) Answer(ctx context.Context, courseID, challengeID uin
 	if err != nil {
 		return nil, err
 	}
-	turn := &model.LearningTurn{CourseID: courseID, UnitID: unit.ID, LessonID: lesson.ID, TurnKind: turnKind(challenge.ChallengeType), ChallengeID: &challenge.ID, Question: challenge.Prompt, UserAnswer: answer, Result: evaluation.Result, Feedback: evaluation.Feedback, Explanation: evaluation.Explanation, MisconceptionsJSON: marshalJSON(evaluation.Misconceptions), CognitiveEvidenceJSON: marshalJSON(evaluation.CognitiveEvidence), EvaluationSource: sourceFromMeta(meta), Provider: meta.Provider, Model: meta.Model, PromptVersion: meta.PromptVersion, DemonstratedLevel: evaluation.DemonstratedLevel, MasteryScore: 0, NeedsReview: requiresReview}
+	masteryBefore, masteryAfter := 0.0, 0.0
+	var mastery *model.MasteryRecord
+	if existingMastery, masteryErr := s.learning.FindMasteryRecord(ctx, lesson.ID); masteryErr == nil {
+		mastery = existingMastery
+		masteryBefore = mastery.MasteryScore
+		masteryAfter = masteryBefore
+	} else if !errors.Is(masteryErr, gorm.ErrRecordNotFound) {
+		return nil, masteryErr
+	}
+	if challenge.ChallengeType == model.ChallengeTypeTransfer && passed {
+		if mastery == nil {
+			mastery = &model.MasteryRecord{CourseID: courseID, LessonID: lesson.ID}
+		}
+		masteryAfter = minFloat(1, masteryBefore+0.10)
+		mastery.MasteryScore = masteryAfter
+		mastery.NeedsReview = transition.State != nil && transition.State.Status == model.CognitiveStatusNeedsReview
+	}
+	turn := &model.LearningTurn{IdempotencyKey: idempotencyKey, CourseID: courseID, UnitID: unit.ID, LessonID: lesson.ID, TurnKind: turnKind(challenge.ChallengeType), ChallengeID: &challenge.ID, Question: challenge.Prompt, UserAnswer: answer, Result: evaluation.Result, Feedback: evaluation.Feedback, Explanation: evaluation.Explanation, MisconceptionsJSON: marshalJSON(evaluation.Misconceptions), CognitiveEvidenceJSON: marshalJSON(evaluation.CognitiveEvidence), EvaluationSource: sourceFromMeta(meta), Provider: meta.Provider, Model: meta.Model, PromptVersion: meta.PromptVersion, DemonstratedLevel: evaluation.DemonstratedLevel, MasteryScore: masteryAfter, MasteryScoreBefore: masteryBefore, MasteryScoreAfter: masteryAfter, NeedsReview: requiresReview}
 	validationJSON := marshalJSON(evaluation.MisconceptionValidation)
-	attempt := &model.ChallengeAttempt{CourseID: courseID, LessonID: lesson.ID, ChallengeID: challenge.ID, UserAnswer: answer, Result: evaluation.Result, DemonstratedLevel: evaluation.DemonstratedLevel, Passed: passed, Feedback: evaluation.Feedback, EvidenceJSON: marshalJSON(evaluation.CognitiveEvidence), MisconceptionValidationJSON: validationJSON}
+	attempt := &model.ChallengeAttempt{IdempotencyKey: idempotencyKey, CourseID: courseID, LessonID: lesson.ID, ChallengeID: challenge.ID, UserAnswer: answer, Result: evaluation.Result, DemonstratedLevel: evaluation.DemonstratedLevel, Passed: passed, Feedback: evaluation.Feedback, Explanation: evaluation.Explanation, EvidenceJSON: marshalJSON(evaluation.CognitiveEvidence), MisconceptionValidationJSON: validationJSON}
 	updates := []model.Misconception{}
 	events := []model.MisconceptionEvent{}
 	observations := make([]model.MisconceptionObservation, 0, len(evaluation.Misconceptions))
@@ -271,10 +323,10 @@ func (s *ChallengeService) Answer(ctx context.Context, courseID, challengeID uin
 		}
 	}
 	run := &model.AIEvaluationRun{CourseID: courseID, LessonID: lesson.ID, Provider: meta.Provider, Model: meta.Model, PromptVersion: meta.PromptVersion, RunType: "challenge_evaluation", Status: model.AIEvaluationRunStatusSuccess, AttemptCount: positiveOrDefault(meta.AttemptCount, 1), LatencyMS: meta.LatencyMS, InputTokens: meta.InputTokens, OutputTokens: meta.OutputTokens, RawResponse: meta.RawResponse}
-	if err := s.challenges.SaveChallengeResultWithObservations(ctx, turn, attempt, challenge, transition.State, transition.Evidence, transition.Event, updates, events, nil, observations, run); err != nil {
+	if err := s.challenges.SaveChallengeResultWithObservations(ctx, turn, attempt, challenge, mastery, transition.State, transition.Evidence, transition.Event, updates, events, nil, observations, run); err != nil {
 		return nil, err
 	}
-	return &ChallengeAnswerResult{ChallengeID: challenge.ID, AttemptID: attempt.ID, LearningTurnID: turn.ID, Result: evaluation.Result, DemonstratedLevel: evaluation.DemonstratedLevel, Passed: passed, Feedback: evaluation.Feedback, Explanation: evaluation.Explanation, CognitiveEvidence: evaluation.CognitiveEvidence, CognitiveState: cognitiveTransitionState(transition), MisconceptionValidation: evaluation.MisconceptionValidation}, nil
+	return &ChallengeAnswerResult{ChallengeID: challenge.ID, AttemptID: attempt.ID, LearningTurnID: turn.ID, Result: evaluation.Result, DemonstratedLevel: evaluation.DemonstratedLevel, Passed: passed, Feedback: evaluation.Feedback, Explanation: evaluation.Explanation, MasteryScoreBefore: masteryBefore, MasteryScoreAfter: masteryAfter, MasteryImpact: masteryImpactText(challenge.ChallengeType, passed), CognitiveEvidence: evaluation.CognitiveEvidence, CognitiveState: cognitiveTransitionState(transition), MisconceptionValidation: evaluation.MisconceptionValidation}, nil
 }
 
 func (s *ChallengeService) courseLesson(ctx context.Context, courseID, lessonID uint) (*model.Course, *model.Lesson, *model.CourseUnit, error) {
@@ -360,6 +412,41 @@ func (s *ChallengeService) recordFailedRun(ctx context.Context, courseID, lesson
 	_ = s.learning.SaveAIEvaluationRun(ctx, &model.AIEvaluationRun{CourseID: courseID, LessonID: lessonID, Provider: meta.Provider, Model: meta.Model, PromptVersion: meta.PromptVersion, RunType: runType, Status: model.AIEvaluationRunStatusFailed, AttemptCount: positiveOrDefault(meta.AttemptCount, 1), LatencyMS: meta.LatencyMS, InputTokens: meta.InputTokens, OutputTokens: meta.OutputTokens, RawResponse: meta.RawResponse, ErrorMessage: ai.ErrorCode(err)})
 }
 
+func (s *ChallengeService) challengeAnswerResultFromAttempt(ctx context.Context, attempt *model.ChallengeAttempt) (*ChallengeAnswerResult, error) {
+	turn, err := s.learning.FindLearningTurnByID(ctx, attempt.LearningTurnID)
+	if err != nil {
+		return nil, err
+	}
+	evidence, err := decodeEvaluationEvidence(attempt.EvidenceJSON)
+	if err != nil {
+		return nil, err
+	}
+	var validation *ai.MisconceptionValidation
+	if strings.TrimSpace(attempt.MisconceptionValidationJSON) != "" && attempt.MisconceptionValidationJSON != "null" {
+		if err := json.Unmarshal([]byte(attempt.MisconceptionValidationJSON), &validation); err != nil {
+			return nil, fmt.Errorf("decode misconception validation: %w", err)
+		}
+	}
+	var cognitiveState *CognitiveAnswerState
+	if s.cognitive != nil {
+		if detail, detailErr := s.cognitive.GetLessonCognitiveState(ctx, attempt.CourseID, attempt.LessonID); detailErr == nil {
+			cognitiveState = &CognitiveAnswerState{CurrentLevel: detail.State.CurrentLevel, Status: detail.State.Status}
+		}
+	}
+	challengeType := model.ChallengeTypeTransfer
+	if challenge, challengeErr := s.challenges.FindByID(ctx, attempt.CourseID, attempt.ChallengeID); challengeErr == nil {
+		challengeType = challenge.ChallengeType
+	}
+	return &ChallengeAnswerResult{
+		ChallengeID: attempt.ChallengeID, AttemptID: attempt.ID, LearningTurnID: attempt.LearningTurnID,
+		Result: attempt.Result, DemonstratedLevel: attempt.DemonstratedLevel, Passed: attempt.Passed,
+		Feedback: attempt.Feedback, Explanation: attempt.Explanation,
+		MasteryScoreBefore: turn.MasteryScoreBefore, MasteryScoreAfter: turn.MasteryScoreAfter,
+		MasteryImpact: masteryImpactText(challengeType, attempt.Passed), CognitiveEvidence: evidence,
+		CognitiveState: cognitiveState, MisconceptionValidation: validation,
+	}, nil
+}
+
 func challengeView(challenge *model.AssessmentChallenge) *ChallengeView {
 	criteria, _ := decodeStrings(challenge.EvaluationCriteriaJSON)
 	concepts, _ := decodeStrings(challenge.SourceConceptsJSON)
@@ -371,6 +458,27 @@ func turnKind(challengeType string) string {
 		return model.TurnKindMisconceptionRecheck
 	}
 	return model.TurnKindTransferChallenge
+}
+func sameOptionalUint(left, right *uint) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return *left == *right
+}
+func minFloat(left, right float64) float64 {
+	if left < right {
+		return left
+	}
+	return right
+}
+func masteryImpactText(challengeType string, passed bool) string {
+	if challengeType != model.ChallengeTypeTransfer {
+		return "误区复测会记录独立证据，但不会直接增加迁移掌握分。"
+	}
+	if passed {
+		return "迁移成功新增独立 transfer 证据，并使累计掌握度提高 10 个百分点（最高 100%）。"
+	}
+	return "本次未形成迁移支持证据，累计掌握度不变。"
 }
 func sourceFromMeta(meta ai.ProviderMeta) string {
 	if meta.Provider == "local" {

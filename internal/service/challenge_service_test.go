@@ -15,11 +15,12 @@ import (
 )
 
 type phase6Provider struct {
-	lessonResult   ai.EvaluationResult
-	fallback       *ai.MockProvider
-	failTransfer   bool
-	timeout        bool
-	challengeCalls int
+	lessonResult    ai.EvaluationResult
+	fallback        *ai.MockProvider
+	failTransfer    bool
+	timeout         bool
+	generationCalls int
+	challengeCalls  int
 }
 
 func (p *phase6Provider) EvaluateLessonAnswer(context.Context, ai.EvaluationRequest) (ai.EvaluationResult, ai.ProviderMeta, error) {
@@ -28,6 +29,7 @@ func (p *phase6Provider) EvaluateLessonAnswer(context.Context, ai.EvaluationRequ
 }
 
 func (p *phase6Provider) GenerateChallenge(ctx context.Context, req ai.ChallengeGenerationRequest) (ai.ChallengeGenerationResult, ai.ProviderMeta, error) {
+	p.generationCalls++
 	return p.fallback.GenerateChallenge(ctx, req)
 }
 
@@ -68,6 +70,8 @@ func newChallengeFixture(t *testing.T) challengeFixture {
 		&model.MasteryRecord{}, &model.Misconception{}, &model.AIEvaluationRun{}, &model.CognitiveState{},
 		&model.CognitiveEvidence{}, &model.CognitiveStateEvent{}, &model.AssessmentChallenge{}, &model.ChallengeAttempt{},
 		&model.MisconceptionEvent{}, &model.MisconceptionPatternLink{},
+		&model.CurriculumBlueprint{}, &model.CurriculumBlueprintUnit{}, &model.CurriculumBlueprintLesson{}, &model.CurriculumBlueprintRelation{}, &model.CurriculumDraft{},
+		&model.KnowledgeSource{}, &model.SourceEvidence{}, &model.GroundingLink{}, &model.SourceCredibilityAssessment{}, &model.GroundingReviewEvent{},
 	); err != nil {
 		t.Fatalf("migrate test database: %v", err)
 	}
@@ -319,5 +323,52 @@ func TestIsNonSubstantiveChallengeAnswerIsConservative(t *testing.T) {
 		if IsNonSubstantiveChallengeAnswer(answer) {
 			t.Errorf("unexpectedly blocked substantive answer: %q", answer)
 		}
+	}
+}
+
+func TestTransferChallengeWritesSeparateEvidenceAndIsIdempotent(t *testing.T) {
+	fixture := newChallengeFixture(t)
+	ctx := context.Background()
+	if _, err := fixture.courseService.SubmitAnswer(ctx, fixture.course.ID, fixture.lesson.ID, "口渴只是信号，还要结合环境和身体状态", "lesson-answer-1"); err != nil {
+		t.Fatal(err)
+	}
+	var masteryBefore model.MasteryRecord
+	if err := fixture.db.Where("lesson_id = ?", fixture.lesson.ID).First(&masteryBefore).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	first, err := fixture.service.Generate(ctx, fixture.course.ID, fixture.lesson.ID, model.ChallengeTypeTransfer, nil, "challenge-generation-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := fixture.service.Generate(ctx, fixture.course.ID, fixture.lesson.ID, model.ChallengeTypeTransfer, nil, "challenge-generation-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.ID != second.ID || fixture.provider.generationCalls != 1 {
+		t.Fatalf("challenge generation was not idempotent: first=%d second=%d calls=%d", first.ID, second.ID, fixture.provider.generationCalls)
+	}
+
+	answer := "高温散步后即使不口渴，也要结合年龄、出汗和环境判断"
+	result, err := fixture.service.Answer(ctx, fixture.course.ID, first.ID, answer, "challenge-answer-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	repeated, err := fixture.service.Answer(ctx, fixture.course.ID, first.ID, answer, "challenge-answer-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.AttemptID != repeated.AttemptID || fixture.provider.challengeCalls != 1 {
+		t.Fatalf("challenge answer was not idempotent: first=%d second=%d calls=%d", result.AttemptID, repeated.AttemptID, fixture.provider.challengeCalls)
+	}
+	if !result.Passed || result.MasteryScoreAfter != minFloat(1, masteryBefore.MasteryScore+0.10) {
+		t.Fatalf("transfer mastery impact is incorrect: before=%v result=%+v", masteryBefore.MasteryScore, result)
+	}
+	var lessonTurns, transferTurns, attempts int64
+	fixture.db.Model(&model.LearningTurn{}).Where("turn_kind = ?", model.TurnKindLessonAnswer).Count(&lessonTurns)
+	fixture.db.Model(&model.LearningTurn{}).Where("turn_kind = ?", model.TurnKindTransferChallenge).Count(&transferTurns)
+	fixture.db.Model(&model.ChallengeAttempt{}).Count(&attempts)
+	if lessonTurns != 1 || transferTurns != 1 || attempts != 1 {
+		t.Fatalf("challenge result was mixed or duplicated: lesson=%d transfer=%d attempts=%d", lessonTurns, transferTurns, attempts)
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 func (p *DeepSeekProvider) GenerateChallenge(ctx context.Context, req ChallengeGenerationRequest) (ChallengeGenerationResult, ProviderMeta, error) {
@@ -18,37 +19,58 @@ func (p *DeepSeekProvider) GenerateChallenge(ctx context.Context, req ChallengeG
 	if p.apiKey == "" {
 		return ChallengeGenerationResult{}, meta, newProviderError(ErrNotConfigured, nil)
 	}
-	requestContext, cancel := context.WithTimeout(ctx, p.challengeTimeout())
+	requestContext, cancel := context.WithTimeout(ctx, p.challengeGenerationTimeoutDuration())
 	defer cancel()
 	started := time.Now()
+	systemPrompt := BuildChallengeGenerationSystemPrompt()
+	userPrompt := BuildChallengeGenerationUserPrompt(req)
+	promptChars := int64(utf8.RuneCountInString(systemPrompt + userPrompt))
 	var lastErr error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		meta.AttemptCount = attempt
-		content, responseMeta, retry, err := p.requestJSON(requestContext, BuildChallengeGenerationSystemPrompt(), BuildChallengeGenerationUserPrompt(req))
+		providerStarted := time.Now()
+		content, responseMeta, retry, err := p.requestJSON(requestContext, systemPrompt, userPrompt)
+		providerLatency := time.Since(providerStarted).Milliseconds()
 		meta.RawResponse, meta.InputTokens, meta.OutputTokens = responseMeta.RawResponse, responseMeta.InputTokens, responseMeta.OutputTokens
 		if err == nil {
 			result, validationErr := parseChallengeGeneration(content, req.ChallengeType)
 			if validationErr == nil {
+				logChallengeGenerationAttempt(req.ChallengeType, meta, attempt, providerLatency, promptChars, content, "success", nil, time.Since(started).Milliseconds())
+				log.Printf("challenge generation completed: challenge_type=%s attempt_count=%d total_latency_ms=%d", req.ChallengeType, attempt, time.Since(started).Milliseconds())
 				meta.LatencyMS = time.Since(started).Milliseconds()
 				return result, meta, nil
 			}
 			err = validationErr
 			retry = true
 		}
+		logChallengeGenerationAttempt(req.ChallengeType, meta, attempt, providerLatency, promptChars, content, "failed", err, time.Since(started).Milliseconds())
 		lastErr = err
 		if !retry || attempt == maxAttempts {
 			break
 		}
-		select {
-		case <-requestContext.Done():
-		case <-time.After(100 * time.Millisecond):
+		if !waitForRetry(requestContext) {
+			break
 		}
 	}
 	meta.LatencyMS = time.Since(started).Milliseconds()
 	if errors.Is(requestContext.Err(), context.DeadlineExceeded) {
-		return ChallengeGenerationResult{}, meta, newProviderError(ErrTimeout, nil)
+		return ChallengeGenerationResult{}, meta, newProviderError(ErrTimeout, requestContext.Err())
 	}
 	return ChallengeGenerationResult{}, meta, lastErr
+}
+
+func logChallengeGenerationAttempt(challengeType string, meta ProviderMeta, attempt int, providerLatencyMS, promptChars int64, content, validationStatus string, err error, totalLatencyMS int64) {
+	logMessage := fmt.Sprintf("challenge generation: challenge_type=%s provider=%s model=%s prompt_version=%s attempt=%d provider_latency_ms=%d prompt_chars=%d raw_content_chars=%d validation_status=%s total_latency_ms=%d", challengeType, meta.Provider, meta.Model, meta.PromptVersion, attempt, providerLatencyMS, promptChars, int64(utf8.RuneCountInString(content)), validationStatus, totalLatencyMS)
+	if validationStatus == "success" {
+		log.Printf("%s", logMessage)
+		return
+	}
+	failureType := challengeFailureType(err)
+	if failureType == "validation_error" {
+		log.Printf("%s failure_type=%s validation_error=%q", logMessage, failureType, ErrorDetail(err))
+		return
+	}
+	log.Printf("%s failure_type=%s error=%q", logMessage, failureType, ErrorDetail(err))
 }
 
 func (p *DeepSeekProvider) EvaluateChallenge(ctx context.Context, req ChallengeEvaluationRequest) (ChallengeEvaluationResult, ProviderMeta, error) {
@@ -56,7 +78,7 @@ func (p *DeepSeekProvider) EvaluateChallenge(ctx context.Context, req ChallengeE
 	if p.apiKey == "" {
 		return ChallengeEvaluationResult{}, meta, newProviderError(ErrNotConfigured, nil)
 	}
-	requestContext, cancel := context.WithTimeout(ctx, p.challengeTimeout())
+	requestContext, cancel := context.WithTimeout(ctx, p.evaluationTimeout())
 	defer cancel()
 	started := time.Now()
 	var lastErr error
@@ -78,9 +100,8 @@ func (p *DeepSeekProvider) EvaluateChallenge(ctx context.Context, req ChallengeE
 		if !retry || attempt == maxAttempts {
 			break
 		}
-		select {
-		case <-requestContext.Done():
-		case <-time.After(100 * time.Millisecond):
+		if !waitForRetry(requestContext) {
+			break
 		}
 	}
 	meta.LatencyMS = time.Since(started).Milliseconds()
@@ -90,11 +111,31 @@ func (p *DeepSeekProvider) EvaluateChallenge(ctx context.Context, req ChallengeE
 	return ChallengeEvaluationResult{}, meta, lastErr
 }
 
-func (p *DeepSeekProvider) challengeTimeout() time.Duration {
+func (p *DeepSeekProvider) evaluationTimeout() time.Duration {
 	if p.timeout > 0 {
 		return p.timeout
 	}
 	return 45 * time.Second
+}
+
+func (p *DeepSeekProvider) challengeGenerationTimeoutDuration() time.Duration {
+	if p.challengeGenerationTimeout > 0 {
+		return p.challengeGenerationTimeout
+	}
+	return 60 * time.Second
+}
+
+func challengeFailureType(err error) string {
+	switch {
+	case errors.Is(err, ErrTimeout), errors.Is(err, context.DeadlineExceeded):
+		return "timeout"
+	case errors.Is(err, ErrEmptyContent):
+		return "empty_content"
+	case errors.Is(err, ErrInvalidResponse):
+		return "validation_error"
+	default:
+		return "provider_error"
+	}
 }
 
 func parseChallengeGeneration(content, challengeType string) (ChallengeGenerationResult, error) {
@@ -183,7 +224,7 @@ func (p *DeepSeekProvider) requestJSON(ctx context.Context, systemPrompt, userPr
 		Messages:       []chatMessage{{Role: "system", Content: systemPrompt}, {Role: "user", Content: userPrompt}},
 		ResponseFormat: responseFormat{Type: "json_object"},
 		Temperature:    0.2,
-		MaxTokens:      2400,
+		MaxTokens:      24000,
 	})
 	if err != nil {
 		return "", ProviderMeta{}, false, newProviderError(ErrProvider, err)
@@ -196,14 +237,31 @@ func (p *DeepSeekProvider) requestJSON(ctx context.Context, systemPrompt, userPr
 	request.Header.Set("Authorization", "Bearer "+p.apiKey)
 	response, err := p.client.Do(request)
 	if err != nil {
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return "", ProviderMeta{}, false, newProviderError(ErrTimeout, nil)
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) {
+			cause := ctx.Err()
+			if cause == nil {
+				cause = err
+			}
+			return "", ProviderMeta{}, false, newProviderError(ErrTimeout, cause)
 		}
-		return "", ProviderMeta{}, true, newProviderError(ErrProvider, err)
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return "", ProviderMeta{}, false, ctx.Err()
+		}
+		return "", ProviderMeta{}, true, newProviderError(ErrNetworkError, err)
 	}
 	responseBody, readErr := io.ReadAll(io.LimitReader(response.Body, 2<<20))
 	closeErr := response.Body.Close()
 	if readErr != nil || closeErr != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(readErr, context.DeadlineExceeded) || errors.Is(closeErr, context.DeadlineExceeded) {
+			cause := ctx.Err()
+			if cause == nil {
+				cause = readErr
+				if cause == nil {
+					cause = closeErr
+				}
+			}
+			return "", ProviderMeta{}, false, newProviderError(ErrTimeout, cause)
+		}
 		return "", ProviderMeta{}, true, newProviderError(ErrProvider, fmt.Errorf("read challenge provider response"))
 	}
 	var completion chatCompletionResponse
@@ -212,11 +270,15 @@ func (p *DeepSeekProvider) requestJSON(ctx context.Context, systemPrompt, userPr
 	}
 	responseMeta := ProviderMeta{RawResponse: string(responseBody), InputTokens: completion.Usage.PromptTokens, OutputTokens: completion.Usage.CompletionTokens}
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return "", responseMeta, response.StatusCode == http.StatusTooManyRequests || response.StatusCode >= 500, &ProviderError{Code: ErrProvider, StatusCode: response.StatusCode}
+		code := ErrProvider
+		if response.StatusCode == http.StatusTooManyRequests {
+			code = ErrRateLimited
+		}
+		return "", responseMeta, response.StatusCode == http.StatusTooManyRequests || response.StatusCode >= 500, &ProviderError{Code: code, StatusCode: response.StatusCode}
 	}
 	if len(completion.Choices) == 0 || strings.TrimSpace(completion.Choices[0].Message.Content) == "" {
 		log.Printf("AI challenge provider empty content: provider=deepseek model=%s", p.model)
-		return "", responseMeta, true, newProviderError(ErrInvalidResponse, fmt.Errorf("empty challenge provider content"))
+		return "", responseMeta, true, newProviderError(ErrEmptyContent, fmt.Errorf("empty challenge provider content"))
 	}
 	return completion.Choices[0].Message.Content, ProviderMeta{RawResponse: completion.Choices[0].Message.Content, InputTokens: responseMeta.InputTokens, OutputTokens: responseMeta.OutputTokens}, false, nil
 }

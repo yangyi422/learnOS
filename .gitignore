@@ -3,6 +3,8 @@
 .vscode/
 .DS_Store
 web/node_modules/
+web/playwright-report/
+web/test-results/
 internal/webassets/dist/*
 !internal/webassets/dist/index.html
 data/*
@@ -10,3 +12,5 @@ data/*
 *.db
 *.db-shm
 *.db-wal
+learnos
+server

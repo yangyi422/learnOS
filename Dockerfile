@@ -25,11 +25,12 @@ RUN apt-get update \
 WORKDIR /app
 COPY --from=go-builder /out/learnos /app/learnos
 RUN mkdir -p /app/data
+RUN mkdir -p /app/backups
 ENV APP_ADDR=:8080 \
     APP_DATA_DIR=/app/data \
     APP_ENV=production
 EXPOSE 8080
-VOLUME ["/app/data"]
+VOLUME ["/app/data", "/app/backups"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD curl --fail --silent http://127.0.0.1:8080/healthz >/dev/null || exit 1
+  CMD curl --fail --silent http://127.0.0.1:8080/health >/dev/null || exit 1
 ENTRYPOINT ["/app/learnos"]

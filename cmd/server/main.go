@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"log"
 
 	"learnos/internal/app"
@@ -19,6 +20,10 @@ func main() {
 	}
 
 	if err := application.Run(); err != nil {
+		if errors.Is(err, app.ErrRestartAfterRestore) {
+			log.Print("database restore requested; restart required")
+			return
+		}
 		log.Fatalf("run application: %v", err)
 	}
 }

@@ -6,6 +6,8 @@ import LearningView from '@/views/LearningView.vue'
 import CourseArchiveView from '@/views/CourseArchiveView.vue'
 import KnowledgeGraphView from '@/views/KnowledgeGraphView.vue'
 import MisconceptionNetworkView from '@/views/MisconceptionNetworkView.vue'
+import ExplorationView from '@/views/ExplorationView.vue'
+import DomainInitializationView from '@/views/DomainInitializationView.vue'
 
 export default createRouter({
   history: createWebHistory(),
@@ -20,6 +22,7 @@ export default createRouter({
       component: CoursesView,
       meta: { title: '课程档案' },
     },
+    { path: '/domains/new', component: DomainInitializationView, meta: { title: '创建学习领域' } },
     {
       path: '/courses/:id/learn',
       component: LearningView,
@@ -44,6 +47,11 @@ export default createRouter({
       path: '/settings',
       component: SettingsView,
       meta: { title: '系统设置' },
+    },
+    {
+      path: '/exploration/questions',
+      component: ExplorationView,
+      meta: { title: '探索问题池' },
     },
   ],
 })

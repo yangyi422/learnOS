@@ -47,6 +47,14 @@ func (r *ChallengeRepository) FindByID(ctx context.Context, courseID, challengeI
 	return &challenge, nil
 }
 
+func (r *ChallengeRepository) FindByIdempotencyKey(ctx context.Context, courseID uint, key string) (*model.AssessmentChallenge, error) {
+	var challenge model.AssessmentChallenge
+	if err := r.db.WithContext(ctx).Where("course_id = ? AND idempotency_key = ?", courseID, key).First(&challenge).Error; err != nil {
+		return nil, fmt.Errorf("find assessment challenge by idempotency key: %w", err)
+	}
+	return &challenge, nil
+}
+
 func (r *ChallengeRepository) ListByLesson(ctx context.Context, courseID, lessonID uint) ([]model.AssessmentChallenge, error) {
 	var challenges []model.AssessmentChallenge
 	if err := r.db.WithContext(ctx).Where("course_id = ? AND lesson_id = ?", courseID, lessonID).Order("created_at DESC, id DESC").Find(&challenges).Error; err != nil {
@@ -63,15 +71,23 @@ func (r *ChallengeRepository) FindAttempt(ctx context.Context, challengeID uint)
 	return &attempt, nil
 }
 
-func (r *ChallengeRepository) SaveChallengeResult(ctx context.Context, turn *model.LearningTurn, attempt *model.ChallengeAttempt, challenge *model.AssessmentChallenge, state *model.CognitiveState, evidence []model.CognitiveEvidence, stateEvent *model.CognitiveStateEvent, misconceptionUpdates []model.Misconception, misconceptionEvents []model.MisconceptionEvent, patternLinks []model.MisconceptionPatternLink, run *model.AIEvaluationRun) error {
-	return r.saveChallengeResult(ctx, turn, attempt, challenge, state, evidence, stateEvent, misconceptionUpdates, misconceptionEvents, patternLinks, nil, run)
+func (r *ChallengeRepository) FindAttemptByIdempotencyKey(ctx context.Context, courseID uint, key string) (*model.ChallengeAttempt, error) {
+	var attempt model.ChallengeAttempt
+	if err := r.db.WithContext(ctx).Where("course_id = ? AND idempotency_key = ?", courseID, key).First(&attempt).Error; err != nil {
+		return nil, fmt.Errorf("find challenge attempt by idempotency key: %w", err)
+	}
+	return &attempt, nil
 }
 
-func (r *ChallengeRepository) SaveChallengeResultWithObservations(ctx context.Context, turn *model.LearningTurn, attempt *model.ChallengeAttempt, challenge *model.AssessmentChallenge, state *model.CognitiveState, evidence []model.CognitiveEvidence, stateEvent *model.CognitiveStateEvent, misconceptionUpdates []model.Misconception, misconceptionEvents []model.MisconceptionEvent, patternLinks []model.MisconceptionPatternLink, observations []model.MisconceptionObservation, run *model.AIEvaluationRun) error {
-	return r.saveChallengeResult(ctx, turn, attempt, challenge, state, evidence, stateEvent, misconceptionUpdates, misconceptionEvents, patternLinks, observations, run)
+func (r *ChallengeRepository) SaveChallengeResult(ctx context.Context, turn *model.LearningTurn, attempt *model.ChallengeAttempt, challenge *model.AssessmentChallenge, mastery *model.MasteryRecord, state *model.CognitiveState, evidence []model.CognitiveEvidence, stateEvent *model.CognitiveStateEvent, misconceptionUpdates []model.Misconception, misconceptionEvents []model.MisconceptionEvent, patternLinks []model.MisconceptionPatternLink, run *model.AIEvaluationRun) error {
+	return r.saveChallengeResult(ctx, turn, attempt, challenge, mastery, state, evidence, stateEvent, misconceptionUpdates, misconceptionEvents, patternLinks, nil, run)
 }
 
-func (r *ChallengeRepository) saveChallengeResult(ctx context.Context, turn *model.LearningTurn, attempt *model.ChallengeAttempt, challenge *model.AssessmentChallenge, state *model.CognitiveState, evidence []model.CognitiveEvidence, stateEvent *model.CognitiveStateEvent, misconceptionUpdates []model.Misconception, misconceptionEvents []model.MisconceptionEvent, patternLinks []model.MisconceptionPatternLink, observations []model.MisconceptionObservation, run *model.AIEvaluationRun) error {
+func (r *ChallengeRepository) SaveChallengeResultWithObservations(ctx context.Context, turn *model.LearningTurn, attempt *model.ChallengeAttempt, challenge *model.AssessmentChallenge, mastery *model.MasteryRecord, state *model.CognitiveState, evidence []model.CognitiveEvidence, stateEvent *model.CognitiveStateEvent, misconceptionUpdates []model.Misconception, misconceptionEvents []model.MisconceptionEvent, patternLinks []model.MisconceptionPatternLink, observations []model.MisconceptionObservation, run *model.AIEvaluationRun) error {
+	return r.saveChallengeResult(ctx, turn, attempt, challenge, mastery, state, evidence, stateEvent, misconceptionUpdates, misconceptionEvents, patternLinks, observations, run)
+}
+
+func (r *ChallengeRepository) saveChallengeResult(ctx context.Context, turn *model.LearningTurn, attempt *model.ChallengeAttempt, challenge *model.AssessmentChallenge, mastery *model.MasteryRecord, state *model.CognitiveState, evidence []model.CognitiveEvidence, stateEvent *model.CognitiveStateEvent, misconceptionUpdates []model.Misconception, misconceptionEvents []model.MisconceptionEvent, patternLinks []model.MisconceptionPatternLink, observations []model.MisconceptionObservation, run *model.AIEvaluationRun) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(turn).Error; err != nil {
 			return fmt.Errorf("create challenge learning turn: %w", err)
@@ -88,6 +104,26 @@ func (r *ChallengeRepository) saveChallengeResult(ctx context.Context, turn *mod
 		}
 		if updated.RowsAffected != 1 {
 			return fmt.Errorf("challenge is no longer pending")
+		}
+		if mastery != nil {
+			var existing model.MasteryRecord
+			err := tx.Where("lesson_id = ?", mastery.LessonID).First(&existing).Error
+			switch {
+			case err == nil:
+				if err := tx.Model(&existing).Updates(map[string]interface{}{
+					"course_id": mastery.CourseID, "mastery_score": mastery.MasteryScore,
+					"answer_count": mastery.AnswerCount, "incorrect_count": mastery.IncorrectCount,
+					"needs_review": mastery.NeedsReview, "next_review_at": mastery.NextReviewAt,
+				}).Error; err != nil {
+					return fmt.Errorf("update challenge mastery record: %w", err)
+				}
+			case errors.Is(err, gorm.ErrRecordNotFound):
+				if err := tx.Create(mastery).Error; err != nil {
+					return fmt.Errorf("create challenge mastery record: %w", err)
+				}
+			default:
+				return fmt.Errorf("find challenge mastery record: %w", err)
+			}
 		}
 		if state != nil {
 			turnID := turn.ID
