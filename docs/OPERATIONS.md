@@ -92,12 +92,16 @@ docker compose ps
 仓库的 `.github/workflows/deploy.yml` 在 `main` 推送或手动触发时运行。它会先执行 Go 测试、`go vet`、前端类型检查、Vitest 和生产构建；全部通过后，使用 SSH 在生产服务器执行：
 
 ```bash
-git fetch origin main
-git merge --ff-only origin/main
-docker compose --profile production up -d --build
+git fetch origin refs/heads/main:refs/remotes/origin/main
+# target_commit 是 Actions 经 SSH 传入的 GITHUB_SHA，即本次已通过验证的提交。
+git merge --ff-only "$target_commit"
+test "$(git rev-parse HEAD)" = "$target_commit"
+docker compose --profile production up -d --build --force-recreate
 ```
 
 在 GitHub 仓库的 `Settings → Environments → production → Environment secrets` 中配置：
+
+部署会检查 main 分支及已跟踪文件是否干净，显式更新远端分支引用以兼容旧版 Git，并打印 `target_commit`、`fetched_main` 和 `deployed_commit`。最终 HEAD 必须等于本次 Actions 的提交；若服务器已经部署更晚的提交，旧运行会失败而不会回退。重新运行旧 Actions 仍对应旧提交，请选择目标提交的运行。
 
 - `DEPLOY_HOST`：服务器域名或 IP
 - `DEPLOY_PORT`：SSH 端口，可选，默认 `22`

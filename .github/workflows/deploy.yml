@@ -93,14 +93,19 @@ jobs:
             -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            bash -s -- "$DEPLOY_PATH" <<'REMOTE'
+            bash -s -- "$DEPLOY_PATH" "$GITHUB_SHA" <<'REMOTE'
           set -euo pipefail
           deploy_path="$1"
+          target_commit="$2"
           cd "$deploy_path"
           test "$(git symbolic-ref --short HEAD)" = "main"
-          git fetch origin main
-          target_commit="$(git rev-parse origin/main)"
-          git merge --ff-only origin/main
+          test -z "$(git status --porcelain --untracked-files=no)"
+          git fetch origin refs/heads/main:refs/remotes/origin/main
+          git cat-file -e "$target_commit^{commit}"
+          git merge-base --is-ancestor "$target_commit" refs/remotes/origin/main
+          echo "target_commit=$target_commit"
+          echo "fetched_main=$(git rev-parse refs/remotes/origin/main)"
+          git merge --ff-only "$target_commit"
           deployed_commit="$(git rev-parse HEAD)"
           test "$deployed_commit" = "$target_commit"
           echo "deploy_path=$deploy_path"
