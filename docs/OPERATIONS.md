@@ -83,3 +83,23 @@ docker compose ps
 ```
 
 收到 SIGINT/SIGTERM 时，服务停止接收新请求，最多等待 10 秒完成已有请求，然后关闭 SQLite 连接。升级前建议手工创建一次备份，并保留最近一次可验证恢复的备份。
+
+## GitHub Actions 自动部署
+
+仓库的 `.github/workflows/deploy.yml` 在 `main` 推送或手动触发时运行。它会先执行 Go 测试、`go vet`、前端类型检查、Vitest 和生产构建；全部通过后，使用 SSH 在生产服务器执行：
+
+```bash
+git fetch origin main
+git merge --ff-only origin/main
+docker compose --profile production up -d --build
+```
+
+在 GitHub 仓库的 `Settings → Environments → production → Environment secrets` 中配置：
+
+- `DEPLOY_HOST`：服务器域名或 IP
+- `DEPLOY_PORT`：SSH 端口，可选，默认 `22`
+- `DEPLOY_USER`：SSH 登录用户
+- `DEPLOY_SSH_KEY`：对应用户的私钥，完整粘贴多行内容
+- `DEPLOY_PATH`：服务器上的 LearnOS 仓库绝对路径，例如 `/opt/learnos`
+
+服务器需要预先完成 Docker、Docker Compose、Git 和仓库访问权限配置；`.env`、SQLite 数据目录和备份目录应留在服务器上，不放入 Git。部署使用 `git merge --ff-only`，服务器存在未提交改动时会安全失败，不会覆盖这些改动。
