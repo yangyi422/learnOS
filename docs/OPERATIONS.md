@@ -19,7 +19,7 @@ BACKUP_HOST_DIR=./backups
 ```bash
 go run ./cmd/learnos init
 docker compose up -d --build app
-curl --fail http://127.0.0.1:8080/health
+curl --fail http://127.0.0.1:8888/health
 ```
 
 `init` 只建立 schema 和 System Seed，不创建 Course、Unit、Lesson 或个人学习数据。生产 / Dogfooding 首次启动必须保持空知识世界；开发环境通过 `DEMO_SEED_ENABLED=true` 保留 Demo World。正常启动不会删除或重置既有课程、Lesson、学习记录、认知状态、探索记录或来源数据。
@@ -31,10 +31,10 @@ curl --fail http://127.0.0.1:8080/health
 应用设置页可以创建备份、下载 JSON/Markdown 导出并运行一致性检查。API 为：
 
 ```bash
-curl -u "$APP_USERNAME:$PASSWORD" -X POST http://127.0.0.1:8080/api/v1/system/backups
-curl -u "$APP_USERNAME:$PASSWORD" http://127.0.0.1:8080/api/v1/system/backups
-curl -u "$APP_USERNAME:$PASSWORD" -X POST 'http://127.0.0.1:8080/api/v1/system/export?format=json' -o learnos-export.json
-curl -u "$APP_USERNAME:$PASSWORD" -X POST 'http://127.0.0.1:8080/api/v1/system/export?format=markdown' -o learnos-export.md
+curl -u "$APP_USERNAME:$PASSWORD" -X POST http://127.0.0.1:8888/api/v1/system/backups
+curl -u "$APP_USERNAME:$PASSWORD" http://127.0.0.1:8888/api/v1/system/backups
+curl -u "$APP_USERNAME:$PASSWORD" -X POST 'http://127.0.0.1:8888/api/v1/system/export?format=json' -o learnos-export.json
+curl -u "$APP_USERNAME:$PASSWORD" -X POST 'http://127.0.0.1:8888/api/v1/system/export?format=markdown' -o learnos-export.md
 ```
 
 设置页还可以选择服务端备份并恢复。该操作要求输入 `恢复 <备份文件名>`，确认后固定所选快照、优雅停止应用，并依赖 Docker `restart: unless-stopped` 或等价进程管理器重新启动。启动阶段会先备份当前数据库，再恢复固定快照；页面和接口不会接受任意文件路径。
@@ -45,7 +45,7 @@ curl -u "$APP_USERNAME:$PASSWORD" -X POST 'http://127.0.0.1:8080/api/v1/system/e
 docker compose stop app
 go run ./cmd/learnos restore --backup ./backups/learnos-YYYYMMDD-HHMMSS.db
 docker compose up -d app
-curl --fail http://127.0.0.1:8080/health
+curl --fail http://127.0.0.1:8888/health
 ```
 
 恢复命令会先验证源文件的 SQLite `integrity_check`，为当前数据库创建 pre-restore 备份，复制到临时文件并再次校验后原子替换。恢复不会改变任何 Lesson 的 ID；恢复完成后应人工检查课程列表、当前 Lesson、学习历史和认知状态。
@@ -57,8 +57,8 @@ curl --fail http://127.0.0.1:8080/health
 设置页或以下接口可查看：
 
 ```bash
-curl -u "$APP_USERNAME:$PASSWORD" http://127.0.0.1:8080/api/v1/system/diagnostics
-curl -u "$APP_USERNAME:$PASSWORD" http://127.0.0.1:8080/api/v1/system/consistency
+curl -u "$APP_USERNAME:$PASSWORD" http://127.0.0.1:8888/api/v1/system/diagnostics
+curl -u "$APP_USERNAME:$PASSWORD" http://127.0.0.1:8888/api/v1/system/consistency
 ```
 
 `/health` 只执行轻量数据库连接检查，适合 Docker healthcheck；完整 SQLite `integrity_check` 在 diagnostics 中执行，避免每个探活请求扫描数据库。一致性检查是只读的，会检查 Course/Unit/Lesson 归属、关系端点与 DAG、节点类型、掌握分数/归属、认知证据与回答范围、误区/挑战、探索和来源关联；不会修复、删除或重写学习数据。

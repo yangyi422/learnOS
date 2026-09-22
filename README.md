@@ -58,9 +58,9 @@ docker compose up -d --build app
 
 生产 / Dogfooding 建议显式使用独立数据目录，并保持 `APP_ENV=production`、`DEMO_SEED_ENABLED=false`。首次打开后从首页的“创建第一个学习领域”进入三阶段初始化；开发环境默认保留 Demo World。
 
-初始化页面也可直接打开：`http://127.0.0.1:8080/domains/new`
+初始化页面也可直接打开：`http://127.0.0.1:8888/domains/new`
 
-服务仅绑定到宿主机回环地址：`http://127.0.0.1:8080`。
+生产服务默认绑定到宿主机回环地址：`http://127.0.0.1:8888`；容器内部仍监听 `8080`。
 
 ### 生成新密码哈希
 
@@ -97,9 +97,9 @@ Caddy 将反向代理到应用并自动处理域名证书。
 ## 验证
 
 ```bash
-curl http://127.0.0.1:8080/health
-curl -u admin:change-me http://127.0.0.1:8080/api/v1/courses
-curl -u admin:change-me http://127.0.0.1:8080/api/v1/courses/1/current-lesson
+curl http://127.0.0.1:8888/health
+curl -u admin:change-me http://127.0.0.1:8888/api/v1/courses
+curl -u admin:change-me http://127.0.0.1:8888/api/v1/courses/1/current-lesson
 ```
 
 ## Phase 3 AI 配置
