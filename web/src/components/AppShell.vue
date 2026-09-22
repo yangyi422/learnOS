@@ -77,7 +77,9 @@ const baseNavigation = [
   { to: '/settings', label: '系统设置' },
   { to: '/users', label: '用户管理' },
 ]
-const navigation = computed(() => current.value?.role === 'admin' ? baseNavigation : baseNavigation.filter(item => item.to !== '/users'))
+const navigation = computed(() => current.value?.role === 'admin'
+  ? baseNavigation
+  : baseNavigation.filter(item => item.to !== '/users' && item.to !== '/settings'))
 const drawerOpen = ref(false)
 const mobileMenuButton = ref<HTMLElement | { $el: HTMLElement } | null>(null)
 let focusAfterClose: 'button' | 'heading' = 'button'
