@@ -101,7 +101,12 @@ func (h *Handler) Login(c *gin.Context) {
 	}
 	token, user, err := h.users.Login(c.Request.Context(), request.Username, request.Password)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid username or password"})
+		if errors.Is(err, service.ErrInvalidCredentials) || errors.Is(err, service.ErrUserBlocked) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": gin.H{"code": "INVALID_CREDENTIALS", "message": "用户名或密码错误，或账号已停用。", "retryable": false}})
+			return
+		}
+		log.Print("login failed: authentication storage or session creation unavailable")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "LOGIN_UNAVAILABLE", "message": "登录服务暂时不可用，请查看服务器日志。", "retryable": true}})
 		return
 	}
 	http.SetCookie(c.Writer, &http.Cookie{Name: middleware.SessionCookieName, Value: token, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: c.Request.TLS != nil, MaxAge: 7 * 24 * 60 * 60})

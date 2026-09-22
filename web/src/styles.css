@@ -1168,9 +1168,16 @@ p {
   outline-offset: 3px !important;
 }
 
-.app-shell :where(.el-input__wrapper, .el-select__wrapper):focus-within,
-.app-shell .el-textarea__inner:focus-visible {
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, .24) !important;
+:where(.el-input__wrapper, .el-select__wrapper):focus-within,
+.el-textarea__inner:focus-visible {
+  box-shadow: 0 0 0 1px #2563eb inset !important;
+}
+
+/* Element Plus draws focus on the wrapper; avoid a second ring on its input. */
+.el-input__inner:focus-visible,
+.el-select__input:focus-visible,
+.el-textarea__inner:focus-visible {
+  outline: none !important;
 }
 
 .app-shell .el-input__wrapper,

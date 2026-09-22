@@ -1,5 +1,9 @@
 # LearnOS 运维手册
 
+## 登录排查
+
+`POST /api/v1/auth/login` 的 401 表示数据库用户不存在、密码不匹配或账号停用；数据库/会话创建故障返回 500。`APP_USERNAME` / `APP_PASSWORD_HASH` 仅用于首次创建该账号，修改环境变量不会覆盖已有用户密码。登录成功后的业务接口 401 则需检查浏览器是否携带 `learnos_session` Cookie。不要在排查输出中粘贴密码、哈希或 Cookie。
+
 ## 数据目录
 
 SQLite 是事实来源。生产容器使用 `/app/data/learnos.db`，备份使用 `/app/backups/`。宿主机建议将两者分开挂载：

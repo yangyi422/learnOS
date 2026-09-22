@@ -7,7 +7,7 @@
       <el-alert v-if="error" :title="error" type="error" show-icon :closable="false" />
       <el-form label-position="top" @submit.prevent="submit">
         <el-form-item label="用户名"><el-input v-model="username" autocomplete="username" /></el-form-item>
-        <el-form-item label="密码"><el-input v-model="password" type="password" show-password autocomplete="current-password" @keyup.enter="submit" /></el-form-item>
+        <el-form-item label="密码"><el-input v-model="password" type="password" show-password autocomplete="current-password" /></el-form-item>
         <el-button type="primary" native-type="submit" :loading="loading" style="width:100%">登录</el-button>
       </el-form>
     </el-card>
@@ -26,6 +26,7 @@ const error = ref('')
 const loading = ref(false)
 
 async function submit() {
+  if (loading.value) return
   error.value = ''
   loading.value = true
   try { await login(username.value, password.value); await router.replace('/') }
