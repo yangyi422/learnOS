@@ -14,7 +14,7 @@ BACKUP_HOST_DIR=./backups
 
 本地开发模式固定使用回环地址：Go API 为 `127.0.0.1:8080`，Vite 开发服务器为 `127.0.0.1:5173`，Vite Preview 为 `127.0.0.1:4173`。`APP_ENV=development` 会跳过 Basic Auth，且拒绝绑定 `0.0.0.0` 或其他非 `127.0.0.1` 地址；production 及其他环境继续使用 Basic Auth。
 
-生产 Docker 部署使用端口映射 `宿主机 8888 → 容器 8080`：宿主机上的访问和运维检查使用 `127.0.0.1:8888`，容器内 Docker healthcheck 和 Caddy 到应用的连接使用 `app:8080`。不要把容器内健康检查端口改为宿主机端口。
+生产 Docker 部署使用端口映射 `宿主机 8888 → 容器 8080`：直接通过服务器 IP 访问时将 `APP_BIND_HOST` 配为 `0.0.0.0`，仅经 Caddy 访问时可配为 `127.0.0.1`；容器内 Docker healthcheck 和 Caddy 到应用的连接使用 `app:8080`。不要把容器内健康检查端口改为宿主机端口。
 
 ## 初始化与启动
 
