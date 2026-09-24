@@ -13,7 +13,7 @@ const (
 
 type DomainInitializationDraft struct {
 	ID                    uint       `gorm:"primaryKey" json:"id"`
-	UserID                uint       `gorm:"not null;index" json:"user_id"`
+	UserID                uint       `gorm:"not null;default:0;index" json:"user_id"`
 	DomainName            string     `gorm:"size:255;not null;index" json:"domain_name"`
 	LearningGoal          string     `gorm:"type:text;not null" json:"learning_goal"`
 	TargetDepth           string     `gorm:"size:32;not null" json:"target_depth"`

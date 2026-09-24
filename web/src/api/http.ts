@@ -64,6 +64,10 @@ function readableLegacyError(code: string, status: number): string {
     AI_NETWORK_ERROR: '暂时无法连接 AI 服务，本次数据未保存。',
     'invalid domain request': '请检查领域名称、学习原因和期望深度。',
     'invalid domain initialization request': '请检查领域名称、学习原因和期望深度。',
+    'invalid project input': '请检查项目、任务名称及填写的字段。',
+    'project or task not found': '项目或任务不存在，可能已被移除。',
+    'invalid task order': '任务位置已变化，请刷新后重试。',
+    'task changed; reload and try again': '任务已在其他设备更新，请刷新后重试。',
   }
   return messages[code] ?? `请求失败：HTTP ${status}`
 }

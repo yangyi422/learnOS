@@ -21,6 +21,7 @@ LearnOS 是一个自托管的个人 AI 学习系统，支持管理员创建多�
 - 认知层级、掌握证据和认知演化时间线持久化
 - 管理员创建用户、会话登录和课程级数据隔离
 - Docker Compose 与可选 Caddy HTTPS
+- Project Kanban Workspace：多项目四列看板、拖动排序、Today 与项目归档
 
 ## 环境要求
 

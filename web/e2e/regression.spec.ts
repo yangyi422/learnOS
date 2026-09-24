@@ -146,6 +146,7 @@ async function installAPIMocks(page: Page): Promise<MockState> {
     const path = url.pathname
     const method = request.method()
 
+    if (path === '/api/v1/auth/me') return json(route, { data: { id: 1, username: 'test-admin', role: 'admin', status: 'active' } })
     if (path === '/api/v1/courses') return json(route, { data: courses })
     if (path === '/api/v1/domains/drafts' && method === 'POST') {
       state.domainCreateAttempts += 1

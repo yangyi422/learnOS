@@ -24,6 +24,13 @@ func TestLearningDataExportIncludesFactsAndNeverIncludesAPIKey(t *testing.T) {
 	if err := db.Create(&model.Course{Name: "Exported course", Goal: "verify export", Status: model.CourseStatusLearning}).Error; err != nil {
 		t.Fatal(err)
 	}
+	project := model.Project{UserID: 7, Title: "Exported project", Status: "active"}
+	if err := db.Create(&project).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.ProjectTask{ProjectID: project.ID, Title: "Exported task", Status: "next", Priority: "normal"}).Error; err != nil {
+		t.Fatal(err)
+	}
 
 	service := NewExportService(db)
 	jsonData, err := service.JSON(context.Background())
@@ -40,6 +47,9 @@ func TestLearningDataExportIncludesFactsAndNeverIncludesAPIKey(t *testing.T) {
 		}
 		if !strings.Contains(string(data), "Exported course") {
 			t.Fatalf("%s export omitted course facts", format)
+		}
+		if !strings.Contains(string(data), "Exported project") || !strings.Contains(string(data), "Exported task") {
+			t.Fatalf("%s export omitted project facts", format)
 		}
 	}
 }

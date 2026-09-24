@@ -34,6 +34,7 @@ type Handler struct {
 	aiConfig       *service.AIConfigurationService
 	nextLesson     *service.NextLessonService
 	users          *service.UserService
+	projects       *service.ProjectService
 }
 
 func NewHandler(courses *service.CourseService, graph *service.KnowledgeGraphService, optional ...interface{}) *Handler {
@@ -51,6 +52,7 @@ func NewHandler(courses *service.CourseService, graph *service.KnowledgeGraphSer
 	var aiConfigurationService *service.AIConfigurationService
 	var nextLessonService *service.NextLessonService
 	var userService *service.UserService
+	var projectService *service.ProjectService
 	for _, item := range optional {
 		switch value := item.(type) {
 		case *service.CognitiveStateService:
@@ -81,9 +83,11 @@ func NewHandler(courses *service.CourseService, graph *service.KnowledgeGraphSer
 			nextLessonService = value
 		case *service.UserService:
 			userService = value
+		case *service.ProjectService:
+			projectService = value
 		}
 	}
-	return &Handler{courses: courses, graph: graph, cognitive: cognitiveService, challenges: challengeService, misconceptions: misconceptionService, exploration: explorationService, curriculum: curriculumService, grounding: groundingService, backups: backupService, databaseHealth: databaseHealthService, export: exportService, consistency: consistencyService, domainInit: domainInitService, aiConfig: aiConfigurationService, nextLesson: nextLessonService, users: userService}
+	return &Handler{courses: courses, graph: graph, cognitive: cognitiveService, challenges: challengeService, misconceptions: misconceptionService, exploration: explorationService, curriculum: curriculumService, grounding: groundingService, backups: backupService, databaseHealth: databaseHealthService, export: exportService, consistency: consistencyService, domainInit: domainInitService, aiConfig: aiConfigurationService, nextLesson: nextLessonService, users: userService, projects: projectService}
 }
 
 func (h *Handler) Login(c *gin.Context) {

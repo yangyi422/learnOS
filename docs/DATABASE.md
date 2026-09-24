@@ -1,10 +1,24 @@
 # 数据库演进草案
 
+## Schema 17：Project Kanban Workspace
+
+projects 增加 description / icon / accent / archived_at，项目可归档并恢复；project_tasks 增加 description / sort_order / priority / due_date / completed_at。任务状态为 inbox / next / doing / done，排序按当前用户的状态列稳定计算。原 is_next_action 保留为历史列，新业务规则不依赖它；旧部分唯一索引已移除。任务读取和更新仍通过 Project 的 user_id 校验归属。
+
+启动先备份旧数据库，再执行加法迁移。旧 todo 按下一步标记映射成 inbox 或 next，doing / done 保留；旧完成时间由 updated_at 近似回填。任务 ID 和项目 ID 不变，重复启动不重复转换。迁移及产品语义见 [PROJECTS.md](PROJECTS.md)。
+
+## Schema 16：项目执行中心
+
+`projects` 保存 `user_id`、标题和 `active / paused / completed` 状态；`project_tasks` 保存标题、`todo / doing / done` 状态与下一步行动标记。任务归属项目，项目归属用户；所有读写先校验当前登录用户的项目所有权。数据库部分唯一索引保证每个项目最多一个下一步行动。完成任务时自动撤销其下一步标记。
+
+启动时通过可重复执行的 `AutoMigrate` 和 `CREATE UNIQUE INDEX IF NOT EXISTS` 建表建索引；Schema 15 升级前由既有备份流程自动生成 SQLite 快照。项目不修改课程、学习或 AI 数据，旧应用可忽略新表。JSON/Markdown 导出包含项目与任务；SQLite 备份自然包含新表。
+
 ## 用户与数据归属
 
 `users` 保存登录账号、角色和状态，`sessions` 只保存会话令牌哈希。`courses.user_id` 是个人知识世界的归属边界，课程下的学习和认知数据通过 `course_id` 隔离。首个管理员由环境变量引导创建，迁移时没有归属人的旧课程会自动归属该管理员；管理员创建的新用户默认没有课程。
 
 Schema 15 增加 `users`、`sessions`，并为 `courses` 和领域初始化草稿增加用户归属。启动时若配置了 `APP_USERNAME` / `APP_PASSWORD_HASH`，会幂等创建首个管理员并把没有归属人的旧课程迁移给该管理员；密码只保存 bcrypt 哈希，会话只保存令牌哈希。
+
+从 Schema 14 或更早版本升级时，已有课程或领域草稿的 `user_id` 缺失。SQLite 新增非空列必须提供默认值，因此这两列以 `DEFAULT 0` 加法迁移，再由引导管理员将归属为 0 的旧数据接管；不改动原有课程、草稿和学习记录。
 
 ## 当前已实现
 

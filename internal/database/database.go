@@ -76,11 +76,16 @@ func Open(cfg config.Config) (*gorm.DB, error) {
 		&model.DomainInitializationDraft{},
 		&model.User{},
 		&model.Session{},
+		&model.Project{},
+		&model.ProjectTask{},
 	); err != nil {
 		if preMigrationBackup.Path != "" {
 			return nil, fmt.Errorf("migrate database: %w (pre-migration backup: %s)", err, preMigrationBackup.Path)
 		}
 		return nil, fmt.Errorf("migrate database: %w", err)
+	}
+	if err := migrateProjectKanban(db); err != nil {
+		return nil, fmt.Errorf("migrate project kanban: %w", err)
 	}
 	// Schema 14 permits one blueprint area to span multiple course units.
 	// AutoMigrate does not remove the old implicit unique index on SQLite.

@@ -1,8 +1,8 @@
 FROM node:22.18-bookworm-slim AS web-builder
 WORKDIR /src/web
 RUN npm install -g npm@11.18.0
-COPY web/package.json ./
-RUN npm install --include=optional
+COPY web/package.json web/package-lock.json ./
+RUN npm ci --include=optional
 COPY web/ ./
 RUN npm run build
 

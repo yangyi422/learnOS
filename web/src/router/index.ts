@@ -10,6 +10,7 @@ import ExplorationView from '@/views/ExplorationView.vue'
 import DomainInitializationView from '@/views/DomainInitializationView.vue'
 import LoginView from '@/views/LoginView.vue'
 import UsersView from '@/views/UsersView.vue'
+import ProjectsView from '@/views/ProjectsView.vue'
 
 export default createRouter({
   history: createWebHistory(),
@@ -52,6 +53,7 @@ export default createRouter({
       meta: { title: '系统设置' },
     },
     { path: '/users', component: UsersView, meta: { title: '用户管理' } },
+    { path: '/projects', component: ProjectsView, meta: { title: '项目' } },
     {
       path: '/exploration/questions',
       component: ExplorationView,

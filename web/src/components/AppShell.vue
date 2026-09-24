@@ -73,6 +73,7 @@ const current = ref<User | null>(null)
 const baseNavigation = [
   { to: '/', label: '学习首页' },
   { to: '/courses', label: '课程档案' },
+  { to: '/projects', label: '项目' },
   { to: '/exploration/questions', label: '探索空间' },
   { to: '/settings', label: '系统设置' },
   { to: '/users', label: '用户管理' },
@@ -85,6 +86,7 @@ const mobileMenuButton = ref<HTMLElement | { $el: HTMLElement } | null>(null)
 let focusAfterClose: 'button' | 'heading' = 'button'
 const activePath = computed(() => {
   if (route.path.startsWith('/courses')) return '/courses'
+  if (route.path.startsWith('/projects')) return '/projects'
   if (route.path.startsWith('/exploration')) return '/exploration/questions'
   if (route.path.startsWith('/settings')) return '/settings'
   if (route.path.startsWith('/users')) return '/users'

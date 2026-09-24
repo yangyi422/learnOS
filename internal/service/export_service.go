@@ -43,6 +43,8 @@ type ExportSnapshot struct {
 	GroundingLinks        []model.GroundingLink               `json:"grounding_links"`
 	Credibility           []model.SourceCredibilityAssessment `json:"source_credibility_assessments"`
 	DomainDrafts          []model.DomainInitializationDraft   `json:"domain_initialization_drafts"`
+	Projects              []model.Project                     `json:"projects"`
+	ProjectTasks          []model.ProjectTask                 `json:"project_tasks"`
 }
 
 func (s *ExportService) Snapshot(ctx context.Context) (*ExportSnapshot, error) {
@@ -58,6 +60,7 @@ func (s *ExportService) Snapshot(ctx context.Context) (*ExportSnapshot, error) {
 		{&snapshot.ExplorationDirections, "exploration directions"}, {&snapshot.ExplorationQuestions, "exploration questions"}, {&snapshot.Blueprints, "blueprints"},
 		{&snapshot.BlueprintUnits, "blueprint units"}, {&snapshot.BlueprintLessons, "blueprint lessons"}, {&snapshot.BlueprintRelations, "blueprint relations"},
 		{&snapshot.Sources, "sources"}, {&snapshot.Evidence, "source evidence"}, {&snapshot.GroundingLinks, "grounding links"}, {&snapshot.Credibility, "credibility"}, {&snapshot.DomainDrafts, "domain initialization drafts"},
+		{&snapshot.Projects, "projects"}, {&snapshot.ProjectTasks, "project tasks"},
 	}
 	for _, query := range queries {
 		if err := s.db.WithContext(ctx).Find(query.dest).Error; err != nil {
@@ -81,9 +84,23 @@ func (s *ExportService) Markdown(ctx context.Context) ([]byte, error) {
 		return nil, err
 	}
 	var out strings.Builder
-	out.WriteString("# LearnOS 学习数据导出\n\n")
+	out.WriteString("# LearnOS 数据导出\n\n")
 	fmt.Fprintf(&out, "导出时间：%s\n\n", snapshot.ExportedAt.Format(time.RFC3339))
-	out.WriteString("本文件由 LearnOS 生成，记录课程结构、学习记录、认知状态、误区、挑战、探索问题和来源关联。\n\n")
+	out.WriteString("本文件由 LearnOS 生成，记录项目任务、课程结构、学习记录、认知状态、误区、挑战、探索问题和来源关联。\n\n")
+	out.WriteString("## 项目看板\n\n")
+	for _, project := range snapshot.Projects {
+		fmt.Fprintf(&out, "### %s\n\n- 状态：%s\n- 目标：%s\n\n", project.Title, project.Status, project.Description)
+		for _, task := range snapshot.ProjectTasks {
+			if task.ProjectID == project.ID {
+				fmt.Fprintf(&out, "- %s（%s · %s", task.Title, task.Status, task.Priority)
+				if task.DueDate != nil {
+					fmt.Fprintf(&out, " · 到期 %s", *task.DueDate)
+				}
+				out.WriteString("）\n")
+			}
+		}
+		out.WriteString("\n")
+	}
 	out.WriteString("## 课程概览\n\n")
 	for _, course := range snapshot.Courses {
 		fmt.Fprintf(&out, "### %s\n\n- 状态：%s\n- 进度：%d%%\n- 目标：%s\n\n", course.Name, course.Status, course.Progress, course.Goal)
