@@ -1,38 +1,35 @@
 <template>
   <el-container class="app-shell">
-    <el-aside width="208px" class="sidebar">
-      <div class="brand">
-        <div class="brand-mark">L</div>
-        <div>
-          <strong>LearnOS</strong>
-          <span>个人学习系统</span>
-        </div>
-      </div>
+    <el-aside width="76px" class="sidebar">
+      <RouterLink to="/" class="brand" aria-label="LearnOS 学习首页" title="LearnOS">
+        <span class="brand-mark">L</span>
+      </RouterLink>
 
       <nav class="nav-menu" aria-label="主要导航">
-        <RouterLink v-for="item in navigation" :key="item.to" :to="item.to" class="nav-link" :aria-current="activePath === item.to ? 'page' : undefined">
-        {{ item.label }}
-      </RouterLink>
+        <RouterLink v-for="item in navigation" :key="item.to" :to="item.to" class="nav-link" :aria-label="item.label" :aria-current="activePath === item.to ? 'page' : undefined" :title="item.label">
+          <WorkspaceIcon :name="item.icon" />
+          <span class="sr-only">{{ item.label }}</span>
+        </RouterLink>
       </nav>
 
       <div class="sidebar-footer">
-        <span>v0.1</span>
-        <el-button text size="small" @click="signOut">退出登录</el-button>
+        <button type="button" class="nav-link sidebar-logout" aria-label="退出登录" title="退出登录" @click="signOut"><WorkspaceIcon name="logout" /></button>
       </div>
     </el-aside>
 
     <el-container class="app-content">
-      <el-header class="mobile-topbar">
-        <el-button
+      <el-header class="workspace-topbar mobile-topbar">
+        <button
           ref="mobileMenuButton"
-          text
+          type="button"
           class="mobile-menu-button"
           aria-label="打开导航"
           aria-controls="mobile-navigation"
           :aria-expanded="drawerOpen"
           @click="openDrawer"
-        >☰</el-button>
-        <strong>LearnOS</strong>
+        ><WorkspaceIcon name="menu" /></button>
+        <div class="workspace-topbar__identity"><span class="workspace-topbar__brand">LEARNOS</span><span class="workspace-topbar__separator" aria-hidden="true">/</span><span class="workspace-topbar__location">{{ currentPageLabel }}</span></div>
+        <div class="workspace-topbar__spacer" />
       </el-header>
       <el-main class="main-content">
         <router-view />
@@ -54,7 +51,7 @@
     >
       <nav id="mobile-navigation" class="nav-menu mobile-nav-menu" aria-label="移动端主要导航">
         <RouterLink v-for="item in navigation" :key="item.to" :to="item.to" class="nav-link" :aria-current="activePath === item.to ? 'page' : undefined" @click="navigateFromDrawer(item.to)">
-          {{ item.label }}
+          <WorkspaceIcon :name="item.icon" />{{ item.label }}
         </RouterLink>
       </nav>
       <el-button class="mobile-logout" text @click="signOut">退出登录</el-button>
@@ -66,17 +63,18 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { currentUser, logout, type User } from '@/api/auth'
+import WorkspaceIcon from '@/components/WorkspaceIcon.vue'
 
 const route = useRoute()
 const router = useRouter()
 const current = ref<User | null>(null)
-const baseNavigation = [
-  { to: '/', label: '学习首页' },
-  { to: '/courses', label: '课程档案' },
-  { to: '/projects', label: '项目' },
-  { to: '/exploration/questions', label: '探索空间' },
-  { to: '/settings', label: '系统设置' },
-  { to: '/users', label: '用户管理' },
+const baseNavigation: { to: string; label: string; icon: 'home' | 'courses' | 'projects' | 'explore' | 'settings' | 'users' }[] = [
+  { to: '/', label: '学习首页', icon: 'home' },
+  { to: '/courses', label: '课程档案', icon: 'courses' },
+  { to: '/projects', label: '项目', icon: 'projects' },
+  { to: '/exploration/questions', label: '探索空间', icon: 'explore' },
+  { to: '/settings', label: '系统设置', icon: 'settings' },
+  { to: '/users', label: '用户管理', icon: 'users' },
 ]
 const navigation = computed(() => current.value?.role === 'admin'
   ? baseNavigation
@@ -92,6 +90,7 @@ const activePath = computed(() => {
   if (route.path.startsWith('/users')) return '/users'
   return '/'
 })
+const currentPageLabel = computed(() => baseNavigation.find(item => item.to === activePath.value)?.label ?? '学习首页')
 
 function openDrawer() {
   focusAfterClose = 'button'

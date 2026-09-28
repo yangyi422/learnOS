@@ -225,19 +225,26 @@ func (s *ProjectService) EditTask(ctx context.Context, userID, taskID uint, patc
 		changes["is_next_action"] = false
 	}
 	if patch.Priority != nil {
-		if !priority(*patch.Priority) {
+		value := strings.TrimSpace(*patch.Priority)
+		// Older project tasks may have an empty priority. Treat it as the
+		// current default when the drawer submits the complete task form.
+		if value == "" {
+			value = "normal"
+		}
+		if !priority(value) {
 			return nil, ErrInvalidProjectInput
 		}
-		changes["priority"] = *patch.Priority
+		changes["priority"] = value
 	}
 	if patch.DueDate != nil {
-		if !validDueDate(patch.DueDate) {
+		value := strings.TrimSpace(*patch.DueDate)
+		if !validDueDate(&value) {
 			return nil, ErrInvalidProjectInput
 		}
-		if *patch.DueDate == "" {
+		if value == "" {
 			changes["due_date"] = nil
 		} else {
-			changes["due_date"] = *patch.DueDate
+			changes["due_date"] = value
 		}
 	}
 	if patch.IsNextAction != nil {

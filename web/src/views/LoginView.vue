@@ -36,9 +36,9 @@ async function submit() {
 </script>
 
 <style scoped>
-.login-page { min-height: 100vh; display: grid; place-items: center; padding: 32px 20px; background: #f7f8fb; }
-.login-card { width: min(100%, 420px); padding: 12px; }
+.login-page { min-height: 100vh; display: grid; place-items: center; padding: 32px 20px; background: var(--bg-app); color: var(--text-primary); }
+.login-card { width: min(100%, 420px); padding: 12px; border-color: var(--border-default); background: var(--bg-surface); }
 .login-card h1 { margin: 0 0 10px; }
-.login-card .muted { margin: 0 0 24px; color: #667085; }
+.login-card .muted { margin: 0 0 24px; color: var(--text-secondary); }
 .login-card .el-alert { margin-bottom: 18px; }
 </style>

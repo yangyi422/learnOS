@@ -7,6 +7,31 @@
     <p class="sr-only" aria-live="polite">{{ liveMessage }}</p>
     <el-alert v-if="error" :title="error" type="error" show-icon :closable="false" />
 
+    <el-card shadow="never" class="appearance-settings" aria-labelledby="appearance-settings-title">
+      <div class="appearance-settings__copy">
+        <div>
+          <span class="appearance-settings__eyebrow">WORKSPACE APPEARANCE</span>
+          <h2 id="appearance-settings-title">外观主题</h2>
+          <p>主题偏好只保存在当前浏览器，不会写入学习数据。</p>
+        </div>
+        <fieldset class="appearance-settings__options">
+          <legend class="sr-only">选择外观主题</legend>
+          <button
+            v-for="option in themeOptions"
+            :key="option.value"
+            type="button"
+            :aria-label="option.label"
+            :aria-pressed="preference === option.value"
+            :class="{ 'is-active': preference === option.value }"
+            @click="setThemePreference(option.value)"
+          >
+            <WorkspaceIcon :name="option.icon" />
+            <span><strong>{{ option.label }}</strong><small>{{ option.description }}</small></span>
+          </button>
+        </fieldset>
+      </div>
+    </el-card>
+
     <el-card shadow="never" aria-labelledby="ai-settings-title">
       <template #header><span id="ai-settings-title">AI 配置</span></template>
       <p class="settings-help">领域初始化、课程生成、探索和学习评价会使用这里的配置。API Key 只保存在后端，页面和接口仅显示配置状态。</p>
@@ -143,8 +168,10 @@
 <script setup lang="ts">
 import PageHeader from '@/components/PageHeader.vue'
 import StatusTag from '@/components/StatusTag.vue'
+import WorkspaceIcon from '@/components/WorkspaceIcon.vue'
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { setThemePreference, useTheme, type ThemePreference } from '@/theme'
 import {
   createBackup, exportLearningData, getAIConfiguration, getConsistency, getDiagnostics, listBackups,
   requestBackupRestore, testAIConnection, updateAIConfiguration,
@@ -168,6 +195,12 @@ const aiTesting = ref(false)
 const error = ref('')
 const liveMessage = ref('')
 const knownModels = ['deepseek-chat', 'deepseek-reasoner']
+const { preference } = useTheme()
+const themeOptions: { value: ThemePreference; label: string; description: string; icon: 'system' | 'sun' | 'moon' }[] = [
+  { value: 'system', label: '跟随系统', description: '随操作系统明暗设置变化', icon: 'system' },
+  { value: 'light', label: '浅色主题', description: '使用冷白工作区', icon: 'sun' },
+  { value: 'dark', label: '深色主题', description: '使用深空蓝黑工作区', icon: 'moon' },
+]
 const descriptionColumns = computed(() => window.matchMedia('(max-width: 700px)').matches ? 1 : 2)
 const providerChanged = computed(() => Boolean(aiConfig.value && aiForm.value.provider !== aiConfig.value.provider))
 const consistencyGroups = computed(() => {
@@ -289,6 +322,19 @@ onMounted(load)
 
 <style scoped>
 .settings-page { max-width: 1040px; margin: 0 auto; }
+.appearance-settings { margin-bottom: 18px; }
+.appearance-settings__copy { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.appearance-settings__eyebrow { color: var(--text-tertiary); font-size: 10px; font-weight: 700; letter-spacing: .14em; }
+.appearance-settings h2 { margin: 5px 0 4px; color: var(--text-primary); font-size: 18px; }
+.appearance-settings p { margin: 0; color: var(--text-secondary); font-size: 13px; }
+.appearance-settings__options { display: grid; grid-template-columns: repeat(3, minmax(145px, 1fr)); gap: 8px; min-width: min(100%, 510px); margin: 0; padding: 0; border: 0; }
+.appearance-settings__options button { display: flex; min-height: 62px; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border-subtle); border-radius: 9px; background: var(--bg-surface); color: var(--text-secondary); text-align: left; cursor: pointer; transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease, box-shadow 140ms ease; }
+.appearance-settings__options button:hover { border-color: var(--card-border-hover); color: var(--text-primary); }
+.appearance-settings__options button.is-active { border-color: var(--color-primary); background: var(--color-primary-soft); color: var(--color-primary); box-shadow: 0 0 0 2px var(--focus-ring); }
+.appearance-settings__options svg { width: 18px; height: 18px; flex: none; }
+.appearance-settings__options strong, .appearance-settings__options small { display: block; }
+.appearance-settings__options strong { font-size: 13px; font-weight: 650; }
+.appearance-settings__options small { margin-top: 3px; color: var(--text-tertiary); font-size: 11px; line-height: 1.3; }
 .settings-help, .field-help { color: var(--text-secondary); line-height: 1.65; }
 .settings-inline-alert { margin: 16px 0; }
 .ai-form { max-width: 820px; }
@@ -318,6 +364,8 @@ onMounted(load)
 .timeout-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
 .timeout-grid div { padding: 14px; background: var(--bg-subtle); border-radius: 8px; display: flex; justify-content: space-between; gap: 10px; }
 @media (max-width: 700px) {
+  .appearance-settings__copy { align-items: stretch; flex-direction: column; }
+  .appearance-settings__options { min-width: 0; }
   .settings-form-grid, .effective-config, .restore-panel { grid-template-columns: minmax(0, 1fr); }
   .secret-field { align-items: flex-start; flex-direction: column; }
 }

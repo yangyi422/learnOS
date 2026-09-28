@@ -1,16 +1,18 @@
 <template>
   <section class="page-stack projects-page">
-    <PageHeader eyebrow="个人工作台" title="项目" description="项目决定推进什么，看板呈现进展，今天聚焦当下。">
-      <template #actions><el-button type="primary" @click="openNewTask('inbox')">+ 新建任务</el-button></template>
+    <PageHeader title="项目">
+      <template #actions>
+        <el-select :model-value="projectKey" class="projects-switcher" aria-label="切换项目" @change="selectProject(String($event))">
+          <el-option label="全部项目" value="all" />
+          <el-option v-for="project in projects.filter(item => item.status !== 'archived')" :key="project.id" :label="`${project.title} · ${openCount(project)} 项未完成`" :value="String(project.id)" />
+          <el-option label="+ 新建项目" value="new" />
+        </el-select>
+        <el-button type="primary" @click="openNewTask('inbox')">+ 新建任务</el-button>
+      </template>
     </PageHeader>
 
     <el-alert v-if="error" :title="error" type="error" show-icon :closable="false" />
     <div class="projects-toolbar">
-      <el-select :model-value="projectKey" class="projects-switcher" aria-label="切换项目" @change="selectProject(String($event))">
-        <el-option label="全部项目" value="all" />
-        <el-option v-for="project in projects.filter(item => item.status !== 'archived')" :key="project.id" :label="`${project.title} · ${openCount(project)} 项未完成`" :value="String(project.id)" />
-        <el-option label="+ 新建项目" value="new" />
-      </el-select>
       <nav class="projects-tabs" aria-label="项目视图">
         <button v-for="tab in tabs" :key="tab.key" type="button" :class="{ 'is-active': view === tab.key }" :aria-current="view === tab.key ? 'page' : undefined" @click="setView(tab.key)">{{ tab.label }}</button>
       </nav>
@@ -23,7 +25,7 @@
           <div><strong>{{ selectedProject.icon }} {{ selectedProject.title }}</strong><p v-if="selectedProject.description">{{ selectedProject.description }}</p></div>
           <el-tag size="small" effect="plain">{{ projectStatusLabel(selectedProject.status) }}</el-tag>
         </div>
-        <KanbanBoard :tasks="tasks" :projects="projectMap" :selected-project-id="selectedProjectID" :done-count="doneCount" :busy="busy" @open="openTask" @add="openNewTask" @move="handleMove" @more-done="loadMoreDone" />
+        <KanbanBoard :tasks="tasks" :projects="projectMap" :selected-project-id="selectedProjectID" :active-task-id="taskDrawerOpen ? editingTask?.id ?? null : null" :done-count="doneCount" :busy="busy" @open="openTask" @add="openNewTask" @move="handleMove" @more-done="loadMoreDone" />
       </template>
 
       <div v-else-if="view === 'today'" class="today-view">
@@ -239,17 +241,26 @@ watch(projectKey, () => { void load() })
 </script>
 
 <style scoped>
-.projects-toolbar { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; margin-bottom: 22px; border-bottom: 1px solid var(--border-subtle); }
-.projects-switcher { width: 245px; margin-bottom: 12px; }
-.projects-tabs { display: flex; gap: 20px; }
-.projects-tabs button { position: relative; padding: 0 0 14px; border: 0; background: none; color: var(--text-tertiary); cursor: pointer; }
-.projects-tabs button.is-active { color: var(--text-primary); font-weight: 650; }
-.projects-tabs button.is-active::after { position: absolute; right: 0; bottom: -1px; left: 0; height: 2px; background: var(--color-primary); content: ''; }
+.projects-page { max-width: 1440px; }
+.projects-page :deep(.page-header) { align-items: flex-end; gap: 16px; margin-bottom: 17px; }
+.projects-page :deep(.page-header__copy) { min-width: 0; }
+.projects-page :deep(.page-header .eyebrow) { margin-bottom: 5px; }
+.projects-page :deep(.page-header h1) { font-size: clamp(29px, 2.5vw, 36px); line-height: 1.15; }
+.projects-page :deep(.page-header__actions) { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.projects-page :deep(.page-header__actions .el-button) { min-height: 38px; padding: 0 17px; box-shadow: 0 3px 12px var(--focus-ring); }
+.projects-switcher { width: clamp(190px, 21vw, 270px); }
+.projects-page :deep(.projects-switcher .el-select__wrapper) { min-height: 38px; border-radius: var(--radius-control); }
+.projects-toolbar { display: flex; align-items: center; min-height: 40px; margin-bottom: 18px; padding-bottom: 8px; border-bottom: 1px solid var(--border-subtle); }
+.projects-tabs { display: flex; align-items: center; gap: 22px; }
+.projects-tabs button { position: relative; min-height: 31px; padding: 0 2px; border: 0; background: transparent; color: var(--text-secondary); font-size: 13px; cursor: pointer; }
+.projects-tabs button:hover { color: var(--text-primary); }
+.projects-tabs button.is-active { color: var(--color-primary); font-weight: 670; }
+.projects-tabs button.is-active::after { position: absolute; right: 0; bottom: -9px; left: 0; height: 2px; border-radius: 2px; background: var(--color-primary); content: ''; }
 .projects-content { min-height: 360px; }
-.projects-context { display: flex; align-items: start; gap: 12px; margin-bottom: 18px; }
-.projects-context__accent { width: 4px; min-height: 32px; border-radius: 4px; }
-.projects-context strong { font-size: 17px; }
-.projects-context p { margin: 5px 0 0; color: var(--text-secondary); font-size: 13px; }
+.projects-context { display: flex; align-items: center; gap: 12px; margin-bottom: 15px; padding: 2px 0; }
+.projects-context__accent { align-self: stretch; width: 3px; min-height: 30px; border-radius: 4px; }
+.projects-context strong { font-size: 14px; font-weight: 670; }
+.projects-context p { margin: 4px 0 0; color: var(--text-secondary); font-size: 12px; }
 .projects-context .el-tag { margin-left: auto; }
 .projects-muted { color: var(--text-tertiary); font-size: 13px; }
 .today-view { max-width: 800px; }
@@ -258,14 +269,14 @@ watch(projectKey, () => { void load() })
 .today-section__heading { display: flex; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid var(--border-default); }
 .today-section__heading h3 { margin: 0; font-size: 15px; }
 .today-section__heading span { color: var(--text-tertiary); font-size: 13px; }
-.today-task { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 4px; border: 0; border-bottom: 1px solid var(--border-subtle); background: none; text-align: left; cursor: pointer; }
+.today-task { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 4px; border: 0; border-bottom: 1px solid var(--border-subtle); background: transparent; color: var(--text-primary); text-align: left; cursor: pointer; }
 .today-task:hover { background: var(--bg-subtle); }
 .today-task__marker { width: 16px; height: 16px; flex: 0 0 16px; border: 1px solid #b5c2d2; border-radius: 5px; }
 .today-task__title { flex: 1; font-size: 14px; }
 .today-task small { color: var(--text-tertiary); }
 .project-list-view { max-width: 920px; }
 .project-list-view__heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
-.project-list-card { display: flex; justify-content: space-between; gap: 18px; padding: 20px; margin-bottom: 12px; border: 1px solid var(--border-default); border-left: 4px solid var(--project-accent); border-radius: var(--radius-card); background: var(--bg-surface); }
+.project-list-card { display: flex; justify-content: space-between; gap: 18px; padding: 20px; margin-bottom: 12px; border: 1px solid var(--border-default); border-left: 3px solid var(--project-accent); border-radius: var(--radius-card); background: var(--bg-surface); }
 .project-list-card__title { display: flex; align-items: center; gap: 10px; }
 .project-list-card__title h3 { margin: 0; font-size: 17px; }
 .project-list-card__main p { margin: 10px 0; color: var(--text-secondary); font-size: 13px; }
@@ -273,5 +284,5 @@ watch(projectKey, () => { void load() })
 .project-list-card__actions { display: flex; align-items: start; justify-content: flex-end; flex-wrap: wrap; }
 .project-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .project-form-row :deep(.el-select) { width: 100%; }
-@media (max-width: 760px) { .projects-toolbar { align-items: stretch; gap: 4px; } .projects-switcher { width: 100%; } .projects-tabs { width: 100%; justify-content: space-between; } .project-list-card, .today-task { align-items: flex-start; flex-direction: column; } .today-task__marker { display: none; } .project-list-card__actions { justify-content: flex-start; } }
+@media (max-width: 760px) { .projects-page :deep(.page-header) { align-items: flex-start; } .projects-page :deep(.page-header__actions) { width: 100%; margin-left: 0; } .projects-switcher { width: auto; min-width: 0; flex: 1; } .projects-tabs { width: 100%; justify-content: space-between; } .projects-tabs button { flex: 1; padding: 0 9px; } .project-list-card, .today-task { align-items: flex-start; flex-direction: column; } .today-task__marker { display: none; } .project-list-card__actions { justify-content: flex-start; } }
 </style>

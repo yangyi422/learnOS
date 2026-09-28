@@ -42,6 +42,8 @@ SQLite
 
 项目工作台使用独立的 Project handler → service → repository 链路。Project 保存用户归属；Task 通过 Project 继承访问边界。看板移动在 repository 事务内校验相邻任务、计算状态列排序值并维护完成时间。前端通过 /projects 的查询参数保存项目与视图选择，任务事实只在 SQLite；迁移和 API 见 [PROJECTS.md](PROJECTS.md)。
 
+前端显示主题由 `web/src/theme.ts` 管理，浏览器本地保存跟随系统、浅色或深色偏好，`workspace-theme.css` 将统一视觉变量映射到应用与 Element Plus。主题偏好不进入后端数据；设计基线见 [WORKSPACE_VISUAL.md](WORKSPACE_VISUAL.md)。
+
 ## 当前阶段
 
 本骨架只实现：

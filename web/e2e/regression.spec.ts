@@ -614,6 +614,28 @@ test('课程卡片分别展示生成、覆盖和掌握进度', async ({ page }) 
   await expect(card).toContainText('理解掌握度')
 })
 
+test('深色主题下首页和课程档案保持基础可读性', async ({ page }, testInfo) => {
+  await installAPIMocks(page)
+  await page.goto('/')
+  await page.goto('/settings')
+  await page.getByRole('button', { name: '深色主题' }).click()
+  await page.goto('/')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await expect(page.getByRole('heading', { name: '继续你的学习' })).toBeVisible()
+  if (process.env.CAPTURE_VISUALS) await page.screenshot({ path: testInfo.outputPath('dashboard-dark.png'), fullPage: true })
+  await page.goto('/courses')
+  await expect(page.locator('.domain-tile').first()).toBeVisible()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  if (process.env.CAPTURE_VISUALS) await page.screenshot({ path: testInfo.outputPath('courses-dark.png'), fullPage: true })
+  await page.goto('/courses/1/learn')
+  await expect(page.locator('.learning-context-header h1')).toBeVisible()
+  if (process.env.CAPTURE_VISUALS) await page.screenshot({ path: testInfo.outputPath('learning-dark.png'), fullPage: true })
+  await page.goto('/login')
+  await expect(page.getByRole('heading', { name: '登录你的学习空间' })).toBeVisible()
+  expect(await page.getByRole('button', { name: '登录' }).evaluate(button => getComputedStyle(button).color)).toBe('rgb(11, 27, 42)')
+  if (process.env.CAPTURE_VISUALS) await page.screenshot({ path: testInfo.outputPath('login-dark.png'), fullPage: true })
+})
+
 test('刷新后可恢复并轮询正在生成的课程草案', async ({ page }) => {
   await installAPIMocks(page)
   let draftReads = 0

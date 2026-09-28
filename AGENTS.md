@@ -12,6 +12,7 @@
 
 - 后端使用 Go，保持 handler → service → repository 分层。
 - 前端使用 Vue 3、TypeScript、Vue Router 和 Element Plus。
+- 前端视觉与交互遵循 [`docs/ui-design.md`](docs/ui-design.md)。
 - API 使用 `/api/v1` 前缀；错误响应不得泄漏内部堆栈。
 - 所有数据库变更必须有可重复执行的迁移策略。
 - AI 输出必须经过结构校验后才能更新课程状态。

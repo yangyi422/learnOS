@@ -1227,22 +1227,13 @@ p {
 .current-focus {
   position: relative;
   overflow: hidden;
-  margin-bottom: 34px;
-  padding: 26px 30px 30px;
-  border: 1px solid #dbe5f3;
-  border-radius: 14px;
-  background: linear-gradient(120deg, #f7fbff 0%, #fff 68%);
-}
-
-.current-focus::after {
-  position: absolute;
-  right: -50px;
-  bottom: -70px;
-  width: 220px;
-  height: 220px;
-  border: 1px solid rgba(59, 130, 246, 0.14);
-  border-radius: 50%;
-  content: '';
+  max-width: 1000px;
+  margin-bottom: 28px;
+  padding: 20px 24px;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  background: linear-gradient(115deg, var(--color-primary-soft), var(--bg-surface) 48%);
+  box-shadow: var(--shadow-card);
 }
 
 .current-focus__eyebrow,
@@ -1254,19 +1245,14 @@ p {
   letter-spacing: 0.14em;
 }
 
-.current-focus__eyebrow { position: relative; z-index: 1; }
-.current-focus__body { position: relative; z-index: 1; display: flex; align-items: flex-end; justify-content: space-between; gap: 30px; margin-top: 18px; }
-.current-focus__copy { max-width: 720px; }
-.current-focus__domain { color: var(--color-primary); font-size: 13px; font-weight: 650; }
-.current-focus h2 { margin: 8px 0 10px; font-size: clamp(26px, 3.2vw, 42px); letter-spacing: -0.045em; line-height: 1.1; }
-.current-focus p { max-width: 620px; margin: 0; color: var(--text-secondary); font-size: 16px; line-height: 1.7; }
-.current-focus__meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 18px; color: var(--text-secondary); font-size: 13px; }
-.current-focus__stats { display: grid; grid-template-columns: repeat(3, minmax(110px, 1fr)); gap: 10px; max-width: 620px; margin: 20px 0 0; }
-.current-focus__stats div { padding: 10px 12px; border: 1px solid #dbe5f3; border-radius: 9px; background: rgba(255, 255, 255, .72); }
-.current-focus__stats dt { color: var(--text-secondary); font-size: 11px; }
-.current-focus__stats dd { margin: 4px 0 0; color: var(--text-primary); font-size: 14px; font-weight: 700; }
-.current-focus p.current-focus__next { margin-top: 16px; font-size: 13px; line-height: 1.6; }
-.current-focus__action { position: relative; z-index: 1; flex: 0 0 auto; min-height: 42px; }
+.current-focus__eyebrow { color: var(--color-primary); }
+.current-focus__body { display: flex; align-items: flex-end; justify-content: space-between; gap: 30px; margin-top: 12px; }
+.current-focus__copy { max-width: 780px; }
+.current-focus__domain { color: var(--text-secondary); font-size: 13px; font-weight: 650; }
+.current-focus h2 { margin: 6px 0 8px; font-size: clamp(23px, 2.4vw, 29px); letter-spacing: -0.035em; line-height: 1.25; }
+.current-focus p { max-width: 650px; margin: 0; color: var(--text-secondary); font-size: 15px; line-height: 1.65; }
+.current-focus__meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin-top: 12px; color: var(--text-tertiary); font-size: 13px; }
+.current-focus__action { flex: 0 0 auto; min-height: 40px; }
 
 .dashboard-section { margin-top: 30px; }
 .dashboard-section .section-header { margin-bottom: 14px; }
@@ -1295,10 +1281,10 @@ p {
 .domain-tile--cyan .domain-tile__icon { background: #e7f7f8; color: #3f8d93; }
 .domain-tile__menu { border: 0; background: transparent; color: var(--text-tertiary); font-size: 14px; letter-spacing: 2px; cursor: pointer; }
 .domain-tile h3 { overflow: hidden; margin: 22px 0 16px; font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
-.domain-tile__progress { display: flex; justify-content: space-between; margin-bottom: 6px; color: var(--text-tertiary); font-size: 11px; }
+.domain-tile__progress { display: flex; justify-content: space-between; margin-bottom: 6px; color: var(--text-tertiary); font-size: 12px; }
 .domain-tile__progress strong { color: var(--text-primary); font-size: 12px; }
-.domain-tile p { overflow: hidden; margin: 12px 0 12px; color: var(--text-secondary); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.domain-tile .el-tag { font-size: 11px; }
+.domain-tile p { overflow: hidden; margin: 12px 0 12px; color: var(--text-secondary); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.domain-tile .el-tag { font-size: 12px; }
 .add-domain-tile { display: grid; min-height: 196px; align-content: center; justify-items: center; gap: 6px; padding: 16px; border: 1px dashed #cbd5e1; border-radius: 12px; background: transparent; color: var(--text-secondary); cursor: pointer; transition: border-color 160ms ease, background 160ms ease; }
 .add-domain-tile:hover { border-color: var(--color-primary); background: var(--color-primary-soft); }
 .add-domain-tile span { color: var(--color-primary); font-size: 25px; font-weight: 300; }

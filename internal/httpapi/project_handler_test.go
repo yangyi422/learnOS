@@ -52,6 +52,25 @@ func TestProjectAPIWorkflowAndValidation(t *testing.T) {
 	if taskResponse.Data.Status != "inbox" || taskResponse.Data.Priority != "high" {
 		t.Fatalf("unexpected task: %s", created)
 	}
+	dated := call(http.MethodPost, "/api/v1/tasks", `{"project_id":1,"title":"Dated task","description":"First note","due_date":"2026-09-28"}`, http.StatusCreated)
+	if err := json.Unmarshal([]byte(dated), &taskResponse); err != nil {
+		t.Fatal(err)
+	}
+	if taskResponse.Data.DueDate == nil || *taskResponse.Data.DueDate != "2026-09-28" {
+		t.Fatalf("unexpected created due date: %s", dated)
+	}
+	edited := call(http.MethodPatch, "/api/v1/tasks/2", `{"project_id":1,"title":"Dated task","description":"Updated note","status":"inbox","priority":"normal","due_date":"2026-09-28"}`, http.StatusOK)
+	if err := json.Unmarshal([]byte(edited), &taskResponse); err != nil {
+		t.Fatal(err)
+	}
+	if taskResponse.Data.Description != "Updated note" || taskResponse.Data.DueDate == nil || *taskResponse.Data.DueDate != "2026-09-28" {
+		t.Fatalf("dated task edit did not persist: %s", edited)
+	}
+	listed := call(http.MethodGet, "/api/v1/tasks?project_id=1", "", http.StatusOK)
+	if !strings.Contains(listed, `"due_date":"2026-09-28"`) {
+		t.Fatalf("listed task due date is not a calendar date: %s", listed)
+	}
+	call(http.MethodPatch, "/api/v1/tasks/2", `{"description":"Saved again","due_date":"2026-09-28"}`, http.StatusOK)
 	call(http.MethodPost, "/api/v1/tasks", `{"project_id":2,"title":"Second task","status":"next"}`, http.StatusCreated)
 	call(http.MethodPatch, "/api/v1/tasks/1/move", `{"status":"next"}`, http.StatusOK)
 	body := call(http.MethodGet, "/api/v1/projects", "", http.StatusOK)

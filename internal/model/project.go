@@ -1,6 +1,10 @@
 package model
 
-import "time"
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
 
 type Project struct {
 	ID             uint          `json:"id" gorm:"primaryKey"`
@@ -32,4 +36,17 @@ type ProjectTask struct {
 	IsNextAction bool       `json:"is_next_action" gorm:"not null;default:false"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
+}
+
+// SQLite's date scanner may return an RFC3339 timestamp for a DATE column.
+// Keep the API's due_date as a calendar date after every database read.
+func (task *ProjectTask) AfterFind(_ *gorm.DB) error {
+	if task.DueDate == nil {
+		return nil
+	}
+	if parsed, err := time.Parse(time.RFC3339Nano, *task.DueDate); err == nil {
+		date := parsed.Format("2006-01-02")
+		task.DueDate = &date
+	}
+	return nil
 }

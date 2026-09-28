@@ -167,6 +167,17 @@ func TestProjectKanbanValidation(t *testing.T) {
 	if _, err := svc.CreateTaskWithInput(ctx, 1, ProjectTaskInput{ProjectID: project.ID, Title: "任务", Priority: "urgent"}); !errors.Is(err, ErrInvalidProjectInput) {
 		t.Fatal(err)
 	}
+	legacy, err := svc.CreateTaskWithInput(ctx, 1, ProjectTaskInput{ProjectID: project.ID, Title: "旧任务", Priority: "normal"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, err := svc.EditTask(ctx, 1, legacy.ID, ProjectTaskPatch{Priority: ptr("")})
+	if err != nil {
+		t.Fatalf("empty priority from the edit form should use normal: %v", err)
+	}
+	if updated.Priority != "normal" {
+		t.Fatalf("expected normalized priority, got %q", updated.Priority)
+	}
 	if err := svc.Update(ctx, 1, project.ID, ProjectPatch{Status: ptr("deleted")}); !errors.Is(err, ErrInvalidProjectInput) {
 		t.Fatal(err)
 	}
