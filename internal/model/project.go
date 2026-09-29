@@ -18,6 +18,7 @@ type Project struct {
 	Tasks          []ProjectTask `json:"tasks" gorm:"foreignKey:ProjectID"`
 	OpenTaskCount  int64         `json:"open_task_count" gorm:"-"`
 	DoingTaskCount int64         `json:"doing_task_count" gorm:"-"`
+	NextTaskCount  int64         `json:"next_task_count" gorm:"-"`
 	DoneTaskCount  int64         `json:"done_task_count" gorm:"-"`
 	CreatedAt      time.Time     `json:"created_at"`
 	UpdatedAt      time.Time     `json:"updated_at"`

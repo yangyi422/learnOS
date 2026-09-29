@@ -2,7 +2,7 @@
   <section class="learning-page editorial-learning-page">
     <header class="learning-context-header">
       <div class="learning-context-header__copy">
-        <nav class="editorial-breadcrumb"><button type="button" @click="router.push('/')">学习首页</button><span>›</span><span>{{ current?.course.name || '正在学习' }}</span><span v-if="current">›</span><strong v-if="current">{{ current.unit.title }}</strong></nav>
+        <nav class="editorial-breadcrumb"><button type="button" @click="router.push('/learn')">学习</button><span>›</span><span>{{ current?.course.name || '正在学习' }}</span><span v-if="current">›</span><strong v-if="current">{{ current.unit.title }}</strong></nav>
         <h1 v-if="current">{{ current.lesson.title }}</h1>
       </div>
       <div class="learning-context-header__actions"><el-button text @click="router.push(`/courses/${courseID}/map`)">知识结构</el-button><el-button text @click="router.push(`/courses/${courseID}/misconceptions`)">误区网络</el-button></div>

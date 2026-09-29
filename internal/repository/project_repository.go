@@ -52,6 +52,9 @@ func (r *ProjectRepository) List(ctx context.Context, userID uint) ([]model.Proj
 		if row.Status == "doing" {
 			project.DoingTaskCount += row.Total
 		}
+		if row.Status == "next" {
+			project.NextTaskCount += row.Total
+		}
 	}
 	return projects, nil
 }
@@ -118,26 +121,37 @@ func (r *ProjectRepository) GetTask(ctx context.Context, userID, taskID uint) (*
 
 func (r *ProjectRepository) CreateTask(ctx context.Context, userID, projectID uint, task *model.ProjectTask) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := ownedProject(tx, userID, projectID); err != nil {
-			return err
-		}
-		var maxOrder int64
-		if err := tx.Model(&model.ProjectTask{}).Joins("JOIN projects ON projects.id = project_tasks.project_id").
-			Where("projects.user_id = ? AND project_tasks.status = ?", userID, task.Status).
-			Select("COALESCE(MAX(project_tasks.sort_order), 0)").Scan(&maxOrder).Error; err != nil {
-			return err
-		}
-		task.ProjectID = projectID
-		task.SortOrder = maxOrder + 1024
-		if task.Status == "done" {
-			now := time.Now().UTC()
-			task.CompletedAt = &now
-		}
-		if err := tx.Create(task).Error; err != nil {
-			return err
-		}
-		return touchProject(tx, projectID)
+		return r.CreateTaskInTx(tx, userID, projectID, task, false)
 	})
+}
+
+// CreateTaskInTx shares ordering, completion timestamp, and project touch rules
+// with Inbox conversion while allowing both writes to commit atomically.
+func (r *ProjectRepository) CreateTaskInTx(tx *gorm.DB, userID, projectID uint, task *model.ProjectTask, requireActive bool) error {
+	projectQuery := tx.Model(&model.Project{}).Select("id").Where("id = ? AND user_id = ?", projectID, userID)
+	if requireActive {
+		projectQuery = projectQuery.Where("status = ?", "active")
+	}
+	var project model.Project
+	if err := projectQuery.First(&project).Error; err != nil {
+		return err
+	}
+	var maxOrder int64
+	if err := tx.Model(&model.ProjectTask{}).Joins("JOIN projects ON projects.id = project_tasks.project_id").
+		Where("projects.user_id = ? AND project_tasks.status = ?", userID, task.Status).
+		Select("COALESCE(MAX(project_tasks.sort_order), 0)").Scan(&maxOrder).Error; err != nil {
+		return err
+	}
+	task.ProjectID = projectID
+	task.SortOrder = maxOrder + 1024
+	if task.Status == "done" {
+		now := time.Now().UTC()
+		task.CompletedAt = &now
+	}
+	if err := tx.Create(task).Error; err != nil {
+		return err
+	}
+	return touchProject(tx, projectID)
 }
 
 func (r *ProjectRepository) UpdateTask(ctx context.Context, userID, taskID uint, changes map[string]interface{}) (*model.ProjectTask, error) {

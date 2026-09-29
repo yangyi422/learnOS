@@ -60,6 +60,7 @@ func TestOpenCreatesPreMigrationBackupForExistingDatabase(t *testing.T) {
 		&model.ExplorationQuestion{}: {"priority"},
 		&model.Project{}:             {"user_id", "title", "description", "status", "icon", "accent", "archived_at"},
 		&model.ProjectTask{}:         {"project_id", "title", "description", "status", "sort_order", "priority", "due_date", "completed_at", "is_next_action"},
+		&model.InboxItem{}:           {"user_id", "content", "status", "source_type", "source_url", "processed_to_type", "processed_to_id", "processed_at", "archived_at"},
 	}
 	for table, names := range columns {
 		for _, name := range names {
@@ -85,12 +86,15 @@ func TestProjectSchemaMigrationIsRepeatable(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !db.Migrator().HasTable(&model.Project{}) || !db.Migrator().HasTable(&model.ProjectTask{}) {
-			t.Fatal("project tables missing")
+		if !db.Migrator().HasTable(&model.Project{}) || !db.Migrator().HasTable(&model.ProjectTask{}) || !db.Migrator().HasTable(&model.InboxItem{}) {
+			t.Fatal("workspace tables missing")
 		}
 		var indexCount int64
 		if err := db.Raw("SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = ?", "idx_project_tasks_board_order").Scan(&indexCount).Error; err != nil || indexCount != 1 {
 			t.Fatalf("board order index: count=%d err=%v", indexCount, err)
+		}
+		if err := db.Raw("SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = ?", "idx_inbox_user_status_created").Scan(&indexCount).Error; err != nil || indexCount != 1 {
+			t.Fatalf("inbox index: count=%d err=%v", indexCount, err)
 		}
 		connection, err := db.DB()
 		if err != nil {

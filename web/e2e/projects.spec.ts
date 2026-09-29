@@ -38,9 +38,21 @@ async function mockWorkspace(page: Page) {
       return reply({ data: projects.map(project => ({
         ...project,
         open_task_count: tasks.filter(task => task.project_id === project.id && task.status !== 'done').length,
+        next_task_count: tasks.filter(task => task.project_id === project.id && task.status === 'next').length,
         doing_task_count: tasks.filter(task => task.project_id === project.id && task.status === 'doing').length,
         done_task_count: tasks.filter(task => task.project_id === project.id && task.status === 'done').length,
       })) })
+    }
+    if (path === '/api/v1/projects/today' && method === 'GET') {
+      const date = url.searchParams.get('date') ?? today
+      const projectID = Number(url.searchParams.get('project_id'))
+      const active = tasks.filter(task => (!projectID || task.project_id === projectID) && projects.some(project => project.id === task.project_id && project.status === 'active') && task.status !== 'done')
+      return reply({ data: {
+        date,
+        doing: active.filter(task => task.status === 'doing'),
+        due: active.filter(task => task.status !== 'doing' && task.due_date && task.due_date <= date),
+        next: active.filter(task => task.status === 'next' && (!task.due_date || task.due_date > date)),
+      } })
     }
     if (path === '/api/v1/projects' && method === 'POST') {
       const input = request.postDataJSON() as Partial<(typeof projects)[number]>

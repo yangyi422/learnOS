@@ -36,11 +36,20 @@ Vue 3 SPA
   │   └── Cognitive / Learning Repository
   ├── Grounding Service
   │   └── Grounding Repository
+  ├── Workspace Service (read-only aggregation)
+  │   ├── Project / Today Service
+  │   ├── Course / CurrentLesson Service
+  │   └── Inbox Service
+  └── Inbox Repository
   ↓
 SQLite
 ```
 
 项目工作台使用独立的 Project handler → service → repository 链路。Project 保存用户归属；Task 通过 Project 继承访问边界。看板移动在 repository 事务内校验相邻任务、计算状态列排序值并维护完成时间。前端通过 /projects 的查询参数保存项目与视图选择，任务事实只在 SQLite；迁移和 API 见 [PROJECTS.md](PROJECTS.md)。
+
+`GET /api/v1/workspace/home` 只读聚合已存在的 Project/Task、Course/CurrentLesson/learning turn、认知状态和 Inbox 摘要。Current Focus 按 Doing → 到期 → 高优先级 Next → 最近活跃课程 CurrentLesson 确定；没有 CurrentFocus 表，也不调用 AI。`GET /api/v1/projects/today` 是 Workspace Home 与 `/projects?view=today` 共用的 Today 分组入口。单个分区读取失败时，聚合响应保留其他分区并返回对应的安全错误提示。
+
+Inbox 使用 `InboxItem.UserID` 隔离。转换服务先校验原项仍处于 inbox，再在同一 SQLite 事务内条件更新处理状态、创建所属用户的 active 项目任务并写入目标 ID。任何一步失败都会回滚；条件更新保证同一项不能被重复转换。新增 Inbox 表通过启动前备份与 `AutoMigrate` 一起迁移，JSON/Markdown 导出读取 Inbox 记录。
 
 前端显示主题由 `web/src/theme.ts` 管理，浏览器本地保存跟随系统、浅色或深色偏好，`workspace-theme.css` 将统一视觉变量映射到应用与 Element Plus。主题偏好不进入后端数据；设计基线见 [WORKSPACE_VISUAL.md](WORKSPACE_VISUAL.md)。
 
@@ -54,7 +63,7 @@ SQLite
 - 课程列表 API；
 - 当前知识点、回答提交和最近学习记录 API；
 - Vue 学习页与结构化 AI / Mock 反馈；
-- Vue 首页读取并展示课程；
+- Workspace Home 通过只读聚合 API 展示当前焦点、Today、项目、学习和 Inbox 摘要；完整学习首页位于 `/learn`；
 - production 及非 development 环境使用数据库用户会话认证；首个管理员由 `APP_USERNAME` / `APP_PASSWORD_HASH` 引导创建；管理员手动创建普通用户；development 仅监听 `127.0.0.1` 并跳过认证；
 - Course 保存 `user_id` 作为个人知识世界的边界；课程下的 Lesson、学习记录、掌握度、认知状态、挑战和探索记录通过 `course_id` 继承隔离；旧课程首次迁移时归属引导管理员；
 - Docker 与 Caddy 部署基础。

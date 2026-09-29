@@ -42,7 +42,7 @@ for (const state of ['empty', 'domain', 'continue'] as const) {
       await page.setViewportSize({ width: 1280, height: 720 })
       await page.emulateMedia({ colorScheme: theme })
       const mock = await mockDashboard(page, state)
-      await page.goto('/')
+      await page.goto('/learn')
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
       const frame = await page.evaluate(() => {
         const rail = document.querySelector('.sidebar')!.getBoundingClientRect()

@@ -209,6 +209,23 @@ func (h *Handler) ListTasks(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": tasks})
 }
 
+func (h *Handler) GetTask(c *gin.Context) {
+	userID, ok := projectUserID(c)
+	if !ok {
+		return
+	}
+	taskID, ok := projectPathID(c, "id")
+	if !ok {
+		return
+	}
+	task, err := h.projects.GetTask(c.Request.Context(), userID, taskID)
+	if err != nil {
+		projectError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": task})
+}
+
 func (h *Handler) CreateTask(c *gin.Context) {
 	userID, ok := projectUserID(c)
 	if !ok {

@@ -93,7 +93,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'
 import KanbanBoard from '@/components/projects/KanbanBoard.vue'
 import TaskDrawer from '@/components/projects/TaskDrawer.vue'
-import { createProject, createTask, deleteTask, listProjects, listTasks, moveTask, updateProject, updateTask, type Project, type ProjectStatus, type ProjectTask, type TaskInput, type TaskStatus } from '@/api/projects'
+import { createProject, createTask, deleteTask, getTask, getTodayView, listProjects, listTasks, moveTask, updateProject, updateTask, type Project, type ProjectStatus, type ProjectTask, type TaskInput, type TaskStatus, type TodayView } from '@/api/projects'
 
 type View = 'board' | 'today' | 'list'
 const tabs: { key: View; label: string }[] = [{ key: 'board', label: '看板' }, { key: 'today', label: '今天' }, { key: 'list', label: '项目列表' }]
@@ -123,17 +123,12 @@ const view = computed<View>(() => tabs.some(tab => tab.key === route.query.view)
 const projectMap = computed<Record<number, Project>>(() => Object.fromEntries(projects.value.map(project => [project.id, project])))
 const doneCount = computed(() => selectedProject.value ? selectedProject.value.done_task_count : projects.value.filter(project => project.status !== 'archived').reduce((sum, project) => sum + project.done_task_count, 0))
 const today = localDate(new Date())
-const todaySections = computed(() => {
-  const active = tasks.value.filter(task => projectMap.value[task.project_id]?.status === 'active' && task.status !== 'done')
-  const doing = active.filter(task => task.status === 'doing')
-  const due = active.filter(task => task.status !== 'doing' && !!task.due_date && task.due_date <= today)
-  const next = active.filter(task => task.status === 'next' && !due.some(item => item.id === task.id))
-  return [
-    { title: '进行中', tasks: doing },
-    { title: '今天到期 / 已逾期', tasks: due },
-    { title: '下一步候选', tasks: next },
-  ]
-})
+const todayView = ref<TodayView | null>(null)
+const todaySections = computed(() => [
+  { title: '进行中', tasks: todayView.value?.doing ?? [] },
+  { title: '今天到期 / 已逾期', tasks: todayView.value?.due ?? [] },
+  { title: '下一步候选', tasks: todayView.value?.next ?? [] },
+])
 function localDate(date: Date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` }
 function projectStatusLabel(status: ProjectStatus) { return { active: '进行中', paused: '已暂停', completed: '已完成', archived: '已归档' }[status] }
 function openCount(project: Project) { return project.open_task_count }
@@ -148,6 +143,12 @@ async function load() {
     if (sequence !== loadSequence) return
     projects.value = projectList
     const id = selectedProjectID.value
+    if (view.value === 'today') {
+      todayView.value = null
+      todayView.value = await getTodayView(today, id ?? undefined)
+      tasks.value = [...todayView.value.doing, ...todayView.value.due, ...todayView.value.next]
+      return
+    }
     const filter = { projectId: id ?? undefined }
     const columns = await Promise.all([
       listTasks({ ...filter, status: 'inbox' }),
@@ -237,7 +238,23 @@ async function setProjectStatus(project: Project, status: ProjectStatus) {
   })
 }
 onMounted(load)
-watch(projectKey, () => { void load() })
+watch(() => [projectKey.value, view.value], () => { void load() })
+watch(() => route.query.task, async value => {
+  const id = Number(value)
+  if (!value || !Number.isSafeInteger(id) || id <= 0) return
+  try {
+    const task = await getTask(id)
+    openTask(task)
+    const query = { ...route.query }
+    delete query.task
+    await router.replace({ path: '/projects', query })
+  } catch (reason) {
+    ElMessage.error(message(reason))
+    const query = { ...route.query }
+    delete query.task
+    await router.replace({ path: '/projects', query })
+  }
+}, { immediate: true })
 </script>
 
 <style scoped>

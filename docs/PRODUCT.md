@@ -2,7 +2,7 @@
 
 ## 一句话定位
 
-一个以用户控制的数据存储作为长期记忆，通过知识地图、状态机和可配置 Agent 工作流组织 LLM，从而实现可持续学习的个人 AI 系统。
+LearnOS 是个人学习与项目管理空间：以用户控制的数据存储作为长期记忆，通过知识地图、状态和可配置工作流组织 LLM，支持持续学习与个人事务推进。
 
 知识结构页同时提供路径列表与 Knowledge Map Graph。地图默认展示 prerequisite DAG，并可叠加 extends、application、related 关系；正式 Lesson、当前 Lesson、认知状态和尚未生成的待生成节点使用不同的轻量视觉状态。浏览节点不会改变学习主线，只有明确选择“开始学习 / 继续学习”才会切换 CurrentLesson。
 
@@ -21,6 +21,16 @@ LearnOS 将长期记忆、课程状态和流程控制放在程序中，按当前
 ## Personal OS 项目工作台
 
 项目工作台记录个人正在推进的项目和任务。默认跨项目四列看板展示待整理、下一步、进行中和已完成；项目切换器提供单项目视角。Today 将正在做、今日到期或逾期、下一步候选分组展示。项目任务保存在同一自托管 SQLite 中，网页在不同设备上访问同一服务器即可看到同一份状态。项目工作台不改变课程学习状态，详细契约见 [PROJECTS.md](PROJECTS.md)。
+
+## Workspace Home 与 Inbox
+
+Workspace Home 的 Current Focus 为任务和学习位置显示固定原因与最近活动时间；Today 的短列表优先展示逾期、今天到期、进行中和下一步任务，并可直接打开任务。活动项目保持轻量列表，学习区突出最近的一门真实课程。Inbox 在首页提供行内记录，成功后刷新最多三条预览；页面各区分别显示骨架加载、具体空状态或可重试错误，不用示例内容填充空间。
+
+`/` 是 Personal Workspace Home，只汇总 Current Focus、Today、Active Projects、Continue Learning 和 Inbox，帮助用户从上次的任务或课程继续；完整学习首页迁移到 `/learn`，完整看板仍在 `/projects`。Current Focus 使用进行中任务、已到期任务、高优先级下一步和最近活跃课程的 CurrentLesson 顺序推导，不调用 AI、不单独持久化。首页 Today 与项目页 Today 复用同一个服务端分组规则。
+
+Inbox 的 `/inbox` 只要求一段内容，保存到按用户隔离的 SQLite `inbox_items` 表。用户之后可以编辑、归档、删除，或把内容转换为任务。转换在单个数据库事务内创建任务并更新原 Inbox 项的处理状态；重复转换会返回冲突，失败时两项写入一起回滚。单独输入的 HTTP/HTTPS URL 会被标为 URL 来源，本阶段不抓取网页或生成摘要。首页快速记录支持 Ctrl/⌘ + Enter；首页聚合 API 是只读接口，各模块的部分错误会随数据一并返回。
+
+主要路由：`/` 工作区、`/learn` 学习、`/projects` 项目、`/inbox` 收集箱、`/explore` 探索。旧 `/exploration/questions` 会重定向到 `/explore`。
 
 ## MVP 验证目标
 

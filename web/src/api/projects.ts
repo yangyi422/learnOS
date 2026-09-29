@@ -28,10 +28,18 @@ export interface Project {
   archived_at: string | null
   tasks: ProjectTask[]
   open_task_count: number
+  next_task_count: number
   doing_task_count: number
   done_task_count: number
   created_at: string
   updated_at: string
+}
+
+export interface TodayView {
+  date: string
+  doing: ProjectTask[]
+  due: ProjectTask[]
+  next: ProjectTask[]
 }
 
 export interface ProjectInput {
@@ -71,6 +79,16 @@ export async function listTasks(filters: { projectId?: number; status?: TaskStat
   if (filters.offset) params.set('offset', String(filters.offset))
   const query = params.size ? `?${params}` : ''
   return (await request<{ data: ProjectTask[] }>(`/api/v1/tasks${query}`)).data
+}
+
+export async function getTask(id: number): Promise<ProjectTask> {
+  return (await request<{ data: ProjectTask }>(`/api/v1/tasks/${id}`)).data
+}
+
+export async function getTodayView(date: string, projectId?: number): Promise<TodayView> {
+  const params = new URLSearchParams({ date })
+  if (projectId) params.set('project_id', String(projectId))
+  return (await request<{ data: TodayView }>(`/api/v1/projects/today?${params}`)).data
 }
 
 export async function createTask(input: TaskInput): Promise<ProjectTask> {

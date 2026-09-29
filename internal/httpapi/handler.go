@@ -35,6 +35,8 @@ type Handler struct {
 	nextLesson     *service.NextLessonService
 	users          *service.UserService
 	projects       *service.ProjectService
+	inbox          *service.InboxService
+	workspace      *service.WorkspaceService
 }
 
 func NewHandler(courses *service.CourseService, graph *service.KnowledgeGraphService, optional ...interface{}) *Handler {
@@ -53,6 +55,8 @@ func NewHandler(courses *service.CourseService, graph *service.KnowledgeGraphSer
 	var nextLessonService *service.NextLessonService
 	var userService *service.UserService
 	var projectService *service.ProjectService
+	var inboxService *service.InboxService
+	var workspaceService *service.WorkspaceService
 	for _, item := range optional {
 		switch value := item.(type) {
 		case *service.CognitiveStateService:
@@ -85,9 +89,13 @@ func NewHandler(courses *service.CourseService, graph *service.KnowledgeGraphSer
 			userService = value
 		case *service.ProjectService:
 			projectService = value
+		case *service.InboxService:
+			inboxService = value
+		case *service.WorkspaceService:
+			workspaceService = value
 		}
 	}
-	return &Handler{courses: courses, graph: graph, cognitive: cognitiveService, challenges: challengeService, misconceptions: misconceptionService, exploration: explorationService, curriculum: curriculumService, grounding: groundingService, backups: backupService, databaseHealth: databaseHealthService, export: exportService, consistency: consistencyService, domainInit: domainInitService, aiConfig: aiConfigurationService, nextLesson: nextLessonService, users: userService, projects: projectService}
+	return &Handler{courses: courses, graph: graph, cognitive: cognitiveService, challenges: challengeService, misconceptions: misconceptionService, exploration: explorationService, curriculum: curriculumService, grounding: groundingService, backups: backupService, databaseHealth: databaseHealthService, export: exportService, consistency: consistencyService, domainInit: domainInitService, aiConfig: aiConfigurationService, nextLesson: nextLessonService, users: userService, projects: projectService, inbox: inboxService, workspace: workspaceService}
 }
 
 func (h *Handler) Login(c *gin.Context) {

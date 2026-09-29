@@ -1,9 +1,10 @@
 # LearnOS Starter
 
-LearnOS 是一个自托管的个人 AI 学习系统，支持管理员创建多个相互隔离的学习用户。本仓库是持续演进中的可运行版本。
+LearnOS 是一个自托管的个人学习与项目管理空间，支持管理员创建多个相互隔离的学习用户。本仓库是持续演进中的可运行版本。
 
 ## 当前能力
 
+- Workspace Home 的 Inbox 区支持 Enter 或按钮提交的首页行内快速记录
 - Go + Gin 后端
 - SQLite + GORM 持久化
 - Vue 3 + TypeScript + Element Plus 前端
@@ -22,6 +23,8 @@ LearnOS 是一个自托管的个人 AI 学习系统，支持管理员创建多�
 - 管理员创建用户、会话登录和课程级数据隔离
 - Docker Compose 与可选 Caddy HTTPS
 - Project Kanban Workspace：多项目四列看板、拖动排序、Today 与项目归档
+- Personal Workspace Home：`/` 聚合 Current Focus、Today、Active Projects、Continue Learning 与 Inbox；原完整学习首页在 `/learn`
+- SQLite Inbox：快速记录、编辑、归档和删除；可在事务中转换为看板任务
 
 ## 环境要求
 
@@ -133,6 +136,15 @@ API Key 只在后端使用，不会返回给浏览器，也不会写入评价错
 也可以登录应用后进入“系统设置 → AI 配置”填写 DeepSeek API Key。保存后配置立即生效，不需要重启；页面只显示 Key 是否已配置。保存的配置优先于环境变量，未保存系统配置时才使用环境变量。
 
 ## Learning API
+
+Personal OS 路由：`/` 工作区、`/learn` 学习、`/projects` 项目、`/inbox` 收集箱、`/explore` 探索。
+
+- `GET /api/v1/workspace/home?date=YYYY-MM-DD`：只读聚合工作区首页；分区错误以安全提示单独返回。
+- `GET /api/v1/projects/today?date=YYYY-MM-DD&project_id=all|:id`：项目页与首页共用的 Today 任务分组。
+- `GET|POST /api/v1/inbox`、`PATCH /api/v1/inbox/:id`：读取、快速记录和编辑当前用户的收集内容。
+- `POST /api/v1/inbox/:id/convert-to-task`：在同一 SQLite 事务中创建项目任务并标记来源 Inbox 项已处理。
+- `POST /api/v1/inbox/:id/archive`、`DELETE /api/v1/inbox/:id`：归档或删除收集内容。
+- `GET /api/v1/tasks/:id`：按当前用户所有权读取任务，用于从 Inbox/Home 打开任务详情。
 
 - `GET /api/v1/courses/:id/current-lesson`：读取课程当前模块和知识点。
 - `DELETE /api/v1/courses/:id`：在确认后删除单个课程及其课程专属学习数据；共享知识来源会保留。

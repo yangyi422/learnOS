@@ -20,6 +20,7 @@
       <section class="dashboard-section">
         <SectionHeader title="知识世界">
           <template #actions>
+            <el-button text @click="router.push('/courses')">课程档案</el-button>
             <el-button text @click="loadCourses">刷新</el-button>
             <el-button @click="router.push('/domains/new')">+ 新建学习领域</el-button>
           </template>

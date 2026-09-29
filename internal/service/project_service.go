@@ -168,15 +168,33 @@ func (s *ProjectService) ListTasks(ctx context.Context, userID uint, projectID *
 	return tasks, err
 }
 
+func (s *ProjectService) GetTask(ctx context.Context, userID, taskID uint) (*model.ProjectTask, error) {
+	return s.projects.GetTask(ctx, userID, taskID)
+}
+
 func (s *ProjectService) CreateTask(ctx context.Context, userID, projectID uint, title string) (*model.ProjectTask, error) {
 	return s.CreateTaskWithInput(ctx, userID, ProjectTaskInput{ProjectID: projectID, Title: title})
 }
 
 func (s *ProjectService) CreateTaskWithInput(ctx context.Context, userID uint, input ProjectTaskInput) (*model.ProjectTask, error) {
+	input, err := normalizeProjectTaskInput(input)
+	if err != nil {
+		return nil, err
+	}
+	task := &model.ProjectTask{Title: input.Title, Description: input.Description, Status: input.Status, Priority: input.Priority, DueDate: input.DueDate}
+	if err := s.projects.CreateTask(ctx, userID, input.ProjectID, task); err != nil {
+		return nil, err
+	}
+	return task, nil
+}
+
+func normalizeProjectTaskInput(input ProjectTaskInput) (ProjectTaskInput, error) {
 	title := strings.TrimSpace(input.Title)
 	if input.ProjectID == 0 || title == "" || len([]rune(title)) > 200 || len([]rune(input.Description)) > 10000 {
-		return nil, ErrInvalidProjectInput
+		return input, ErrInvalidProjectInput
 	}
+	input.Title = title
+	input.Description = strings.TrimSpace(input.Description)
 	if input.Status == "" {
 		input.Status = "inbox"
 	}
@@ -184,13 +202,54 @@ func (s *ProjectService) CreateTaskWithInput(ctx context.Context, userID uint, i
 		input.Priority = "normal"
 	}
 	if !taskStatus(input.Status) || !priority(input.Priority) || !validDueDate(input.DueDate) {
+		return input, ErrInvalidProjectInput
+	}
+	return input, nil
+}
+
+type TodayView struct {
+	Date  string              `json:"date"`
+	Doing []model.ProjectTask `json:"doing"`
+	Due   []model.ProjectTask `json:"due"`
+	Next  []model.ProjectTask `json:"next"`
+}
+
+func (s *ProjectService) Today(ctx context.Context, userID uint, date string, projectID *uint) (*TodayView, error) {
+	if !validDueDate(&date) || date == "" {
 		return nil, ErrInvalidProjectInput
 	}
-	task := &model.ProjectTask{Title: title, Description: strings.TrimSpace(input.Description), Status: input.Status, Priority: input.Priority, DueDate: input.DueDate}
-	if err := s.projects.CreateTask(ctx, userID, input.ProjectID, task); err != nil {
+	projects, err := s.projects.List(ctx, userID)
+	if err != nil {
 		return nil, err
 	}
-	return task, nil
+	active := make(map[uint]bool, len(projects))
+	for _, project := range projects {
+		active[project.ID] = project.Status == "active" && (projectID == nil || *projectID == project.ID)
+	}
+	if projectID != nil {
+		if _, err := s.projects.GetProject(ctx, userID, *projectID); err != nil {
+			return nil, err
+		}
+	}
+	tasks, err := s.ListTasks(ctx, userID, projectID, "", "", 0, 0)
+	if err != nil {
+		return nil, err
+	}
+	view := &TodayView{Date: date, Doing: []model.ProjectTask{}, Due: []model.ProjectTask{}, Next: []model.ProjectTask{}}
+	for _, task := range tasks {
+		if !active[task.ProjectID] || task.Status == "done" {
+			continue
+		}
+		switch {
+		case task.Status == "doing":
+			view.Doing = append(view.Doing, task)
+		case task.DueDate != nil && *task.DueDate <= date:
+			view.Due = append(view.Due, task)
+		case task.Status == "next":
+			view.Next = append(view.Next, task)
+		}
+	}
+	return view, nil
 }
 
 func (s *ProjectService) EditTask(ctx context.Context, userID, taskID uint, patch ProjectTaskPatch) (*model.ProjectTask, error) {

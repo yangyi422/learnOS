@@ -1,5 +1,30 @@
 # LearnOS Roadmap
 
+## Workspace Home UX Polish（已完成）
+
+- [x] Current Focus 显示真实归属、状态、固定原因和最近活动时间，不调用 AI
+- [x] Today 按逾期、今天到期、进行中、下一步排列最多三条可直接打开的任务
+- [x] Active Projects 保持轻量列表并突出真实项目图标、强调色和任务数量
+- [x] Continue Learning 突出最近课程；空知识世界提供明确的首次学习入口
+- [x] Inbox 首页增加 Enter / 按钮行内快速记录，并保留顶部快速记录对话框
+- [x] 首页各区统一骨架加载、真实空状态、可重试错误和隔离浏览器回归
+
+本轮复用 Workspace 聚合 API 与 Inbox 创建接口，不增加业务模块、后端字段或数据库迁移。
+
+## Personal Workspace Home + Inbox（本次）
+
+- [x] `/` 改为真实工作区首页，原学习首页完整迁移到 `/learn`
+- [x] 首页按确定性规则推导 Current Focus，并复用 Today 服务端分组
+- [x] 汇总最多 5 个活动项目、最多 2 个真实学习领域和 3 条待整理 Inbox 内容
+- [x] Schema 18 `InboxItem` 用户隔离、SQLite 持久化、URL 来源记录与可重复迁移
+- [x] 快速记录、编辑、待整理/已处理/已归档列表、归档与删除
+- [x] Inbox 转任务使用单事务、重复转换保护和失败回滚
+- [x] Home/Inbox 路由与轻量窄导航入口，保留完整看板和学习模块
+- [x] JSON/Markdown 导出包含 Inbox；补充服务、迁移、事务与前端回归检查
+- [ ] 使用个人真实数据进行最终人工验收并观察首次 Schema 18 启动备份
+
+实现规则见 [PRODUCT.md](PRODUCT.md)、[ARCHITECTURE.md](ARCHITECTURE.md) 与 [DATABASE.md](DATABASE.md)。
+
 ## 个人数字工作空间视觉基线（本次）
 
 - [x] 建立长期界面设计规范，并在 `AGENTS.md` 引用

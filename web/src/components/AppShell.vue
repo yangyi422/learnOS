@@ -1,7 +1,7 @@
 <template>
   <el-container class="app-shell">
     <el-aside width="76px" class="sidebar">
-      <RouterLink to="/" class="brand" aria-label="LearnOS 学习首页" title="LearnOS">
+      <RouterLink to="/" class="brand" aria-label="LearnOS 工作区" title="LearnOS">
         <span class="brand-mark">L</span>
       </RouterLink>
 
@@ -68,11 +68,12 @@ import WorkspaceIcon from '@/components/WorkspaceIcon.vue'
 const route = useRoute()
 const router = useRouter()
 const current = ref<User | null>(null)
-const baseNavigation: { to: string; label: string; icon: 'home' | 'courses' | 'projects' | 'explore' | 'settings' | 'users' }[] = [
-  { to: '/', label: '学习首页', icon: 'home' },
-  { to: '/courses', label: '课程档案', icon: 'courses' },
+const baseNavigation: { to: string; label: string; icon: 'home' | 'inbox' | 'courses' | 'projects' | 'explore' | 'settings' | 'users' }[] = [
+  { to: '/', label: '工作区', icon: 'home' },
+  { to: '/learn', label: '学习', icon: 'courses' },
   { to: '/projects', label: '项目', icon: 'projects' },
-  { to: '/exploration/questions', label: '探索空间', icon: 'explore' },
+  { to: '/inbox', label: '收集箱', icon: 'inbox' },
+  { to: '/explore', label: '探索', icon: 'explore' },
   { to: '/settings', label: '系统设置', icon: 'settings' },
   { to: '/users', label: '用户管理', icon: 'users' },
 ]
@@ -83,14 +84,16 @@ const drawerOpen = ref(false)
 const mobileMenuButton = ref<HTMLElement | { $el: HTMLElement } | null>(null)
 let focusAfterClose: 'button' | 'heading' = 'button'
 const activePath = computed(() => {
-  if (route.path.startsWith('/courses')) return '/courses'
+  if (route.path === '/learn') return '/learn'
+  if (route.path.startsWith('/courses')) return '/learn'
+  if (route.path.startsWith('/inbox')) return '/inbox'
   if (route.path.startsWith('/projects')) return '/projects'
-  if (route.path.startsWith('/exploration')) return '/exploration/questions'
+  if (route.path.startsWith('/exploration') || route.path.startsWith('/explore')) return '/explore'
   if (route.path.startsWith('/settings')) return '/settings'
   if (route.path.startsWith('/users')) return '/users'
   return '/'
 })
-const currentPageLabel = computed(() => baseNavigation.find(item => item.to === activePath.value)?.label ?? '学习首页')
+const currentPageLabel = computed(() => baseNavigation.find(item => item.to === activePath.value)?.label ?? '工作区')
 
 function openDrawer() {
   focusAfterClose = 'button'

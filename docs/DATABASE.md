@@ -1,5 +1,13 @@
 # 数据库演进草案
 
+## Schema 18：Workspace Home 与 Inbox
+
+新增 `inbox_items` 表：`user_id`、原始 `content`、`inbox / processed / archived` 状态、`manual / url / system` 来源类型、可选 `source_url`、处理目标类型/ID，以及创建、更新、处理和归档时间。按 `(user_id, status, created_at DESC)` 建立列表索引。各行始终按当前用户过滤；Inbox 与 Course/Project 生命周期相互独立。
+
+升级只新增表和索引，不改写既有项目、课程或学习记录。Schema 版本增加后，`database.Open` 按现有流程先生成 SQLite 迁移前备份，再执行可重复的 `AutoMigrate` 并更新 metadata；回滚到旧程序时旧程序忽略新表。项目任务转换不引入额外字段，在单事务中创建 `project_tasks` 行并设置 InboxItem 的 `processed_to_type/processed_to_id/processed_at`。
+
+JSON 导出新增 `inbox_items`；Markdown 导出增加收集箱段落。导出不包含凭据或 AI 密钥。
+
 ## Schema 17：Project Kanban Workspace
 
 projects 增加 description / icon / accent / archived_at，项目可归档并恢复；project_tasks 增加 description / sort_order / priority / due_date / completed_at。任务状态为 inbox / next / doing / done，排序按当前用户的状态列稳定计算。原 is_next_action 保留为历史列，新业务规则不依赖它；旧部分唯一索引已移除。任务读取和更新仍通过 Project 的 user_id 校验归属。

@@ -45,6 +45,7 @@ type ExportSnapshot struct {
 	DomainDrafts          []model.DomainInitializationDraft   `json:"domain_initialization_drafts"`
 	Projects              []model.Project                     `json:"projects"`
 	ProjectTasks          []model.ProjectTask                 `json:"project_tasks"`
+	InboxItems            []model.InboxItem                   `json:"inbox_items"`
 }
 
 func (s *ExportService) Snapshot(ctx context.Context) (*ExportSnapshot, error) {
@@ -60,7 +61,7 @@ func (s *ExportService) Snapshot(ctx context.Context) (*ExportSnapshot, error) {
 		{&snapshot.ExplorationDirections, "exploration directions"}, {&snapshot.ExplorationQuestions, "exploration questions"}, {&snapshot.Blueprints, "blueprints"},
 		{&snapshot.BlueprintUnits, "blueprint units"}, {&snapshot.BlueprintLessons, "blueprint lessons"}, {&snapshot.BlueprintRelations, "blueprint relations"},
 		{&snapshot.Sources, "sources"}, {&snapshot.Evidence, "source evidence"}, {&snapshot.GroundingLinks, "grounding links"}, {&snapshot.Credibility, "credibility"}, {&snapshot.DomainDrafts, "domain initialization drafts"},
-		{&snapshot.Projects, "projects"}, {&snapshot.ProjectTasks, "project tasks"},
+		{&snapshot.Projects, "projects"}, {&snapshot.ProjectTasks, "project tasks"}, {&snapshot.InboxItems, "inbox items"},
 	}
 	for _, query := range queries {
 		if err := s.db.WithContext(ctx).Find(query.dest).Error; err != nil {
@@ -86,7 +87,12 @@ func (s *ExportService) Markdown(ctx context.Context) ([]byte, error) {
 	var out strings.Builder
 	out.WriteString("# LearnOS 数据导出\n\n")
 	fmt.Fprintf(&out, "导出时间：%s\n\n", snapshot.ExportedAt.Format(time.RFC3339))
-	out.WriteString("本文件由 LearnOS 生成，记录项目任务、课程结构、学习记录、认知状态、误区、挑战、探索问题和来源关联。\n\n")
+	out.WriteString("本文件由 LearnOS 生成，记录收集箱、项目任务、课程结构、学习记录、认知状态、误区、挑战、探索问题和来源关联。\n\n")
+	out.WriteString("## 收集箱\n\n")
+	for _, item := range snapshot.InboxItems {
+		fmt.Fprintf(&out, "- %s（%s）\n", item.Content, item.Status)
+	}
+	out.WriteString("\n")
 	out.WriteString("## 项目看板\n\n")
 	for _, project := range snapshot.Projects {
 		fmt.Fprintf(&out, "### %s\n\n- 状态：%s\n- 目标：%s\n\n", project.Title, project.Status, project.Description)

@@ -11,6 +11,8 @@ import DomainInitializationView from '@/views/DomainInitializationView.vue'
 import LoginView from '@/views/LoginView.vue'
 import UsersView from '@/views/UsersView.vue'
 import ProjectsView from '@/views/ProjectsView.vue'
+import WorkspaceHomeView from '@/views/WorkspaceHomeView.vue'
+import InboxView from '@/views/InboxView.vue'
 
 export default createRouter({
   history: createWebHistory(),
@@ -18,9 +20,11 @@ export default createRouter({
     { path: '/login', component: LoginView, meta: { title: '登录' } },
     {
       path: '/',
-      component: DashboardView,
-      meta: { title: '学习首页' },
+      component: WorkspaceHomeView,
+      meta: { title: '工作区' },
     },
+    { path: '/learn', component: DashboardView, meta: { title: '学习' } },
+    { path: '/inbox', component: InboxView, meta: { title: '收集箱' } },
     {
       path: '/courses',
       component: CoursesView,
@@ -56,8 +60,8 @@ export default createRouter({
     { path: '/projects', component: ProjectsView, meta: { title: '项目' } },
     {
       path: '/exploration/questions',
-      component: ExplorationView,
-      meta: { title: '探索问题池' },
+      redirect: '/explore',
     },
+    { path: '/explore', component: ExplorationView, meta: { title: '探索' } },
   ],
 })
