@@ -12,6 +12,7 @@ import LoginView from '@/views/LoginView.vue'
 import UsersView from '@/views/UsersView.vue'
 import ProjectsView from '@/views/ProjectsView.vue'
 import WorkspaceHomeView from '@/views/WorkspaceHomeView.vue'
+import LifeView from '@/views/LifeView.vue'
 import InboxView from '@/views/InboxView.vue'
 
 export default createRouter({
@@ -24,6 +25,7 @@ export default createRouter({
       meta: { title: '工作区' },
     },
     { path: '/learn', component: DashboardView, meta: { title: '学习' } },
+    { path: '/life', component: LifeView, meta: { title: '生活' } },
     { path: '/inbox', component: InboxView, meta: { title: '收集箱' } },
     {
       path: '/courses',

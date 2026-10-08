@@ -1,6 +1,7 @@
 <template>
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
     <template v-if="name === 'home'"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21v-7h6v7"/></template>
+    <template v-else-if="name === 'life'"><path d="M7 3v18M7 6h10M7 12h7M7 18h10"/><circle cx="7" cy="6" r="2" fill="var(--bg-surface)"/><circle cx="7" cy="18" r="2" fill="var(--bg-surface)"/></template>
     <template v-else-if="name === 'inbox'"><path d="M4 4h16l1 11-3 5H6l-3-5z"/><path d="M3.5 14h5l1.5 2h5l1.5-2h5"/></template>
     <template v-else-if="name === 'courses'"><rect x="3" y="4" width="7" height="16" rx="1.5"/><rect x="10" y="4" width="7" height="16" rx="1.5"/><path d="m18 7 3 12M5.5 8h2M12.5 8h2"/></template>
     <template v-else-if="name === 'projects'"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10M15 10v10"/></template>
@@ -17,5 +18,5 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{ name: 'home' | 'inbox' | 'courses' | 'projects' | 'explore' | 'settings' | 'users' | 'logout' | 'menu' | 'sun' | 'moon' | 'system' | 'drag' }>()
+defineProps<{ name: 'life' | 'home' | 'inbox' | 'courses' | 'projects' | 'explore' | 'settings' | 'users' | 'logout' | 'menu' | 'sun' | 'moon' | 'system' | 'drag' }>()
 </script>

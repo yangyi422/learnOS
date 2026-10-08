@@ -11,6 +11,7 @@ const (
 	InboxSourceSystem    = "system"
 	InboxTargetTask      = "task"
 	InboxTargetRecord    = "record"
+	InboxTargetLifeEvent = "life_event"
 )
 
 type InboxItem struct {

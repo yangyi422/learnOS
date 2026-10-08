@@ -68,9 +68,10 @@ import WorkspaceIcon from '@/components/WorkspaceIcon.vue'
 const route = useRoute()
 const router = useRouter()
 const current = ref<User | null>(null)
-const baseNavigation: { to: string; label: string; icon: 'home' | 'inbox' | 'courses' | 'projects' | 'explore' | 'settings' | 'users' }[] = [
+const baseNavigation: { to: string; label: string; icon: 'life' | 'home' | 'inbox' | 'courses' | 'projects' | 'explore' | 'settings' | 'users' }[] = [
   { to: '/', label: '工作区', icon: 'home' },
   { to: '/learn', label: '学习', icon: 'courses' },
+  { to: '/life', label: '生活', icon: 'life' },
   { to: '/projects', label: '项目', icon: 'projects' },
   { to: '/inbox', label: '收集箱', icon: 'inbox' },
   { to: '/explore', label: '探索', icon: 'explore' },
@@ -86,6 +87,7 @@ let focusAfterClose: 'button' | 'heading' = 'button'
 const activePath = computed(() => {
   if (route.path === '/learn') return '/learn'
   if (route.path.startsWith('/courses')) return '/learn'
+  if (route.path.startsWith('/life')) return '/life'
   if (route.path.startsWith('/inbox')) return '/inbox'
   if (route.path.startsWith('/projects')) return '/projects'
   if (route.path.startsWith('/exploration') || route.path.startsWith('/explore')) return '/explore'

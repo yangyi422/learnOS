@@ -17,6 +17,9 @@ type ExportService struct{ db *gorm.DB }
 func NewExportService(db *gorm.DB) *ExportService { return &ExportService{db: db} }
 
 type ExportSnapshot struct {
+	LifeEvents            []model.LifeEvent                   `json:"life_events"`
+	LifeGoals             []model.LifeGoal                    `json:"life_goals"`
+	LifeGoalEntries       []model.LifeGoalEntry               `json:"life_goal_entries"`
 	ExportVersion         string                              `json:"export_version"`
 	ExportedAt            time.Time                           `json:"exported_at"`
 	Courses               []model.Course                      `json:"courses"`
@@ -55,6 +58,7 @@ func (s *ExportService) Snapshot(ctx context.Context) (*ExportSnapshot, error) {
 		dest interface{}
 		name string
 	}{
+		{&snapshot.LifeEvents, "life events"}, {&snapshot.LifeGoals, "life goals"}, {&snapshot.LifeGoalEntries, "life goal entries"},
 		{&snapshot.Courses, "courses"}, {&snapshot.Units, "course units"}, {&snapshot.Lessons, "lessons"}, {&snapshot.Relations, "lesson relations"},
 		{&snapshot.LearningTurns, "learning turns"}, {&snapshot.Mastery, "mastery records"}, {&snapshot.CognitiveStates, "cognitive states"},
 		{&snapshot.CognitiveEvidence, "cognitive evidence"}, {&snapshot.CognitiveEvents, "cognitive events"}, {&snapshot.Misconceptions, "misconceptions"},
@@ -88,12 +92,45 @@ func (s *ExportService) Markdown(ctx context.Context) ([]byte, error) {
 	var out strings.Builder
 	out.WriteString("# LearnOS 数据导出\n\n")
 	fmt.Fprintf(&out, "导出时间：%s\n\n", snapshot.ExportedAt.Format(time.RFC3339))
-	out.WriteString("本文件由 LearnOS 生成，记录收集箱、项目任务、课程结构、学习记录、认知状态、误区、挑战、探索问题和来源关联。\n\n")
+	out.WriteString("本文件由 LearnOS 生成，记录生活档案、长期目标及历史、收集箱、项目任务、课程结构、学习记录、认知状态、误区、挑战、探索问题和来源关联。\n\n")
 	out.WriteString("## 收集箱\n\n")
 	for _, item := range snapshot.InboxItems {
 		fmt.Fprintf(&out, "- %s（%s）\n", item.Content, item.Status)
 	}
 	out.WriteString("\n")
+	out.WriteString("## 生活档案\n\n")
+	for _, event := range snapshot.LifeEvents {
+		fmt.Fprintf(&out, "### %s · %s\n\n%s\n\n- 事件 ID：%d\n- 里程碑：%t\n- 领域：%s / %s\n- 创建：%s\n- 修改：%s\n", event.OccurredOn, event.Title, event.Description, event.ID, event.Milestone, event.PrimaryDomain, event.SecondaryDomain, event.CreatedAt.Format(time.RFC3339), event.UpdatedAt.Format(time.RFC3339))
+		if event.SourceID != nil {
+			fmt.Fprintf(&out, "- 来源：%s / %d / %s\n", event.SourceType, *event.SourceID, event.SourceTitle)
+		}
+		if event.GoalID != nil {
+			fmt.Fprintf(&out, "- 目标 ID：%d\n", *event.GoalID)
+		}
+		if event.ExternalURL != "" {
+			fmt.Fprintf(&out, "- 外部链接：%s %s\n", event.LinkName, event.ExternalURL)
+		}
+		out.WriteString("\n")
+	}
+	for _, goal := range snapshot.LifeGoals {
+		fmt.Fprintf(&out, "### 长期目标：%s\n\n%s\n\n%s\n\n- 目标 ID：%d\n- 状态：%s\n- 领域：%s\n- 创建：%s\n- 修改：%s\n", goal.Title, goal.Why, goal.CurrentNote, goal.ID, goal.Status, goal.Domain, goal.CreatedAt.Format(time.RFC3339), goal.UpdatedAt.Format(time.RFC3339))
+		if goal.ProjectID != nil {
+			fmt.Fprintf(&out, "- 项目 ID：%d\n", *goal.ProjectID)
+		}
+		if goal.ExternalURL != "" {
+			fmt.Fprintf(&out, "- 外部链接：%s %s\n", goal.LinkName, goal.ExternalURL)
+		}
+		for _, entry := range snapshot.LifeGoalEntries {
+			if entry.GoalID == goal.ID {
+				fmt.Fprintf(&out, "- %s：%s", entry.OccurredOn, entry.Content)
+				if entry.ToStatus != "" {
+					fmt.Fprintf(&out, "（%s → %s）", entry.FromStatus, entry.ToStatus)
+				}
+				fmt.Fprintf(&out, " %s\n", entry.Reason)
+			}
+		}
+		out.WriteString("\n")
+	}
 	out.WriteString("## 轻量记录\n\n")
 	for _, record := range snapshot.Records {
 		fmt.Fprintf(&out, "### 记录 %d\n\n%s\n\n- 创建：%s\n- 修改：%s\n", record.ID, record.Content, record.CreatedAt.Format(time.RFC3339), record.UpdatedAt.Format(time.RFC3339))

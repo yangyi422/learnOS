@@ -163,3 +163,10 @@ Grounding Coverage 是来源覆盖事实，只统计 BlueprintLesson / 正式 Le
 `inbox_items` 增加可空 `capture_key`，与 `user_id` 组合唯一。旧行保持 NULL，多次空键捕获仍合法；新客户端重试相同内容使用相同键，服务端返回原始行。状态仍为 `inbox / processed / archived`，通过 `processed_to_type=task / record` 区分去向，兼容旧任务转换记录。原内容不被记录编辑覆盖；转换事务失败全部回滚。
 
 启动按既有版本检测先创建迁移前 SQLite 备份，再使用可重复 `AutoMigrate` 添加表、列、索引并更新版本。重复启动不会新增或改写用户记录。回退优先停止服务并恢复迁移前备份再运行旧版；直接使用旧版不支持本轮记录操作，并可能降低 metadata 版本，因此不作为推荐回退路径。本轮无需新增配置或第三方依赖。
+
+
+## Schema 21：生活档案
+
+新增 `life_events`（发生日期、主/次领域、里程碑、可选目标及真实来源 ID/标题快照）、`life_goals`（理由、当前判断、状态及可选项目）、`life_goal_entries`（阶段判断、原因、状态前后值和日期）。日期保存为已校验的 `YYYY-MM-DD` 文字，采用用户本地日历。请求键与来源键建立唯一索引，Inbox 转换及状态历史在单事务中提交。来源不配置级联删除，项目归档/课程删除不会丢失生活事实。
+
+既有迁移前整库备份、重复 AutoMigrate、JSON/Markdown 导出覆盖新数据；旧 Inbox 模型只增加 `life_event` 处理类型，原始内容不修改。详见 [LIFE_ARCHIVE.md](LIFE_ARCHIVE.md)。

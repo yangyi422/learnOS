@@ -15,13 +15,15 @@
       <article v-for="item in group.items" :key="item.id" class="inbox-item">
         <div class="inbox-item__main">
           <button type="button" class="inbox-item__content" @click="viewItem(item)">{{ item.content }}</button>
-          <div class="inbox-item__meta"><time>{{ formatDate(item.created_at) }}</time><span v-if="item.source_type === 'url'">链接</span><ExternalLink v-if="item.source_url" :url="item.source_url" /><span v-if="item.status === 'processed' && item.processed_to_type === 'task'">已转为任务</span><span v-if="item.processed_to_type === 'record'">已保存为记录</span></div>
+          <div class="inbox-item__meta"><time>{{ formatDate(item.created_at) }}</time><span v-if="item.source_type === 'url'">链接</span><ExternalLink v-if="item.source_url" :url="item.source_url" /><span v-if="item.status === 'processed' && item.processed_to_type === 'task'">已转为任务</span><span v-if="item.processed_to_type === 'record'">已保存为记录</span><span v-if="item.processed_to_type === 'life_event'">已保存为生活事件</span></div>
         </div>
         <div class="inbox-item__actions">
           <el-button v-if="item.status === 'inbox'" text @click="openConvert(item)">转为任务</el-button>
           <el-button v-if="item.status === 'inbox'" text @click="openSaveRecord(item)">保存为记录</el-button>
+          <el-button v-if="item.status === 'inbox'" text @click="selectedItem = item; lifeOpen = true">保存为生活事件</el-button>
 
           <el-button v-if="item.status === 'processed' && item.processed_to_type === 'task' && item.processed_to_id" text @click="openTask(item)">查看任务</el-button>
+          <el-button v-if="item.processed_to_type === 'life_event' && item.processed_to_id" text @click="router.push({ path: '/life', query: { event: item.processed_to_id } })">查看生活事件</el-button>
           <el-button v-if="item.processed_to_type === 'record' && item.processed_to_id" text @click="openRecord(item)">查看记录</el-button>
         </div>
       </article>
@@ -29,10 +31,11 @@
       <el-empty v-if="!loading && items.length === 0" :description="emptyLabel" />
     </div>
     <QuickCaptureDialog v-model="captureOpen" @created="captureCompleted" />
+    <LifeEventDialog v-model="lifeOpen" :inbox-item="selectedItem" @saved="recordSaved" />
     <RecordDialog v-model="recordOpen" :inbox-item="selectedItem" @saved="recordSaved" />
     <el-dialog v-model="detailOpen" title="收集内容" width="min(620px, calc(100vw - 28px))">
       <div class="inbox-detail"><LinkedText v-if="selectedItem" :content="selectedItem.content" /></div>
-      <template #footer><div class="inbox-detail-actions"><el-button v-if="selectedItem?.status === 'inbox'" @click="detailOpen = false; openConvert(selectedItem)">转为任务</el-button><el-button v-if="selectedItem?.status === 'inbox'" @click="detailOpen = false; openSaveRecord(selectedItem)">保存为记录</el-button><el-button v-if="selectedItem?.status === 'inbox'" @click="detailOpen = false; openEdit(selectedItem)">编辑</el-button><el-button v-if="selectedItem && selectedItem.status !== 'archived'" @click="archive(selectedItem)">归档</el-button><el-button v-if="selectedItem" text type="danger" @click="remove(selectedItem)">删除</el-button></div></template>
+      <template #footer><div class="inbox-detail-actions"><el-button v-if="selectedItem?.status === 'inbox'" @click="detailOpen = false; openConvert(selectedItem)">转为任务</el-button><el-button v-if="selectedItem?.status === 'inbox'" @click="detailOpen = false; openSaveRecord(selectedItem)">保存为记录</el-button><el-button v-if="selectedItem?.status === 'inbox'" @click="detailOpen = false; lifeOpen = true">保存为生活事件</el-button><el-button v-if="selectedItem?.status === 'inbox'" @click="detailOpen = false; openEdit(selectedItem)">编辑</el-button><el-button v-if="selectedItem && selectedItem.status !== 'archived'" @click="archive(selectedItem)">归档</el-button><el-button v-if="selectedItem" text type="danger" @click="remove(selectedItem)">删除</el-button></div></template>
     </el-dialog>
     <ConvertInboxDialog v-model="convertOpen" :item="selectedItem" @converted="handleConverted" />
     <el-dialog v-model="editOpen" title="编辑收集内容" width="min(520px, calc(100vw - 28px))">
@@ -46,6 +49,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import LifeEventDialog from '@/components/life/LifeEventDialog.vue'
+import '@/life.css'
 import PageHeader from '@/components/PageHeader.vue'
 import QuickCaptureDialog from '@/components/QuickCaptureDialog.vue'
 import InboxCaptureForm from '@/components/InboxCaptureForm.vue'
@@ -60,6 +65,7 @@ type Tab = InboxStatus | 'records'
 const tabs: { key: Tab; label: string }[] = [{ key: 'inbox', label: '待整理' }, { key: 'processed', label: '已处理' }, { key: 'archived', label: '已归档' }, { key: 'records', label: '记录' }]
 const router = useRouter()
 const status = ref<Tab>('inbox')
+const lifeOpen = ref(false);
 const recordOpen = ref(false); const detailOpen = ref(false)
 const recordsPanel = ref<InstanceType<typeof RecordsPanel> | null>(null)
 let loadSequence = 0

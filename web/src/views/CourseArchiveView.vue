@@ -1,9 +1,10 @@
 <template>
   <section class="page-stack curriculum-page coverage-page">
     <PageHeader eyebrow="知识盘点" title="课程档案与覆盖度" description="盘点课程蓝图已经覆盖什么，以及下一步应该补齐哪里。">
-      <template #actions><el-button text @click="router.push(`/courses/${courseID}/learn`)">返回学习</el-button><el-button type="primary" @click="router.push(`/courses/${courseID}/map`)">查看知识结构 →</el-button></template>
+      <template #actions><LifeCaptureButton v-if="lifeSource?.eligible" source-type="course" :source-id="courseID" /><el-button v-else-if="lifeSource?.can_graduate" :loading="graduating" @click="graduate">确认课程结业</el-button><el-button text @click="router.push(`/courses/${courseID}/learn`)">返回学习</el-button><el-button type="primary" @click="router.push(`/courses/${courseID}/map`)">查看知识结构 →</el-button></template>
     </PageHeader>
 
+    <el-alert v-if="lifeSourceError" :title="lifeSourceError" type="warning" :closable="false"><el-button text @click="loadLifeSource">重试成果状态</el-button></el-alert>
     <AIRequestError v-if="draftError" :message="draftError.message" :retryable="draftError.retryable" :retry="retryDraft" />
     <CoverageSummary v-if="coverage" :metrics="coverage.metrics" />
 
@@ -34,6 +35,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { applyCurriculumDraft, createCurriculumDraft, getCurriculumCoverage, listCurriculumDrafts, rejectCurriculumDraft } from '@/api/curriculum'
 import { APIRequestError } from '@/api/http'
+import LifeCaptureButton from '@/components/life/LifeCaptureButton.vue'
+import { getLifeSource, graduateCourse, type LifeSource } from '@/api/life'
 import AIRequestError from '@/components/AIRequestError.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
@@ -46,6 +49,11 @@ import { invalidateExplorationRadar } from '@/api/exploration'
 
 const route = useRoute()
 const router = useRouter()
+const lifeSource = ref<LifeSource | null>(null)
+const graduating = ref(false)
+const lifeSourceError = ref('')
+async function loadLifeSource() { lifeSourceError.value = ''; try { const result = await getLifeSource('course', courseID); if (result.type === 'course') lifeSource.value = result } catch (reason) { lifeSource.value = null; lifeSourceError.value = reason instanceof Error ? reason.message : '成果状态暂时无法读取' } }
+async function graduate() { if (graduating.value) return; try { await ElMessageBox.confirm('课程内容已完成学习流程（可能包含跳过的课）。结业不会提高掌握度，也不会自动收录生活档案。确认结业？', '确认课程结业', { confirmButtonText: '确认结业', cancelButtonText: '继续学习' }); graduating.value = true; await graduateCourse(courseID); await loadLifeSource(); ElMessage.success('课程已正式结业') } catch (reason) { if (reason !== 'cancel' && reason !== 'close') ElMessage.error(reason instanceof Error ? reason.message : '结业失败') } finally { graduating.value = false } }
 const courseID = Number(String(route.params.id))
 const returnToMap = route.query.return_to === 'map'
 const activeTab = ref(route.query.tab === 'drafts' ? 'drafts' : 'coverage')
@@ -83,9 +91,9 @@ async function load() {
   } catch (error) { ElMessage.error(error instanceof Error ? error.message : '加载课程覆盖度失败') }
 }
 async function generateDraft() { if (generating.value) return; generating.value = true; draftError.value = null; try { drafts.value.unshift(await createCurriculumDraft(courseID)); activeTab.value = 'drafts'; ElMessage.success('草案已生成，请审核后确认应用') } catch (error) { if (error instanceof APIRequestError) { draftError.value = error; if (error.code === 'CURRICULUM_DRAFT_GENERATION_IN_PROGRESS') { activeTab.value = 'drafts'; await refreshDrafts() } } else ElMessage.error(error instanceof Error ? error.message : '生成草案失败') } finally { generating.value = false } }
-async function applyDraft(id: number) { try { await ElMessageBox.confirm('应用草案只会新增课程节点，不会改变当前课程节点、学习历史或个人认知状态。继续？', '确认课程扩充'); await applyCurriculumDraft(courseID, id); invalidateExplorationRadar(); ElMessage.success('草案已应用'); if (returnToMap) await router.push(`/courses/${courseID}/map`); else await load() } catch (error) { if (error !== 'cancel') ElMessage.error(error instanceof Error ? error.message : '应用失败') } }
+async function applyDraft(id: number) { try { await ElMessageBox.confirm('应用草案只会新增课程节点，不会改变当前课程节点、学习历史或个人认知状态。继续？', '确认课程扩充'); await applyCurriculumDraft(courseID, id); invalidateExplorationRadar(); void loadLifeSource(); ElMessage.success('草案已应用'); if (returnToMap) await router.push(`/courses/${courseID}/map`); else await load() } catch (error) { if (error !== 'cancel') ElMessage.error(error instanceof Error ? error.message : '应用失败') } }
 async function rejectDraft(id: number) { try { await rejectCurriculumDraft(courseID, id); ElMessage.success('草案已拒绝'); await load() } catch (error) { ElMessage.error(error instanceof Error ? error.message : '拒绝失败') } }
-onMounted(load)
+onMounted(() => { void load(); void loadLifeSource() })
 onBeforeUnmount(() => { if (generationPollTimer !== null) window.clearTimeout(generationPollTimer) })
 </script>
 

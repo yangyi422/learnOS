@@ -80,6 +80,9 @@ func Open(cfg config.Config) (*gorm.DB, error) {
 		&model.ProjectTask{},
 		&model.InboxItem{},
 		&model.LightweightRecord{},
+		&model.LifeEvent{},
+		&model.LifeGoal{},
+		&model.LifeGoalEntry{},
 	); err != nil {
 		if preMigrationBackup.Path != "" {
 			return nil, fmt.Errorf("migrate database: %w (pre-migration backup: %s)", err, preMigrationBackup.Path)

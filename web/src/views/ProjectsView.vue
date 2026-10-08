@@ -23,7 +23,7 @@
         <div v-if="selectedProject" class="projects-context">
           <span class="projects-context__accent" :style="{ background: selectedProject.accent || '#94a3b8' }" />
           <div><strong>{{ selectedProject.icon }} {{ selectedProject.title }}</strong><p v-if="selectedProject.description">{{ selectedProject.description }}</p></div>
-          <el-tag size="small" effect="plain">{{ projectStatusLabel(selectedProject.status) }}</el-tag>
+          <el-tag size="small" effect="plain">{{ projectStatusLabel(selectedProject.status) }}</el-tag><LifeCaptureButton v-if="selectedProject.status === 'completed'" source-type="project" :source-id="selectedProject.id" />
         </div>
         <KanbanBoard :tasks="tasks" :projects="projectMap" :selected-project-id="selectedProjectID" :active-task-id="taskDrawerOpen ? editingTask?.id ?? null : null" :done-count="doneCount" :busy="busy || loading" :today="today" @open="openTask" @add="openNewTask" @move="handleMove" @more-done="loadMoreDone" />
         <details v-if="selectedProjectID" class="project-records" @toggle="recordsExpanded = ($event.target as HTMLDetailsElement).open"><summary>项目记录</summary><RecordsPanel v-if="recordsExpanded" :key="selectedProjectID" :project-id="selectedProjectID" /></details>
@@ -57,6 +57,8 @@
           <div class="project-list-card__actions">
             <el-button text @click="openProject(project)">打开看板</el-button>
             <el-button text @click="openProjectForm(project)">编辑</el-button>
+            <el-button v-if="project.status === 'active' || project.status === 'paused'" text @click="setProjectStatus(project, 'completed')">标记项目完成</el-button>
+            <LifeCaptureButton v-if="project.status === 'completed'" source-type="project" :source-id="project.id" />
             <el-button v-if="project.status === 'active'" text @click="setProjectStatus(project, 'paused')">暂停</el-button>
             <el-button v-else text @click="setProjectStatus(project, 'active')">恢复</el-button>
             <el-button v-if="project.status !== 'archived'" text @click="setProjectStatus(project, 'archived')">归档</el-button>
@@ -93,6 +95,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import LifeCaptureButton from '@/components/life/LifeCaptureButton.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import KanbanBoard from '@/components/projects/KanbanBoard.vue'
 import TaskDrawer from '@/components/projects/TaskDrawer.vue'
