@@ -20,7 +20,20 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19" /></svg>
         </button>
       </header>
-      <el-form class="task-drawer__form" label-position="top" :disabled="busy" @submit.prevent="submit">
+      <div class="task-drawer__content">
+        <article v-if="task && !editing" class="task-drawer__reading" aria-label="任务内容">
+          <h3 ref="readingTitle" tabindex="-1">{{ task.title }}</h3>
+          <dl class="task-drawer__metadata">
+            <div><dt>项目</dt><dd>{{ projects.find(project => project.id === task?.project_id)?.title || '项目' }}</dd></div>
+            <div><dt>状态</dt><dd>{{ statusLabel(task.status) }}</dd></div>
+            <div><dt>优先级</dt><dd>{{ priorityLabel(task.priority) }}</dd></div>
+            <div><dt>截止日期</dt><dd>{{ task.due_date || '无截止日期' }}</dd></div>
+          </dl>
+          <p v-if="task.description" class="task-drawer__read-description">{{ task.description }}</p>
+          <p v-else class="task-drawer__empty-description">暂无任务说明</p>
+          <el-alert v-if="saveError" :title="saveError" type="error" :closable="false" show-icon />
+        </article>
+      <el-form v-if="editing || !task" class="task-drawer__form" label-position="top" :disabled="busy" @submit.prevent="submit">
         <div class="task-drawer__title-field">
           <span class="task-drawer__field-label">任务标题</span>
           <el-input ref="titleInput" v-model="form.title" aria-label="任务名称" maxlength="200" placeholder="要完成什么？" />
@@ -58,17 +71,24 @@
           <el-input v-model="form.description" type="textarea" :rows="6" maxlength="10000" show-word-limit placeholder="记录完成这项任务所需的上下文" @input="resizeDescription" />
         </el-form-item>
 
-        <details v-if="task" class="task-drawer__activity">
-          <summary>记录</summary>
-          <div><p>创建：{{ formatTime(task.created_at) }}</p><p>最近修改：{{ formatTime(task.updated_at) }}</p><p v-if="task.completed_at">完成：{{ formatTime(task.completed_at) }}</p></div>
-        </details>
+        <el-alert v-if="saveError" :title="saveError" type="error" :closable="false" show-icon />
       </el-form>
+      <details v-if="task" class="task-drawer__activity">
+        <summary>记录</summary>
+        <div><p>创建：{{ formatTime(task.created_at) }}</p><p>最近修改：{{ formatTime(task.updated_at) }}</p><p v-if="task.completed_at">完成：{{ formatTime(task.completed_at) }}</p></div>
+      </details>
+      </div>
       <footer class="task-drawer__actions">
-        <el-button v-if="task" text type="danger" :disabled="busy" @click="$emit('delete', task)">删除任务</el-button>
+        <el-button v-if="task && !editing" text type="danger" :disabled="busy" @click="$emit('delete', task)">删除任务</el-button>
         <div class="task-drawer__actions-main">
-          <el-button v-if="task" :disabled="busy" @click="toggleDone">{{ task.status === 'done' ? '重新打开' : '标记完成' }}</el-button>
-          <el-button :disabled="busy" @click="requestClose">取消</el-button>
-          <el-button type="primary" :loading="busy" :disabled="!form.title.trim() || !form.project_id" @click="submit">{{ task ? '保存' : '创建任务' }}</el-button>
+          <template v-if="task && !editing">
+            <el-button :disabled="busy" @click="startEditing">编辑</el-button>
+            <el-button type="primary" :loading="busy" @click="$emit('status', task, task.status === 'done' ? 'next' : 'done')">{{ task.status === 'done' ? '重新打开' : '标记完成' }}</el-button>
+          </template>
+          <template v-else>
+            <el-button :disabled="busy" @click="cancelEditing">取消</el-button>
+            <el-button type="primary" :loading="busy" :disabled="!form.title.trim() || !form.project_id" @click="submit">{{ task ? '保存' : '创建任务' }}</el-button>
+          </template>
         </div>
       </footer>
     </div>
@@ -76,7 +96,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import type { Project, ProjectTask, TaskInput, TaskPriority, TaskStatus } from '@/api/projects'
@@ -88,13 +108,17 @@ const props = defineProps<{
   defaultProjectId: number | null
   defaultStatus: TaskStatus
   busy: boolean
+  saveError?: string
 }>()
 const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
   (e: 'save', input: TaskInput): void
   (e: 'delete', task: ProjectTask): void
+  (e: 'status', task: ProjectTask, status: TaskStatus): void
 }>()
 const width = ref(window.innerWidth)
+const editing = ref(false)
+const readingTitle = ref<HTMLElement | null>(null)
 const titleInput = ref<{ focus: () => void } | null>(null)
 const workspace = ref<HTMLElement | null>(null)
 let returnFocus: HTMLElement | null = null
@@ -105,12 +129,11 @@ const form = reactive<{ title: string; project_id: number | null; status: TaskSt
 const availableProjects = computed(() => props.projects.filter(project => project.status !== 'archived' || project.id === props.task?.project_id))
 const initialSnapshot = ref('')
 function snapshot() { return JSON.stringify([form.title, form.project_id, form.status, form.priority, form.due_date, form.description]) }
-const dirty = computed(() => props.modelValue && initialSnapshot.value !== snapshot())
+const dirty = computed(() => props.modelValue && (editing.value || !props.task) && initialSnapshot.value !== snapshot())
 watch(() => props.modelValue, (open, wasOpen) => {
   if (open && !wasOpen && document.activeElement instanceof HTMLElement) returnFocus = document.activeElement
 }, { flush: 'sync' })
-watch(() => [props.modelValue, props.task, props.defaultProjectId, props.defaultStatus], () => {
-  if (!props.modelValue) return
+function resetForm() {
   form.title = props.task?.title ?? ''
   form.project_id = props.task?.project_id ?? props.defaultProjectId
   form.status = props.task?.status ?? props.defaultStatus
@@ -119,20 +142,41 @@ watch(() => [props.modelValue, props.task, props.defaultProjectId, props.default
   form.description = props.task?.description ?? ''
   initialSnapshot.value = snapshot()
   resizeDescription()
-}, { immediate: true })
-async function confirmClose(done: () => void) {
-  if (props.busy) return
-  if (dirty.value) {
-    try {
-      await ElMessageBox.confirm('当前修改尚未保存。确定放弃吗？', '放弃未保存的修改', {
-        confirmButtonText: '放弃修改', cancelButtonText: '继续编辑', type: 'warning',
-      })
-    } catch { return }
-  }
-  done()
 }
+watch(() => [props.modelValue, props.task], () => {
+  if (!props.modelValue) return
+  editing.value = !props.task
+  resetForm()
+  void nextTick(focusTitle)
+}, { immediate: true })
+let discardDecision: Promise<boolean> | null = null
+async function canReplace(): Promise<boolean> {
+  if (props.busy) return false
+  if (!dirty.value) return true
+  if (!discardDecision) {
+    discardDecision = ElMessageBox.confirm('当前修改尚未保存。确定放弃吗？', '放弃未保存的修改', {
+      confirmButtonText: '放弃修改', cancelButtonText: '继续编辑', type: 'warning',
+    }).then(() => true, () => false).finally(() => { discardDecision = null })
+  }
+  return discardDecision
+}
+async function confirmClose(done: () => void) { if (await canReplace()) done() }
 function requestClose() { void confirmClose(() => emit('update:modelValue', false)) }
-function focusTitle() { resizeDescription(); requestAnimationFrame(() => titleInput.value?.focus()) }
+function focusTitle() {
+  resizeDescription()
+  requestAnimationFrame(() => { if (editing.value || !props.task) titleInput.value?.focus(); else readingTitle.value?.focus({ preventScroll: true }) })
+}
+function startEditing() { resetForm(); editing.value = true; void nextTick(focusTitle) }
+async function cancelEditing() {
+  if (!await canReplace()) return
+  if (!props.task) { emit('update:modelValue', false); return }
+  resetForm()
+  editing.value = false
+  void nextTick(focusTitle)
+}
+defineExpose({ canReplace })
+function statusLabel(status: TaskStatus) { return { inbox: '待整理', next: '下一步', doing: '进行中', done: '已完成' }[status] }
+function priorityLabel(priority: TaskPriority) { return { high: '高', normal: '普通', low: '低' }[priority] || '普通' }
 function resizeDescription() {
   requestAnimationFrame(() => {
     const textarea = workspace.value?.querySelector<HTMLTextAreaElement>('.task-drawer__description textarea')
@@ -150,7 +194,6 @@ function restoreFocus() {
   if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true })
   returnFocus = null
 }
-function toggleDone() { if (!props.task) return; form.status = props.task.status === 'done' ? 'next' : 'done'; submit() }
 function submit() {
   if (!form.title.trim() || !form.project_id || props.busy) return
   emit('save', {
@@ -169,7 +212,7 @@ onUnmounted(() => window.removeEventListener('resize', onResize))
 </script>
 
 <style>
-.task-drawer.el-drawer.rtl { top: 12px; right: 12px; height: calc(100vh - 24px); border: 1px solid var(--drawer-edge); border-radius: 12px; background: var(--drawer-bg); color: var(--text-primary); box-shadow: var(--drawer-shadow); overflow: hidden; transition: transform 170ms ease-out; }
+.task-drawer.el-drawer.rtl { top: 12px; right: 12px; height: calc(100dvh - 24px); border: 1px solid var(--drawer-edge); border-radius: 12px; background: var(--drawer-bg); color: var(--text-primary); box-shadow: var(--drawer-shadow); overflow: hidden; transition: transform 170ms ease-out; }
 .task-drawer .el-drawer__body { display: flex; min-height: 0; padding: 0; overflow: hidden; }
 .task-drawer__workspace { display: flex; width: 100%; min-height: 0; flex-direction: column; }
 .task-drawer__header { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 22px 14px; border-bottom: 1px solid var(--border-subtle); }
@@ -177,7 +220,15 @@ onUnmounted(() => window.removeEventListener('resize', onResize))
 .task-drawer__close { display: grid; width: 32px; height: 32px; flex: none; place-items: center; padding: 0; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--text-secondary); cursor: pointer; transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease; }
 .task-drawer__close:hover { border-color: var(--border-default); background: var(--drawer-control); color: var(--text-primary); }
 .task-drawer__close svg { width: 16px; height: 16px; }
-.task-drawer__form { min-height: 0; flex: 1; overflow-y: auto; padding: 24px 26px 30px; scrollbar-color: var(--border-default) transparent; }
+.task-drawer__content { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 24px 26px 30px; scrollbar-color: var(--border-default) transparent; }
+.task-drawer__form { min-width: 0; }
+.task-drawer__reading h3 { margin: 0 0 20px; overflow-wrap: anywhere; color: var(--text-primary); font-size: 24px; line-height: 1.5; }
+.task-drawer__metadata { display: flex; flex-wrap: wrap; gap: 12px 18px; margin: 0 0 24px; color: var(--text-secondary); font-size: 12px; }
+.task-drawer__metadata div { min-width: 0; }
+.task-drawer__metadata dt { color: var(--text-tertiary); margin-bottom: 4px; }
+.task-drawer__metadata dd { margin: 0; overflow-wrap: anywhere; }
+.task-drawer__read-description { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-primary); font-size: 14px; line-height: 1.85; }
+.task-drawer__empty-description { color: var(--text-tertiary); font-size: 13px; }
 .task-drawer__field-label { display: block; margin-bottom: 4px; color: var(--text-tertiary); font-size: 12px; }
 .task-drawer__title-field { margin-bottom: 24px; }
 .task-drawer__title-field .el-input__wrapper { margin: 0 -7px; padding: 7px 7px 10px; border-bottom: 1px solid var(--border-subtle); border-radius: 6px 6px 0 0; background: transparent; box-shadow: none !important; transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease; }
@@ -219,9 +270,9 @@ onUnmounted(() => window.removeEventListener('resize', onResize))
 .el-message-box__title { color: var(--text-primary); }
 .el-message-box__message { color: var(--text-secondary); }
 @media (max-width: 760px) {
-  .task-drawer.el-drawer.rtl { top: 0; right: 0; height: 100vh; border: 0; border-radius: 0; }
+  .task-drawer.el-drawer.rtl { top: 0; right: 0; height: 100dvh; border: 0; border-radius: 0; }
   .task-drawer__header { padding: 14px 18px; }
-  .task-drawer__form { padding: 20px 18px 28px; }
-  .task-drawer__actions { flex-wrap: wrap; padding: 12px 16px; }
+  .task-drawer__content { padding: 20px 18px 28px; }
+  .task-drawer__actions { flex-wrap: wrap; padding: 12px 16px max(12px, env(safe-area-inset-bottom)); }
 }
 </style>

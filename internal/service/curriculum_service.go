@@ -690,7 +690,7 @@ func (s *CurriculumService) ApplyDraft(ctx context.Context, courseID, draftID ui
 		}
 		lessonByTemp := map[string]uint{}
 		for _, newLesson := range changeSet.NewLessons {
-			if newLesson.TempKey == "" || newLesson.BlueprintLessonKey == "" || newLesson.Title == "" {
+			if newLesson.TempKey == "" || newLesson.BlueprintLessonKey == "" || newLesson.Title == "" || len([]rune(newLesson.Content)) > 12000 {
 				return ErrCurriculumDraftInvalid
 			}
 			if _, exists := lessonByTitle[newLesson.Title]; exists {
@@ -704,7 +704,7 @@ func (s *CurriculumService) ApplyDraft(ctx context.Context, courseID, draftID ui
 			if role == "" {
 				role = model.ContentRoleCore
 			}
-			item := &model.Lesson{CourseID: courseID, UnitID: unitID, Title: newLesson.Title, CoreQuestion: newLesson.CoreQuestion, ExpectedUnderstanding: newLesson.ExpectedUnderstanding, SortOrder: newLesson.SortOrder, Status: model.LessonStatusPending, IsCore: newLesson.IsCore, ContentRole: role, DepthLevel: newLesson.DepthLevel, AssessmentTargetLevel: newLesson.AssessmentTargetLevel, GroundingStatus: model.CurriculumGroundingUngrounded}
+			item := &model.Lesson{CourseID: courseID, UnitID: unitID, Title: newLesson.Title, CoreQuestion: newLesson.CoreQuestion, ExpectedUnderstanding: newLesson.ExpectedUnderstanding, Content: newLesson.Content, SortOrder: newLesson.SortOrder, Status: model.LessonStatusPending, IsCore: newLesson.IsCore, ContentRole: role, DepthLevel: newLesson.DepthLevel, AssessmentTargetLevel: newLesson.AssessmentTargetLevel, GroundingStatus: model.CurriculumGroundingUngrounded}
 			if item.DepthLevel < 1 {
 				item.DepthLevel = 1
 			}

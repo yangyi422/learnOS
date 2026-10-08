@@ -17,7 +17,9 @@ export interface CurrentLesson {
   id: number
   title: string
   core_question: string
-  status: 'pending' | 'learning' | 'completed'
+  content: string
+  expected_understanding: string
+  status: 'pending' | 'learning' | 'completed' | 'skipped'
   content_role: KnowledgeNodeType
   depth_level: number
 }
@@ -302,4 +304,37 @@ function normalizeAnswerResult(result: AnswerResultPayload): AnswerResult {
     cognitive_evidence: result.cognitive_evidence ?? [],
     cognitive_state: result.cognitive_state ?? null,
   }
+}
+
+export interface ConversationTurn {
+  id: number
+  user_answer: string
+  feedback: string
+  result: string
+  turn_kind: string
+  evaluation_source: string
+  created_at: string
+}
+export interface ConversationData {
+  turns: ConversationTurn[]
+  completion_suggested: boolean
+  has_next: boolean
+  position: number
+  total: number
+}
+export async function getConversation(courseID: number, lessonID: number, signal?: AbortSignal): Promise<ConversationData> {
+  const response = await request<{ data: ConversationData }>(`/api/v1/courses/${courseID}/lessons/${lessonID}/conversation`, { signal })
+  return response.data
+}
+export async function sendConversation(courseID: number, lessonID: number, message: string, key: string): Promise<ConversationData> {
+  const response = await request<{ data: ConversationData }>(`/api/v1/courses/${courseID}/lessons/${lessonID}/conversation`, { method: 'POST', body: JSON.stringify({ message, idempotency_key: key }) })
+  return response.data
+}
+export async function advanceConversation(courseID: number, lessonID: number, action: 'complete' | 'skip' | 'continue'): Promise<CurrentLessonData> {
+  const response = await request<{ data: CurrentLessonData }>(`/api/v1/courses/${courseID}/lessons/${lessonID}/advance`, { method: 'POST', body: JSON.stringify({ action }) })
+  return response.data
+}
+export async function retryConversation(courseID: number, lessonID: number, turnID: number): Promise<ConversationData> {
+  const response = await request<{ data: ConversationData }>(`/api/v1/courses/${courseID}/lessons/${lessonID}/conversation/${turnID}/retry`, { method: 'POST' })
+  return response.data
 }

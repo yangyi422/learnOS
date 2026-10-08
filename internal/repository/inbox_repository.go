@@ -4,15 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
+	"learnos/internal/links"
 	"time"
 
 	"learnos/internal/model"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var (
+	ErrInboxCaptureConflict  = errors.New("capture key reused with different content")
 	ErrInboxItemNotFound     = errors.New("inbox item not found")
 	ErrInboxAlreadyProcessed = errors.New("inbox item already processed")
 	ErrInboxAlreadyArchived  = errors.New("inbox item already archived")
@@ -23,8 +25,23 @@ type InboxRepository struct{ db *gorm.DB }
 func NewInboxRepository(db *gorm.DB) *InboxRepository { return &InboxRepository{db: db} }
 
 func (r *InboxRepository) Create(ctx context.Context, item *model.InboxItem) error {
-	if err := r.db.WithContext(ctx).Create(item).Error; err != nil {
-		return fmt.Errorf("create inbox item: %w", err)
+	query := r.db.WithContext(ctx)
+	if item.CaptureKey != nil {
+		query = query.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "user_id"}, {Name: "capture_key"}}, DoNothing: true})
+	}
+	result := query.Create(item)
+	if result.Error != nil {
+		return fmt.Errorf("create inbox item: %w", result.Error)
+	}
+	if result.RowsAffected == 0 && item.CaptureKey != nil {
+		var existing model.InboxItem
+		if err := r.db.WithContext(ctx).Where("user_id = ? AND capture_key = ?", item.UserID, *item.CaptureKey).First(&existing).Error; err != nil {
+			return err
+		}
+		if existing.Content != item.Content {
+			return ErrInboxCaptureConflict
+		}
+		*item = existing
 	}
 	return nil
 }
@@ -166,9 +183,8 @@ func sourceType(content string) string {
 }
 
 func sourceURL(content string) string {
-	parsed, err := url.ParseRequestURI(content)
-	if err != nil || len(content) > 2048 || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
-		return ""
+	if content != "" && links.SafeExternal(content) {
+		return content
 	}
-	return content
+	return ""
 }

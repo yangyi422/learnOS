@@ -189,6 +189,7 @@ async function installAPIMocks(page: Page): Promise<MockState> {
     if (path === '/api/v1/domains/drafts/701/apply' && method === 'POST') return json(route, { data: {
       draft: { id: 701, domain_name: '系统测试领域', learning_goal: '用完整流程验证领域创建可恢复', target_depth: 'systematic', status: 'applied', generated_by: 'mock', provider: 'mock', model: 'domain-test', skeleton_prompt_version: 'v1', starter_prompt_version: 'v1', world_prompt_version: 'v1', skeleton_json: '{}', starter_blueprint_json: '{}', initial_world_json: '{}', applied_course_id: 1, created_at: now, updated_at: now, applied_at: now },
     } })
+    if (path.endsWith('/conversation') && method === 'GET') return json(route, { data: { turns: [], completion_suggested: false, position: 0, total: 0 } })
     if (path === '/api/v1/courses/1/current-lesson' && method === 'GET') return json(route, { data: currentLesson })
     if (path === '/api/v1/courses/1/current-lesson' && method === 'POST') { state.currentLessonWrites += 1; return json(route, { data: currentLesson }) }
     if (path.endsWith('/current-lesson') && method === 'POST') { state.currentLessonWrites += 1; return json(route, { data: currentLesson }) }
@@ -685,7 +686,7 @@ test('学习回答禁止空提交，并自动保存、恢复草稿和提示离�
   await page.goto('/courses/1/learn')
 
   const editor = page.locator('#lesson-answer')
-  const submit = page.getByRole('button', { name: /提交回答/ })
+  const submit = page.getByRole('button', { name: '发送', exact: true })
   await expect(submit).toBeDisabled()
   await editor.fill('   ')
   await expect(submit).toBeDisabled()
@@ -713,9 +714,10 @@ test('回答—评价—修正—迁移—掌握证据形成可追溯闭环', as
   const state = await installAPIMocks(page)
   await page.goto('/courses/1/learn')
 
-  const editor = page.locator('#lesson-answer')
+  await page.getByText('可选挑战、掌握证据与详细评价', { exact: true }).click()
+  const editor = page.getByPlaceholder('需要详细评价的解释')
   await editor.fill('不口渴不代表一定不缺水，还要结合高温、运动、年龄和身体状态判断。')
-  const submit = page.getByRole('button', { name: /提交回答/ })
+  const submit = page.getByRole('button', { name: '查看详细评价', exact: true })
   await submit.evaluate((button) => {
     const element = button as HTMLButtonElement
     element.click()
@@ -730,17 +732,14 @@ test('回答—评价—修正—迁移—掌握证据形成可追溯闭环', as
   expect(state.answerAttempts).toBe(1)
   expect(state.answerWrites).toBe(1)
   await expect(editor).toHaveValue('')
-  expect(await page.evaluate(() => localStorage.getItem('learnos:answer-draft:1:101'))).toBeNull()
 
   await expect(page.getByRole('heading', { name: /当前学习状态为什么是“初步理解”/ })).toBeVisible()
   await expect(page.getByText('说明了口渴只是补水判断信号之一。')).toBeVisible()
   await page.getByText(/查看状态判断时间线/).click()
   await expect(page.getByText('结构化评价形成了理解与边界证据。')).toBeVisible()
 
-  await page.getByRole('button', { name: '根据缺口修正回答' }).click()
-  await expect(editor).toBeFocused()
   await editor.fill('修正版：口渴可能滞后于体液变化，因此还要结合尿色、出汗、环境和个体状态。')
-  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Enter' : 'Control+Enter')
+  await page.getByRole('button', { name: '查看详细评价', exact: true }).click()
   await expect.poll(() => state.answerWrites).toBe(2)
 
   await page.getByRole('button', { name: '生成迁移挑战' }).click()
@@ -754,6 +753,7 @@ test('回答—评价—修正—迁移—掌握证据形成可追溯闭环', as
   await expect(page.getByRole('heading', { name: /当前学习状态为什么是“掌握”/ })).toBeVisible()
   expect(state.challengeWrites).toBe(1)
 
+  await page.getByText('历史回答与评价记录', { exact: true }).click()
   await page.getByRole('button', { name: /展开全部/ }).click()
   await expect(page.getByText('回答版本 1')).toBeVisible()
   await expect(page.getByText('回答版本 2')).toBeVisible()
@@ -769,6 +769,7 @@ test('迁移挑战禁用时显示明确解锁条件', async ({ page }) => {
   } }))
   await page.goto('/courses/1/learn')
 
+  await page.getByText('可选挑战、掌握证据与详细评价', { exact: true }).click()
   await expect(page.getByText('解锁条件：核心问题达到“初步理解”。当前状态为“未接触”。')).toBeVisible()
   await expect(page.getByRole('button', { name: '生成迁移挑战' })).toBeDisabled()
 })

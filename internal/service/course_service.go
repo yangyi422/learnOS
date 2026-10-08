@@ -193,7 +193,7 @@ func buildCourseView(course model.Course, facts repository.CourseProgressFacts) 
 		learningStatus = "paused"
 	} else if course.Status == model.CourseStatusCompleted || (facts.LessonCount > 0 && coverageProgress == 100) {
 		learningStatus = "completed"
-	} else if facts.CoveredLessonCount > 0 {
+	} else if facts.CoveredLessonCount > 0 || facts.ConversationLessonCount > 0 {
 		learningStatus = "in_progress"
 	}
 

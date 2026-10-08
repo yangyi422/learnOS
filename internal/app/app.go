@@ -45,6 +45,7 @@ func New(cfg config.Config) (*App, error) {
 	userService := service.NewUserService(userRepository)
 	projectRepository := repository.NewProjectRepository(db)
 	projectService := service.NewProjectService(projectRepository)
+	recordService := service.NewRecordService(repository.NewRecordRepository(db))
 	inboxService := service.NewInboxService(repository.NewInboxRepository(db), projectRepository)
 	bootstrapContext := context.Background()
 	if cfg.Username != "" && cfg.PasswordHash != "" {
@@ -125,7 +126,7 @@ func New(cfg config.Config) (*App, error) {
 		return nil, fmt.Errorf("load embedded web assets: %w", err)
 	}
 
-	handler := httpapi.NewHandler(courseService, knowledgeGraphService, cognitiveStateService, challengeService, misconceptionService, explorationService, curriculumService, groundingService, backupService, databaseHealthService, exportService, consistencyService, domainInitializationService, aiConfigurationService, nextLessonService, userService, projectService, inboxService, workspaceService)
+	handler := httpapi.NewHandler(courseService, knowledgeGraphService, cognitiveStateService, challengeService, misconceptionService, explorationService, curriculumService, groundingService, backupService, databaseHealthService, exportService, consistencyService, domainInitializationService, aiConfigurationService, nextLessonService, userService, projectService, inboxService, recordService, workspaceService)
 	router := httpapi.NewRouter(cfg, handler, dist, userService)
 
 	return &App{

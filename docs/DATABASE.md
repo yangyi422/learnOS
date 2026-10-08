@@ -151,3 +151,15 @@ Grounding Coverage 是来源覆盖事实，只统计 BlueprintLesson / 正式 Le
 ## Phase 7 preparation
 
 当前已完成测试知识世界扩充和 Exploration Engine：营养学 8 个 Lesson、逻辑与科学思维 3 个 Lesson、心理学 3 个 Lesson。跨课程候选由 Exploration Service 计算，仍不新增 `CrossCourseLessonRelation`；`LessonRelation` 继续只表达同 Course 内结构。
+
+## Schema 19：轻量课件与自然对话
+
+新增 `lessons.content` 可空文本列，既有 AutoMigrate 与迁移前自动备份负责升级，不回填或覆盖历史课件。`Lesson.status=skipped` 和 `LearningTurn.turn_kind=conversation` 复用已有字段；pending 消息、回复、原文理解证据与 AI 调用审计持久化在原有表中。完成/跳过与课程定位在同一事务内保存，不写入掌握分。旧二进制不能解释新状态与轮次，精确回滚须停止写入并恢复升级前备份；升级后的新记录应先导出保留。完整契约见 [LEARNING_LOOP.md](LEARNING_LOOP.md)。
+
+## Schema 20：轻量记录与统一捕获
+
+新增 `lightweight_records`：内容、用户 ID、可空真实项目 ID、可空唯一来源 Inbox ID、外部链接与显示名称、创建/修改/归档时间。来源唯一约束避免重复保存；可空 `creation_key` 与用户组合唯一，用于直接新增项目记录的失败重试；无项目或 Inbox 的级联删除，归档项目不影响记录生命周期。关联项目在写入事务中校验存在及归属，不改变 Project/Task 表。
+
+`inbox_items` 增加可空 `capture_key`，与 `user_id` 组合唯一。旧行保持 NULL，多次空键捕获仍合法；新客户端重试相同内容使用相同键，服务端返回原始行。状态仍为 `inbox / processed / archived`，通过 `processed_to_type=task / record` 区分去向，兼容旧任务转换记录。原内容不被记录编辑覆盖；转换事务失败全部回滚。
+
+启动按既有版本检测先创建迁移前 SQLite 备份，再使用可重复 `AutoMigrate` 添加表、列、索引并更新版本。重复启动不会新增或改写用户记录。回退优先停止服务并恢复迁移前备份再运行旧版；直接使用旧版不支持本轮记录操作，并可能降低 metadata 版本，因此不作为推荐回退路径。本轮无需新增配置或第三方依赖。

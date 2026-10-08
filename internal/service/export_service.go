@@ -45,6 +45,7 @@ type ExportSnapshot struct {
 	DomainDrafts          []model.DomainInitializationDraft   `json:"domain_initialization_drafts"`
 	Projects              []model.Project                     `json:"projects"`
 	ProjectTasks          []model.ProjectTask                 `json:"project_tasks"`
+	Records               []model.LightweightRecord           `json:"records"`
 	InboxItems            []model.InboxItem                   `json:"inbox_items"`
 }
 
@@ -61,7 +62,7 @@ func (s *ExportService) Snapshot(ctx context.Context) (*ExportSnapshot, error) {
 		{&snapshot.ExplorationDirections, "exploration directions"}, {&snapshot.ExplorationQuestions, "exploration questions"}, {&snapshot.Blueprints, "blueprints"},
 		{&snapshot.BlueprintUnits, "blueprint units"}, {&snapshot.BlueprintLessons, "blueprint lessons"}, {&snapshot.BlueprintRelations, "blueprint relations"},
 		{&snapshot.Sources, "sources"}, {&snapshot.Evidence, "source evidence"}, {&snapshot.GroundingLinks, "grounding links"}, {&snapshot.Credibility, "credibility"}, {&snapshot.DomainDrafts, "domain initialization drafts"},
-		{&snapshot.Projects, "projects"}, {&snapshot.ProjectTasks, "project tasks"}, {&snapshot.InboxItems, "inbox items"},
+		{&snapshot.Projects, "projects"}, {&snapshot.ProjectTasks, "project tasks"}, {&snapshot.InboxItems, "inbox items"}, {&snapshot.Records, "lightweight records"},
 	}
 	for _, query := range queries {
 		if err := s.db.WithContext(ctx).Find(query.dest).Error; err != nil {
@@ -93,6 +94,20 @@ func (s *ExportService) Markdown(ctx context.Context) ([]byte, error) {
 		fmt.Fprintf(&out, "- %s（%s）\n", item.Content, item.Status)
 	}
 	out.WriteString("\n")
+	out.WriteString("## 轻量记录\n\n")
+	for _, record := range snapshot.Records {
+		fmt.Fprintf(&out, "### 记录 %d\n\n%s\n\n- 创建：%s\n- 修改：%s\n", record.ID, record.Content, record.CreatedAt.Format(time.RFC3339), record.UpdatedAt.Format(time.RFC3339))
+		if record.ProjectID != nil {
+			fmt.Fprintf(&out, "- 项目 ID：%d\n", *record.ProjectID)
+		}
+		if record.ExternalURL != "" {
+			fmt.Fprintf(&out, "- 外部链接：%s\n", record.ExternalURL)
+		}
+		if record.ArchivedAt != nil {
+			fmt.Fprintf(&out, "- 已归档：%s\n", record.ArchivedAt.Format(time.RFC3339))
+		}
+		out.WriteString("\n")
+	}
 	out.WriteString("## 项目看板\n\n")
 	for _, project := range snapshot.Projects {
 		fmt.Fprintf(&out, "### %s\n\n- 状态：%s\n- 目标：%s\n\n", project.Title, project.Status, project.Description)

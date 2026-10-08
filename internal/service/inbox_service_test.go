@@ -20,7 +20,7 @@ func inboxTestServices(t *testing.T) (*InboxService, *ProjectService, *gorm.DB) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.Project{}, &model.ProjectTask{}, &model.InboxItem{}); err != nil {
+	if err := db.AutoMigrate(&model.Project{}, &model.ProjectTask{}, &model.InboxItem{}, &model.LightweightRecord{}); err != nil {
 		t.Fatal(err)
 	}
 	projectRepo := repository.NewProjectRepository(db)

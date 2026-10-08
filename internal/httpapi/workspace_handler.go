@@ -89,13 +89,14 @@ func (h *Handler) CreateInboxItem(c *gin.Context) {
 		return
 	}
 	var input struct {
-		Content string `json:"content"`
+		Content    string `json:"content"`
+		CaptureKey string `json:"capture_key"`
 	}
 	if c.ShouldBindJSON(&input) != nil {
 		inboxError(c, service.ErrInvalidInboxInput)
 		return
 	}
-	item, err := h.inbox.Create(c.Request.Context(), userID, input.Content)
+	item, err := h.inbox.CreateWithKey(c.Request.Context(), userID, input.Content, input.CaptureKey)
 	if err != nil {
 		inboxError(c, err)
 		return
@@ -183,15 +184,17 @@ func (h *Handler) DeleteInboxItem(c *gin.Context) {
 
 func inboxError(c *gin.Context, err error) {
 	switch {
-	case errors.Is(err, service.ErrInvalidInboxInput), errors.Is(err, service.ErrInvalidProjectInput):
-		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "INBOX_INPUT_INVALID", "message": "请检查收集内容和任务字段。", "retryable": false}})
+	case errors.Is(err, service.ErrInvalidRecordInput), errors.Is(err, service.ErrInvalidInboxInput), errors.Is(err, service.ErrInvalidProjectInput):
+		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "INBOX_INPUT_INVALID", "message": "请检查内容、项目或外部链接格式。", "retryable": false}})
 	case errors.Is(err, repository.ErrInboxItemNotFound), errors.Is(err, gorm.ErrRecordNotFound):
-		c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"code": "INBOX_ITEM_NOT_FOUND", "message": "收集内容或所属项目不存在。", "retryable": false}})
+		c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"code": "INBOX_ITEM_NOT_FOUND", "message": "内容、记录或所属项目不存在。", "retryable": false}})
+	case errors.Is(err, repository.ErrInboxCaptureConflict):
+		c.JSON(http.StatusConflict, gin.H{"error": gin.H{"code": "INBOX_CAPTURE_CONFLICT", "message": "该请求已经保存过其他内容，请刷新后编辑原记录。", "retryable": false}})
 	case errors.Is(err, repository.ErrInboxAlreadyProcessed):
-		c.JSON(http.StatusConflict, gin.H{"error": gin.H{"code": "INBOX_ITEM_ALREADY_PROCESSED", "message": "这条内容已经转换过任务。", "retryable": false}})
+		c.JSON(http.StatusConflict, gin.H{"error": gin.H{"code": "INBOX_ITEM_ALREADY_PROCESSED", "message": "这条内容已经整理过，请刷新查看。", "retryable": false}})
 	case errors.Is(err, repository.ErrInboxAlreadyArchived):
 		c.JSON(http.StatusConflict, gin.H{"error": gin.H{"code": "INBOX_ITEM_ARCHIVED", "message": "已归档的内容不能执行此操作。", "retryable": false}})
 	default:
-		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "INBOX_OPERATION_FAILED", "message": "收集箱操作失败，请稍后重试。", "retryable": true}})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "INBOX_OPERATION_FAILED", "message": "操作失败，请稍后重试。", "retryable": true}})
 	}
 }

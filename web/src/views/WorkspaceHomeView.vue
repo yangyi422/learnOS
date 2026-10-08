@@ -170,27 +170,7 @@
             <el-button text @click="router.push('/inbox')">打开收集箱{{ home.inbox?.count ? ' · ' + home.inbox.count : '' }} →</el-button>
           </template>
         </SectionHeader>
-        <form class="inbox-capture" @submit.prevent="submitCapture">
-          <el-input
-            v-model="captureContent"
-            :disabled="captureSaving"
-            maxlength="10000"
-            aria-label="快速记录到收集箱"
-            placeholder="有什么先记下来……"
-            @input="captureError = ''"
-          />
-          <el-button
-            class="inbox-capture__submit"
-            type="primary"
-            native-type="submit"
-            :loading="captureSaving"
-            :disabled="!captureContent.trim()"
-            aria-label="记录到收集箱"
-          >
-            <span aria-hidden="true">+</span>
-          </el-button>
-        </form>
-        <p v-if="captureError" class="capture-error" role="alert" aria-live="polite">{{ captureError }}</p>
+        <InboxCaptureForm button-text="+" @created="captured" />
         <div v-if="home.errors.inbox" class="module-error" role="alert">
           <span>{{ home.errors.inbox }}</span>
           <button class="inline-action" type="button" @click="load">重试</button>
@@ -219,13 +199,14 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { APIRequestError } from '@/api/http'
-import { createInboxItem, type InboxItem } from '@/api/inbox'
+import { type InboxItem } from '@/api/inbox'
 import type { ProjectTask } from '@/api/projects'
 import { getWorkspaceHome, type WorkspaceHome, type WorkspaceLearningItem } from '@/api/workspace'
 import EmptyState from '@/components/EmptyState.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
 import QuickCaptureDialog from '@/components/QuickCaptureDialog.vue'
+import InboxCaptureForm from '@/components/InboxCaptureForm.vue'
 
 type HomeSection = 'today' | 'projects' | 'learning' | 'inbox'
 
@@ -234,9 +215,6 @@ const home = ref<WorkspaceHome | null>(null)
 const loading = ref(true)
 const loadError = ref('')
 const captureOpen = ref(false)
-const captureContent = ref('')
-const captureSaving = ref(false)
-const captureError = ref('')
 const loadingSections: HomeSection[] = ['today', 'projects', 'learning', 'inbox']
 const dateLabel = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(new Date())
 const todayPreview = computed(() => {
@@ -380,21 +358,13 @@ async function load() {
     loading.value = false
   }
 }
-async function submitCapture() {
-  const content = captureContent.value.trim()
-  if (!content || captureSaving.value) return
-  captureSaving.value = true
-  captureError.value = ''
-  try {
-    await createInboxItem(content)
-    captureContent.value = ''
-    ElMessage.success('已记录')
-    await load()
-  } catch (reason) {
-    captureError.value = safeMessage(reason, '暂时无法记录，请重试。')
-  } finally {
-    captureSaving.value = false
+
+function captured(item: InboxItem) {
+  if (home.value?.inbox && item.status === 'inbox' && !home.value.inbox.items.some(existing => existing.id === item.id)) {
+    home.value.inbox.items = [item, ...home.value.inbox.items.filter(existing => existing.id !== item.id)].slice(0, 3)
+    home.value.inbox.count += 1
   }
+  void load()
 }
 function openTask(task: ProjectTask) {
   router.push({ path: '/projects', query: { project: String(task.project_id), view: 'board', task: String(task.id) } })

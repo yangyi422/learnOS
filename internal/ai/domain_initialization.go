@@ -106,6 +106,7 @@ type InitialWorldLesson struct {
 	BlueprintLessonKey    string `json:"blueprint_lesson_key"`
 	Title                 string `json:"title"`
 	CoreQuestion          string `json:"core_question"`
+	Content               string `json:"content"`
 	ExpectedUnderstanding string `json:"expected_understanding"`
 	ContentRole           string `json:"content_role"`
 	DepthLevel            int    `json:"depth_level"`
@@ -173,6 +174,7 @@ func BuildInitialWorldSystemPrompt() string {
     "title": "Lesson 标题",
     "core_question": "核心问题",
     "expected_understanding": "完成后应理解什么",
+    "content": "围绕一个概念的简明讲解与必要案例",
     "content_role": "foundation|core|deepening|application|extension",
     "depth_level": 1,
     "assessment_target_level": "recognize|understand|apply|transfer",
@@ -181,6 +183,7 @@ func BuildInitialWorldSystemPrompt() string {
   "relations": [{"from_lesson_key": "initial_lessons 中已有 key", "to_lesson_key": "initial_lessons 中已有 key", "relation_type": "prerequisite|extends|application|related"}],
   "recommended_first_lesson_key": "initial_lessons 中已有的 blueprint_lesson_key"
 }
+每课 content 为可直接阅读的简短课件：一个核心概念、简明讲解、一个必要案例；建议 200～400 字，复杂内容不硬性截断。
 initial_lessons 必须有 3 到 5 个；每个 Lesson 都必须有 core_question 和 expected_understanding。不要创建 Course 或用户认知记录。`
 }
 
@@ -307,7 +310,7 @@ func ParseAndValidateInitialWorld(content string, starter DomainStarterResult) (
 	}
 	lessons := map[string]bool{}
 	for _, lesson := range result.InitialLessons {
-		if !valid[lesson.BlueprintLessonKey] || lesson.Title == "" || lesson.CoreQuestion == "" || lesson.ExpectedUnderstanding == "" || lessons[lesson.BlueprintLessonKey] || !validContentRole(lesson.ContentRole) || !validAssessmentLevel(lesson.AssessmentTargetLevel) {
+		if !valid[lesson.BlueprintLessonKey] || lesson.Title == "" || lesson.CoreQuestion == "" || lesson.ExpectedUnderstanding == "" || len([]rune(lesson.Content)) > 12000 || lessons[lesson.BlueprintLessonKey] || !validContentRole(lesson.ContentRole) || !validAssessmentLevel(lesson.AssessmentTargetLevel) {
 			return InitialWorldResult{}, newProviderError(ErrInvalidResponse, fmt.Errorf("invalid initial world lesson"))
 		}
 		lessons[lesson.BlueprintLessonKey] = true

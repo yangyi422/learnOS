@@ -144,6 +144,7 @@ type CurriculumDraftLesson struct {
 	Title                 string `json:"title"`
 	Summary               string `json:"summary"`
 	CoreQuestion          string `json:"core_question"`
+	Content               string `json:"content"`
 	ExpectedUnderstanding string `json:"expected_understanding"`
 	ContentRole           string `json:"content_role"`
 	DepthLevel            int    `json:"depth_level"`

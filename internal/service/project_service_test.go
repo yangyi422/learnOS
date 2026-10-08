@@ -236,3 +236,52 @@ func TestProjectTaskOrderPersistsAfterDatabaseReopen(t *testing.T) {
 }
 
 func ptr[T any](value T) *T { return &value }
+
+func TestProjectTodayAggregatesOnlyActiveProjectsAndKeepsCalendarDates(t *testing.T) {
+	svc := projectTestService(t)
+	ctx := context.Background()
+	first, err := svc.Create(ctx, 1, "第一项目")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := svc.Create(ctx, 1, "第二项目")
+	if err != nil {
+		t.Fatal(err)
+	}
+	paused, err := svc.Create(ctx, 1, "暂停项目")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Update(ctx, 1, paused.ID, ProjectPatch{Status: ptr("paused")}); err != nil {
+		t.Fatal(err)
+	}
+	for _, input := range []ProjectTaskInput{
+		{ProjectID: first.ID, Title: "到期进行中", Status: "doing", DueDate: ptr("2026-10-08")},
+		{ProjectID: second.ID, Title: "逾期", Status: "next", DueDate: ptr("2026-10-07")},
+		{ProjectID: second.ID, Title: "无日期进行中", Status: "doing"},
+		{ProjectID: paused.ID, Title: "暂停项目任务", Status: "next"},
+		{ProjectID: first.ID, Title: "已经完成", Status: "done", DueDate: ptr("2026-10-08")},
+	} {
+		if _, err := svc.CreateTaskWithInput(ctx, 1, input); err != nil {
+			t.Fatal(err)
+		}
+	}
+	today, err := svc.Today(ctx, 1, "2026-10-08", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tasks := append(append(append([]model.ProjectTask{}, today.Doing...), today.Due...), today.Next...)
+	if len(tasks) != 3 {
+		t.Fatalf("unexpected aggregation: %+v", today)
+	}
+	seen := map[uint]bool{}
+	for _, task := range tasks {
+		if seen[task.ID] || task.Status == "done" || task.ProjectID == paused.ID {
+			t.Fatal("duplicate or excluded task", task)
+		}
+		seen[task.ID] = true
+		if task.Title == "到期进行中" && (task.DueDate == nil || *task.DueDate != "2026-10-08") {
+			t.Fatal("calendar day changed", task)
+		}
+	}
+}

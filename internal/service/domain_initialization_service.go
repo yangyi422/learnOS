@@ -297,7 +297,7 @@ func (s *DomainInitializationService) Apply(ctx context.Context, id uint) (*Doma
 			if unitID == 0 {
 				return ErrDomainDraftInvalid
 			}
-			lesson := &model.Lesson{CourseID: course.ID, UnitID: unitID, Title: item.Title, CoreQuestion: item.CoreQuestion, ExpectedUnderstanding: item.ExpectedUnderstanding, SortOrder: blueprintLesson.SortOrder, Status: model.LessonStatusPending, IsCore: item.IsCore, ContentRole: model.ContentRole(item.ContentRole), DepthLevel: item.DepthLevel, AssessmentTargetLevel: item.AssessmentTargetLevel, GroundingStatus: model.CurriculumGroundingProvisional}
+			lesson := &model.Lesson{CourseID: course.ID, UnitID: unitID, Title: item.Title, CoreQuestion: item.CoreQuestion, ExpectedUnderstanding: item.ExpectedUnderstanding, Content: item.Content, SortOrder: blueprintLesson.SortOrder, Status: model.LessonStatusPending, IsCore: item.IsCore, ContentRole: model.ContentRole(item.ContentRole), DepthLevel: item.DepthLevel, AssessmentTargetLevel: item.AssessmentTargetLevel, GroundingStatus: model.CurriculumGroundingProvisional}
 			if err := tx.Create(lesson).Error; err != nil {
 				return err
 			}

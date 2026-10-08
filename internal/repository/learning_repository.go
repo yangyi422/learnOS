@@ -38,7 +38,7 @@ func (r *LearningRepository) FindLessonByID(ctx context.Context, id uint) (*mode
 func (r *LearningRepository) ListLearningTurns(ctx context.Context, courseID uint, limit int) ([]model.LearningTurn, error) {
 	var turns []model.LearningTurn
 	if err := r.db.WithContext(ctx).
-		Where("course_id = ?", courseID).
+		Where("course_id = ? AND turn_kind <> ?", courseID, "conversation").
 		Order("created_at DESC, id DESC").
 		Limit(limit).
 		Find(&turns).Error; err != nil {
@@ -75,7 +75,7 @@ func (r *LearningRepository) ListAnsweredLessonIDs(ctx context.Context, courseID
 	var lessonIDs []uint
 	if err := r.db.WithContext(ctx).
 		Model(&model.LearningTurn{}).
-		Where("course_id = ?", courseID).
+		Where("course_id = ? AND (turn_kind <> ? OR result = ?)", courseID, "conversation", "ready").
 		Distinct("lesson_id").
 		Pluck("lesson_id", &lessonIDs).Error; err != nil {
 		return nil, fmt.Errorf("list answered lesson ids: %w", err)

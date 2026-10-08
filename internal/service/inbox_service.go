@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 	"errors"
-	"net/url"
+	"learnos/internal/links"
 	"strings"
 
 	"learnos/internal/model"
@@ -57,8 +57,14 @@ func (s *InboxService) Summary(ctx context.Context, userID uint) (*InboxSummary,
 }
 
 func (s *InboxService) Create(ctx context.Context, userID uint, content string) (*model.InboxItem, error) {
+	return s.CreateWithKey(ctx, userID, content, "")
+}
+func (s *InboxService) CreateWithKey(ctx context.Context, userID uint, content, key string) (*model.InboxItem, error) {
 	content = strings.TrimSpace(content)
 	if content == "" || len([]rune(content)) > 10000 {
+		return nil, ErrInvalidInboxInput
+	}
+	if !validRequestKey(key) {
 		return nil, ErrInvalidInboxInput
 	}
 	urlValue := validInboxURL(content)
@@ -67,6 +73,9 @@ func (s *InboxService) Create(ctx context.Context, userID uint, content string) 
 		sourceType = model.InboxSourceURL
 	}
 	item := &model.InboxItem{UserID: userID, Content: content, Status: model.InboxStatusInbox, SourceType: sourceType, SourceURL: urlValue}
+	if key != "" {
+		item.CaptureKey = &key
+	}
 	if err := s.items.Create(ctx, item); err != nil {
 		return nil, err
 	}
@@ -136,9 +145,8 @@ func firstLine(value string) string {
 }
 
 func validInboxURL(value string) string {
-	parsed, err := url.ParseRequestURI(value)
-	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || len(value) > 2048 {
-		return ""
+	if value != "" && links.SafeExternal(value) {
+		return value
 	}
-	return value
+	return ""
 }

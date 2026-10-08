@@ -20,12 +20,13 @@ type CourseRepository struct {
 // CourseProgressFacts contains independent facts used to derive the three
 // public progress dimensions. None of these values reuse Course.Progress.
 type CourseProgressFacts struct {
-	LessonCount            int
-	BlueprintLessonCount   int
-	GeneratedLessonCount   int
-	CoveredLessonCount     int
-	MasteryPointTotal      int
-	NeedsReviewLessonCount int
+	LessonCount             int
+	BlueprintLessonCount    int
+	GeneratedLessonCount    int
+	ConversationLessonCount int
+	CoveredLessonCount      int
+	MasteryPointTotal       int
+	NeedsReviewLessonCount  int
 }
 
 func NewCourseRepository(db *gorm.DB) *CourseRepository {
@@ -70,6 +71,11 @@ func (r *CourseRepository) ProgressFacts(ctx context.Context, courseID uint) (Co
 		return facts, fmt.Errorf("count course lessons: %w", err)
 	}
 	facts.LessonCount = int(lessonCount)
+	var conversationCount int64
+	if err := r.db.WithContext(ctx).Model(&model.LearningTurn{}).Where("course_id = ? AND turn_kind = ?", courseID, "conversation").Distinct("lesson_id").Count(&conversationCount).Error; err != nil {
+		return facts, err
+	}
+	facts.ConversationLessonCount = int(conversationCount)
 	if err := r.db.WithContext(ctx).Raw(`
 		SELECT COUNT(*)
 		FROM curriculum_blueprint_lessons bl
@@ -87,10 +93,12 @@ func (r *CourseRepository) ProgressFacts(ctx context.Context, courseID uint) (Co
 	}
 	if err := r.db.WithContext(ctx).Raw(`
 		SELECT COUNT(*) FROM (
-			SELECT lesson_id FROM learning_turns WHERE course_id = ?
+			SELECT lesson_id FROM learning_turns WHERE course_id = ? AND turn_kind <> 'conversation'
 			UNION
 			SELECT lesson_id FROM cognitive_states WHERE course_id = ? AND current_level <> ?
-		) engaged`, courseID, courseID, model.CognitiveLevelUnseen).Scan(&facts.CoveredLessonCount).Error; err != nil {
+ UNION
+ SELECT id FROM lessons l WHERE course_id = ? AND (status = ? OR (status = ? AND EXISTS (SELECT 1 FROM learning_turns t WHERE t.lesson_id = l.id AND t.turn_kind = 'conversation' AND t.result = 'ready')))
+		) engaged`, courseID, courseID, model.CognitiveLevelUnseen, courseID, model.LessonStatusSkipped, model.LessonStatusCompleted).Scan(&facts.CoveredLessonCount).Error; err != nil {
 		return facts, fmt.Errorf("count covered lessons: %w", err)
 	}
 	if err := r.db.WithContext(ctx).Raw(`

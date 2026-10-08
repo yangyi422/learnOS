@@ -1,40 +1,18 @@
 <template>
-  <el-dialog v-model="open" title="快速记录" width="min(520px, calc(100vw - 28px))" class="quick-capture-dialog" @opened="focusInput">
-    <p class="capture-hint">先记下来，稍后再整理。</p>
-    <el-input ref="captureInput" v-model="content" type="textarea" :rows="5" maxlength="10000" show-word-limit placeholder="想法、待办或链接……" @keydown.ctrl.enter.prevent="submit" @keydown.meta.enter.prevent="submit" />
-    <template #footer><el-button @click="open = false">取消</el-button><el-button type="primary" :loading="saving" :disabled="!content.trim()" @click="submit">保存到收集箱</el-button></template>
+  <el-dialog v-model="open" title="快速记录" width="min(520px, calc(100vw - 28px))" class="quick-capture-dialog" :before-close="close" @opened="capture?.focus()">
+    <p class="capture-hint">Enter 保存，Shift+Enter 换行。</p>
+    <InboxCaptureForm ref="capture" success-message="已保存到收集箱" @created="created" />
+    <template #footer><el-button @click="close(() => open = false)">取消</el-button></template>
   </el-dialog>
 </template>
-
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
-import { createInboxItem } from '@/api/inbox'
-
+import { computed, ref } from 'vue'
+import InboxCaptureForm from '@/components/InboxCaptureForm.vue'
 const props = defineProps<{ modelValue: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [value: boolean]; created: [] }>()
-const open = ref(props.modelValue)
-const saving = ref(false)
-const content = ref('')
-const captureInput = ref<{ focus: () => void } | null>(null)
-watch(() => props.modelValue, value => { open.value = value })
-watch(open, value => emit('update:modelValue', value))
-function focusInput() { void nextTick(() => captureInput.value?.focus()) }
-async function submit() {
-  if (saving.value || !content.value.trim()) return
-  saving.value = true
-  try {
-    await createInboxItem(content.value)
-    content.value = ''
-    open.value = false
-    emit('created')
-    ElMessage.success('已保存到收集箱')
-  } catch (reason) {
-    ElMessage.error(reason instanceof Error ? reason.message : '保存失败，请重试')
-  } finally { saving.value = false }
-}
+const open = computed({ get: () => props.modelValue, set: value => emit('update:modelValue', value) })
+const capture = ref<InstanceType<typeof InboxCaptureForm> | null>(null)
+function close(done: () => void) { if (!capture.value?.isSaving()) done() }
+function created() { open.value = false; emit('created') }
 </script>
-
-<style scoped>
-.capture-hint { margin: 0 0 12px; color: var(--text-secondary); font-size: 14px; }
-</style>
+<style scoped>.capture-hint { margin: 0 0 12px; color: var(--text-secondary); font-size: 13px; }</style>

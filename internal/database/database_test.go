@@ -52,6 +52,7 @@ func TestOpenCreatesPreMigrationBackupForExistingDatabase(t *testing.T) {
 		t.Fatalf("migration did not preserve existing data: course=%+v err=%v", preserved, err)
 	}
 	columns := map[any][]string{
+		&model.Lesson{}:              {"content"},
 		&model.LearningTurn{}:        {"idempotency_key", "evidence_used_json", "confidence", "uncertainty", "recommended_next_action", "transfer_challenge_eligible", "mastery_score_before", "mastery_score_after"},
 		&model.AssessmentChallenge{}: {"idempotency_key"},
 		&model.ChallengeAttempt{}:    {"idempotency_key", "explanation"},
@@ -269,5 +270,62 @@ func TestBackfillCourseUnitBlueprintIDsUsesAppliedLessonIdentity(t *testing.T) {
 	}
 	if reloaded.BlueprintUnitID == nil || *reloaded.BlueprintUnitID != blueprintUnit.ID {
 		t.Fatalf("stable blueprint unit link was not backfilled: %+v", reloaded)
+	}
+}
+
+func TestSchema20PreservesLegacyInboxAndRecordSourceUniqueness(t *testing.T) {
+	dir := t.TempDir()
+	cfg := config.Config{AppVersion: "test", DatabasePath: filepath.Join(dir, "records.db"), BackupDir: filepath.Join(dir, "backups"), BackupRetentionCount: 5}
+	legacy, err := gorm.Open(sqlite.Open(cfg.DatabasePath), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = legacy.Exec("CREATE TABLE inbox_items (id integer PRIMARY KEY AUTOINCREMENT, user_id integer NOT NULL, content text NOT NULL, status text NOT NULL DEFAULT 'inbox')").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = legacy.Exec("INSERT INTO inbox_items(user_id,content,status) VALUES(1,'legacy inbox','inbox')").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = legacy.AutoMigrate(&model.SystemMetadata{}); err != nil {
+		t.Fatal(err)
+	}
+	if err = legacy.Create(&model.SystemMetadata{ID: 1, SchemaVersion: 19}).Error; err != nil {
+		t.Fatal(err)
+	}
+	conn, _ := legacy.DB()
+	conn.Close()
+	for attempt := 0; attempt < 2; attempt++ {
+		db, err := Open(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var item model.InboxItem
+		if err = db.First(&item, 1).Error; err != nil || item.Content != "legacy inbox" || item.Status != "inbox" || item.CaptureKey != nil {
+			t.Fatalf("legacy Inbox changed: %+v %v", item, err)
+		}
+		if !db.Migrator().HasIndex(&model.LightweightRecord{}, "SourceInboxID") {
+			t.Fatal("missing unique source index")
+		}
+		if attempt == 0 {
+			record := model.LightweightRecord{UserID: 1, Content: "retained", SourceInboxID: &item.ID}
+			if err = db.Create(&record).Error; err != nil {
+				t.Fatal(err)
+			}
+			duplicate := model.LightweightRecord{UserID: 1, Content: "duplicate", SourceInboxID: &item.ID}
+			if err = db.Create(&duplicate).Error; err == nil {
+				t.Fatal("duplicate source accepted")
+			}
+		}
+		var count int64
+		db.Model(&model.LightweightRecord{}).Count(&count)
+		if count != 1 {
+			t.Fatal("repeat migration changed records")
+		}
+		conn, _ := db.DB()
+		conn.Close()
+	}
+	backups, err := ListBackups(cfg.BackupDir)
+	if err != nil || len(backups) != 1 {
+		t.Fatalf("backups: %d %v", len(backups), err)
 	}
 }

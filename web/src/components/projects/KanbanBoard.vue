@@ -1,7 +1,7 @@
 <template>
   <div class="kanban-scroll">
     <div class="kanban-grid">
-      <section v-for="column in columns" :key="column.status" class="kanban-column" :class="`kanban-column--${column.status}`" :aria-label="column.label">
+      <section v-for="column in columns" :key="column.status" class="kanban-column" :class="[`kanban-column--${column.status}`, { 'is-drop-target': dropTarget === column.status }]" :aria-label="column.label">
         <header class="kanban-column__header">
           <div><div class="kanban-column__title"><span class="kanban-column__dot" aria-hidden="true" /><h2>{{ column.label }}</h2></div><small v-if="column.status === 'doing' && counts.doing > 3">建议减少同时进行的任务</small></div>
           <span class="kanban-column__count">{{ counts[column.status] }}</span>
@@ -12,7 +12,11 @@
           :data-status="column.status"
           :group="{ name: 'project-tasks' }"
           :disabled="busy"
-          :delay="180"
+          :delay="240"
+          :touch-start-threshold="8"
+          :fallback-tolerance="8"
+          :bubble-scroll="false"
+          :on-move="onDragMove"
           :delay-on-touch-only="true"
           :animation="150"
           ghost-class="task-card--ghost"
@@ -40,8 +44,8 @@
                 <span v-if="task.description" class="task-card__summary">{{ task.description }}</span>
               </div>
             </div>
-            <div class="task-card__footer">
-              <span class="task-card__project" :style="{ '--project-accent': projects[task.project_id]?.accent || '#94a3b8' }">{{ projects[task.project_id]?.title || '项目' }}</span>
+            <div v-if="selectedProjectId === null || task.priority !== 'normal' || task.due_date" class="task-card__footer">
+              <span v-if="selectedProjectId === null" class="task-card__project" :style="{ '--project-accent': projects[task.project_id]?.accent || '#94a3b8' }">{{ projects[task.project_id]?.title || '项目' }}</span>
               <span v-if="task.priority !== 'normal'" class="task-card__priority" :class="`task-card__priority--${task.priority}`">{{ priorityLabel(task.priority) }}</span>
               <span v-if="task.due_date" class="task-card__due" :class="{ 'task-card__due--overdue': task.due_date < today && task.status !== 'done' }">{{ dueLabel(task.due_date, task.status) }}</span>
             </div>
@@ -55,11 +59,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { VueDraggable } from 'vue-draggable-plus'
+import { localCalendarDate, taskDueDate } from '@/utils/projectTasks'
 import type { Project, ProjectTask, TaskPriority, TaskStatus } from '@/api/projects'
 
-const props = defineProps<{ tasks: ProjectTask[]; projects: Record<number, Project>; selectedProjectId: number | null; activeTaskId?: number | null; doneCount: number; busy: boolean }>()
+const props = defineProps<{ tasks: ProjectTask[]; projects: Record<number, Project>; selectedProjectId: number | null; activeTaskId?: number | null; doneCount: number; busy: boolean; today?: string }>()
 const emit = defineEmits<{
   (e: 'open', task: ProjectTask): void
   (e: 'add', status: TaskStatus): void
@@ -74,8 +79,10 @@ const columns: { status: TaskStatus; label: string }[] = [
 ]
 const lists = reactive<Record<TaskStatus, ProjectTask[]>>({ inbox: [], next: [], doing: [], done: [] })
 const suppressCardClick = ref(false)
+const dropTarget = ref<TaskStatus | null>(null)
+let dragScope: number | null = null
 let clickSuppressionTimer: number | undefined
-const today = localDate(new Date())
+const today = computed(() => props.today ?? localCalendarDate(new Date()))
 const counts = computed<Record<TaskStatus, number>>(() => ({
   inbox: props.tasks.filter(task => task.status === 'inbox').length,
   next: props.tasks.filter(task => task.status === 'next').length,
@@ -83,12 +90,13 @@ const counts = computed<Record<TaskStatus, number>>(() => ({
   done: props.doneCount,
 }))
 
-watch(() => props.tasks, () => {
+function restoreLists() {
   for (const column of columns) {
-    const sorted = props.tasks.filter(task => task.status === column.status).sort((a, b) => a.sort_order - b.sort_order || a.id - b.id)
-    lists[column.status] = sorted
+    lists[column.status] = props.tasks.filter(task => task.status === column.status).sort((a, b) => a.sort_order - b.sort_order || a.id - b.id)
   }
-}, { immediate: true })
+}
+watch(() => props.tasks, restoreLists, { immediate: true })
+onBeforeUnmount(() => window.clearTimeout(clickSuppressionTimer))
 
 function openTaskFromCard(task: ProjectTask, event?: MouseEvent) {
   if (suppressCardClick.value) return
@@ -100,13 +108,22 @@ function openTaskFromCard(task: ProjectTask, event?: MouseEvent) {
 function onDragStart() {
   if (clickSuppressionTimer) window.clearTimeout(clickSuppressionTimer)
   suppressCardClick.value = true
+  dragScope = props.selectedProjectId
 }
-function onDragEnd(event: { item: HTMLElement; to: HTMLElement; newIndex?: number }) {
+function onDragMove(event: { to: HTMLElement }) {
+  const status = event.to.dataset.status as TaskStatus
+  const valid = !props.busy && props.selectedProjectId === dragScope && columns.some(column => column.status === status)
+  dropTarget.value = valid ? status : null
+  return valid
+}
+function onDragEnd(event: { item: HTMLElement; to: HTMLElement; from?: HTMLElement; newIndex?: number; oldIndex?: number }) {
   try {
     const id = Number(event.item.dataset.taskId)
     const status = event.to.dataset.status as TaskStatus
     const task = props.tasks.find(item => item.id === id)
-    if (!task || !columns.some(column => column.status === status)) return
+    if (!task || props.busy || props.selectedProjectId !== dragScope || !columns.some(column => column.status === status)) { restoreLists(); return }
+    // Preserve existing reorder operations, but unchanged placement is a no-op.
+    if (event.from === event.to && event.oldIndex === event.newIndex) { restoreLists(); return }
     // VueDraggable reconciles the DOM during the end event. The dropped card
     // may already have been removed from the target DOM before Vue renders it.
     const otherIDs = Array.from(event.to.querySelectorAll<HTMLElement>(':scope > .task-card'))
@@ -114,6 +131,7 @@ function onDragEnd(event: { item: HTMLElement; to: HTMLElement; newIndex?: numbe
     const index = Math.min(event.newIndex ?? otherIDs.length, otherIDs.length)
     emit('move', { task, status, before_id: otherIDs[index - 1], after_id: otherIDs[index] })
   } finally {
+    dropTarget.value = null
     // Sortable dispatches click after dragend. Keep the card from opening the
     // drawer when a long press was used to move it.
     if (clickSuppressionTimer) window.clearTimeout(clickSuppressionTimer)
@@ -126,23 +144,24 @@ function onDragEnd(event: { item: HTMLElement; to: HTMLElement; newIndex?: numbe
 
 function priorityLabel(value: TaskPriority) { return { high: 'P1', normal: 'P2', low: 'P3' }[value] }
 function dueLabel(value: string, status: TaskStatus) {
-  if (value === today) return '今天'
+  value = taskDueDate(value) ?? value
+  if (value === today.value) return '今天'
   const tomorrow = new Date()
   tomorrow.setDate(tomorrow.getDate() + 1)
-  if (value === localDate(tomorrow)) return '明天'
-  if (value < today && status !== 'done') {
-    const days = Math.max(1, Math.round((Date.parse(today) - Date.parse(value)) / 86400000))
+  if (value === localCalendarDate(tomorrow)) return '明天'
+  if (value < today.value && status !== 'done') {
+    const days = Math.max(1, Math.round((Date.parse(today.value) - Date.parse(value)) / 86400000))
     return `逾期 ${days} 天`
   }
   return `${Number(value.slice(5, 7))}月${Number(value.slice(8, 10))}日`
 }
-function localDate(date: Date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` }
 </script>
 
 <style scoped>
-.kanban-scroll { max-width: 100%; overflow-x: auto; padding: 0 0 14px; scrollbar-color: var(--border-default) transparent; }
-.kanban-grid { display: grid; grid-template-columns: repeat(4, minmax(255px, 1fr)); min-width: 1020px; align-items: stretch; }
+.kanban-scroll { width: 100%; min-width: 0; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; padding: 0 0 14px; scrollbar-color: var(--border-default) transparent; }
+.kanban-grid { display: grid; grid-template-columns: repeat(4, minmax(255px, 1fr)); min-width: 1020px; align-items: start; }
 .kanban-column { min-width: 0; min-height: 360px; padding: 0 15px 12px; border-left: 1px solid var(--board-divider); }
+.kanban-column.is-drop-target { background: var(--color-primary-soft); outline: 1px solid var(--color-primary); outline-offset: -1px; border-radius: 8px; }
 .kanban-column:first-child { padding-left: 0; border-left: 0; }
 .kanban-column:last-child { padding-right: 0; }
 .kanban-column__header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; min-height: 42px; margin-bottom: 13px; padding: 4px 2px 10px; }
@@ -166,10 +185,10 @@ function localDate(date: Date) { return `${date.getFullYear()}-${String(date.get
 .task-card--dragging { border-color: var(--color-primary); background: var(--card-surface-hover); box-shadow: 0 0 0 2px var(--focus-ring), var(--shadow-card-hover); }
 .task-card__top { display: block; min-width: 0; }
 .task-card__body { display: block; min-width: 0; padding: 0; border: 0; background: transparent; color: var(--text-primary); text-align: left; cursor: inherit; }
-.task-card__body strong { display: block; overflow-wrap: anywhere; font-size: 15px; font-weight: 650; line-height: 1.45; }
+.task-card__body strong { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; font-size: 15px; font-weight: 650; line-height: 1.45; }
 .task-card__summary { display: -webkit-box; overflow: hidden; margin-top: 8px; color: var(--text-secondary); font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.task-card__footer { display: flex; min-width: 0; align-items: center; gap: 7px; color: var(--text-tertiary); font-size: 12px; line-height: 1.35; }
-.task-card__project { display: inline-flex; min-width: 0; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-card__footer { display: flex; min-width: 0; align-items: center; gap: 7px; color: var(--text-tertiary); font-size: 12px; line-height: 1.35; min-height: 16px; }
+.task-card__project { display: inline-flex; flex: 1; min-width: 0; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-card__project::before { width: 5px; height: 5px; flex: none; border-radius: 50%; background: var(--project-accent); content: ''; }
 .task-card__priority { flex: none; }
 .task-card__due { flex: none; margin-left: auto; white-space: nowrap; }

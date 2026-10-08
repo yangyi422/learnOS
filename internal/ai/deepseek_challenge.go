@@ -218,13 +218,17 @@ func normalizeChallengeEvidence(wire []challengeEvidenceWire) ([]EvaluationEvide
 	return evidence, nil
 }
 
-func (p *DeepSeekProvider) requestJSON(ctx context.Context, systemPrompt, userPrompt string) (string, ProviderMeta, bool, error) {
+func (p *DeepSeekProvider) requestJSON(ctx context.Context, systemPrompt, userPrompt string, tokenLimits ...int) (string, ProviderMeta, bool, error) {
+	maxTokens := 24000
+	if len(tokenLimits) > 0 {
+		maxTokens = tokenLimits[0]
+	}
 	body, err := json.Marshal(chatCompletionRequest{
 		Model:          p.model,
 		Messages:       []chatMessage{{Role: "system", Content: systemPrompt}, {Role: "user", Content: userPrompt}},
 		ResponseFormat: responseFormat{Type: "json_object"},
 		Temperature:    0.2,
-		MaxTokens:      24000,
+		MaxTokens:      maxTokens,
 	})
 	if err != nil {
 		return "", ProviderMeta{}, false, newProviderError(ErrProvider, err)

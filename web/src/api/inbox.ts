@@ -12,8 +12,8 @@ export interface InboxSummary { count: number; items: InboxItem[] }
 export async function listInbox(status?: InboxStatus): Promise<InboxView> {
   return (await request<{ data: InboxView }>(`/api/v1/inbox${status ? `?status=${status}` : ''}`)).data
 }
-export async function createInboxItem(content: string): Promise<InboxItem> {
-  return (await request<{ data: InboxItem }>('/api/v1/inbox', { method: 'POST', body: JSON.stringify({ content }) })).data
+export async function createInboxItem(content: string, captureKey?: string): Promise<InboxItem> {
+  return (await request<{ data: InboxItem }>('/api/v1/inbox', { method: 'POST', body: JSON.stringify({ content, capture_key: captureKey }) })).data
 }
 export async function updateInboxItem(id: number, content: string): Promise<InboxItem> {
   return (await request<{ data: InboxItem }>(`/api/v1/inbox/${id}`, { method: 'PATCH', body: JSON.stringify({ content }) })).data

@@ -27,6 +27,7 @@ async function mockWorkspace(page: Page) {
   let saveDelay = 0
   let saveCount = 0
   let moveCount = 0
+  let moveDelay = 0
   await page.route('**/api/v1/**', async (route: Route) => {
     const request = route.request()
     const url = new URL(request.url())
@@ -104,6 +105,7 @@ async function mockWorkspace(page: Page) {
     const move = path.match(/^\/api\/v1\/tasks\/(\d+)\/move$/)
     if (move && method === 'PATCH') {
       moveCount++
+      if (moveDelay) await new Promise(resolve => setTimeout(resolve, moveDelay))
       if (failMove) return reply({ error: 'project operation failed' }, 500)
       const task = tasks.find(item => item.id === Number(move[1]))!
       const input = request.postDataJSON() as { status: string }
@@ -117,6 +119,7 @@ async function mockWorkspace(page: Page) {
   return {
     tasks,
     projects,
+    setMoveDelay(value: number) { moveDelay = value },
     setFailMove(value: boolean) { failMove = value },
     setFailSave(value: boolean) { failSave = value },
     setSaveDelay(value: number) { saveDelay = value },
@@ -138,11 +141,11 @@ test('defaults to all projects, retains a selected project and groups Today with
   await page.reload()
   await expect(page.locator('.task-card')).toHaveCount(2)
   await page.getByRole('button', { name: '今天', exact: true }).click()
-  await expect(page.locator('.today-task')).toHaveCount(1)
-  await expect(page.locator('.today-task')).toContainText('云部署')
-  await page.locator('.projects-switcher').click()
-  await page.getByText('全部项目').last().click()
   await expect(page.locator('.today-task')).toHaveCount(2)
+  await expect(page.locator('.today-view')).toContainText('云部署')
+  await expect(page.locator('.projects-switcher')).toHaveCount(0)
+  await page.getByRole('button', { name: '看板', exact: true }).click()
+  await expect(page.locator('.task-card')).toHaveCount(2)
 })
 
 test('keeps manual theme choice and follows system when requested', async ({ page }, testInfo) => {
@@ -164,6 +167,7 @@ test('keeps manual theme choice and follows system when requested', async ({ pag
   await expect(drawer).toBeVisible()
   await expect.poll(async () => (await drawer.boundingBox())?.x ?? 2000).toBeLessThan(800)
   if (process.env.CAPTURE_VISUALS) await page.screenshot({ path: testInfo.outputPath('task-drawer-dark.png'), fullPage: true })
+  await drawer.getByRole('button', { name: '编辑', exact: true }).click()
   await drawer.locator('.el-select').last().click()
   const selectPopper = page.locator('.el-popper.task-select-popper:visible')
   await expect(selectPopper).toBeVisible()
@@ -199,6 +203,7 @@ test('keeps manual theme choice and follows system when requested', async ({ pag
   await expect(drawer).toBeVisible()
   await expect.poll(async () => (await drawer.boundingBox())?.x ?? 2000).toBeLessThan(800)
   if (process.env.CAPTURE_VISUALS) await page.screenshot({ path: testInfo.outputPath('task-drawer-light.png'), fullPage: true })
+  await drawer.getByRole('button', { name: '编辑', exact: true }).click()
   await drawer.locator('.el-select').last().click()
   await expect(selectPopper).toBeVisible()
   await expect(selectPopper).toHaveCSS('opacity', '1')
@@ -259,6 +264,7 @@ test('creates and completes a task in the drawer and archives a project', async 
   await page.locator('.task-card').filter({ hasText: '修复地图节点' }).locator('.task-card__body').click()
   await drawer.getByRole('button', { name: '标记完成', exact: true }).click()
   await expect(page.locator('.kanban-column').nth(3).locator('.task-card').filter({ hasText: '修复地图节点' })).toBeVisible()
+  await drawer.getByRole('button', { name: '关闭任务详情' }).click()
   await page.getByRole('button', { name: '项目列表', exact: true }).click()
   const card = page.locator('.project-list-card').filter({ hasText: '像素团团' })
   await card.getByRole('button', { name: '归档' }).click()
@@ -282,6 +288,8 @@ test('task card handles long content and drawer protects edits while preserving 
   await card.locator('.task-card__body').click()
   const drawer = page.locator('.task-drawer.el-drawer')
   await expect(card).toHaveClass(/task-card--selected/)
+  await expect(drawer.locator('input, textarea')).toHaveCount(0)
+  await drawer.getByRole('button', { name: '编辑', exact: true }).click()
   await drawer.getByRole('textbox', { name: '任务名称' }).fill('修改后的任务')
   await drawer.getByRole('button', { name: '取消' }).click()
   await expect(page.locator('.el-message-box')).toContainText('当前修改尚未保存')
@@ -293,12 +301,14 @@ test('task card handles long content and drawer protects edits while preserving 
   await expect(card).toContainText(workspace.tasks[0].title)
 
   await page.locator('.task-card').filter({ hasText: '云部署' }).locator('.task-card__body').click()
+  await drawer.getByRole('button', { name: '编辑', exact: true }).click()
   await drawer.locator('textarea').fill('保留原有到期日并补充说明')
   await drawer.getByRole('button', { name: '保存', exact: true }).click()
   const saved = page.locator('.task-card').filter({ hasText: '云部署' })
   await expect(saved.locator('.task-card__summary')).toHaveText('保留原有到期日并补充说明')
   await expect(saved.locator('.task-card__due')).toBeVisible()
-  await saved.locator('.task-card__body').click()
+  await expect(drawer.locator('.task-drawer__read-description')).toHaveText('保留原有到期日并补充说明')
+  await expect(drawer.locator('input, textarea')).toHaveCount(0)
   await drawer.getByRole('button', { name: '删除任务' }).click()
   await expect(page.locator('.el-message-box')).toContainText('删除任务')
   await page.locator('.el-message-box__btns .el-button--primary').click()
@@ -315,6 +325,8 @@ test('task drawer keeps focus, long descriptions and failed saves stable', async
   await trigger.click()
 
   const drawer = page.locator('.task-drawer.el-drawer')
+  await expect(drawer.locator('.task-drawer__reading h3')).toBeFocused()
+  await drawer.getByRole('button', { name: '编辑', exact: true }).click()
   const title = drawer.getByRole('textbox', { name: '任务名称' })
   await expect(title).toBeFocused()
   expect(await drawer.evaluate(element => Number.parseFloat(getComputedStyle(element).transitionDuration))).toBeLessThan(.02)
@@ -330,6 +342,7 @@ test('task drawer keeps focus, long descriptions and failed saves stable', async
 
   await page.setViewportSize({ width: 375, height: 667 })
   await trigger.click()
+  await drawer.getByRole('button', { name: '编辑', exact: true }).click()
   const description = drawer.locator('textarea')
   const emptyDescriptionHeight = await description.evaluate(element => element.clientHeight)
   const longDescription = Array.from({ length: 80 }, (_, index) => `第 ${index + 1} 行任务说明，用于验证长文本滚动保持稳定。`).join('\n')
@@ -359,6 +372,113 @@ test('task drawer keeps focus, long descriptions and failed saves stable', async
   workspace.setFailSave(false)
   workspace.setSaveDelay(0)
   await drawer.getByRole('button', { name: '保存', exact: true }).click()
-  await expect(drawer).not.toBeVisible()
+  await expect(drawer.locator('.task-drawer__read-description')).toHaveText('保存失败后应保留的说明')
+  await expect(drawer.locator('textarea')).toHaveCount(0)
   await expect(page.locator('.task-card').filter({ hasText: '云部署' }).locator('.task-card__summary')).toHaveText('保存失败后应保留的说明')
 })
+
+test('read first, cancel edits restores persisted task and completing keeps details readable', async ({ page }) => {
+  const workspace = await mockWorkspace(page)
+  workspace.tasks[0].description = '第一段完整说明。\n第二段说明仍然可阅读。'
+  await page.goto('/projects')
+  await page.locator('[data-task-id="1"]').click()
+  const drawer = page.locator('.task-drawer')
+  await expect(drawer.locator('.task-drawer__read-description')).toHaveText(workspace.tasks[0].description)
+  await expect(drawer.locator('input, textarea')).toHaveCount(0)
+  await drawer.getByRole('button', { name: '编辑', exact: true }).click()
+  await drawer.getByRole('textbox', { name: '任务名称' }).fill('不保存的标题')
+  await drawer.getByRole('button', { name: '取消', exact: true }).click()
+  await page.getByRole('button', { name: '放弃修改' }).click()
+  await expect(drawer.locator('.task-drawer__reading h3')).toHaveText('UI 重构')
+  expect(workspace.saveCount).toBe(0)
+  await drawer.getByRole('button', { name: '标记完成' }).click()
+  await expect(drawer.locator('.task-drawer__metadata')).toContainText('已完成')
+  await expect(drawer.getByRole('button', { name: '重新打开' })).toBeVisible()
+})
+
+test('Today uses all active projects, gives due dates precedence, expands next and completes without duplicates', async ({ page }) => {
+  const workspace = await mockWorkspace(page)
+  workspace.tasks[0].status = 'doing'
+  workspace.tasks[0].due_date = '2000-01-01'
+  workspace.tasks[2].due_date = today
+  for (let id = 10; id < 20; id++) workspace.tasks.push({ ...initialTasks[1]!, id, title: `候选 ${id}`, due_date: null })
+  await page.goto('/projects?project=1&view=today')
+  const overdue = page.locator('.today-section').filter({ has: page.getByRole('heading', { name: '已逾期', exact: true }) })
+  const due = page.locator('.today-section').filter({ has: page.getByRole('heading', { name: '今天到期', exact: true }) })
+  const doing = page.locator('.today-section').filter({ has: page.getByRole('heading', { name: '正在进行', exact: true }) })
+  const next = page.locator('.today-section').filter({ has: page.getByRole('heading', { name: '下一步', exact: true }) })
+  await expect(overdue.locator('.today-task')).toHaveCount(1)
+  await expect(due.locator('.today-task')).toHaveCount(2)
+  await expect(doing.locator('.today-task')).toHaveCount(0)
+  await expect(next.locator('.today-task')).toHaveCount(6)
+  await page.getByRole('button', { name: '查看全部下一步（10）' }).click()
+  await expect(next.locator('.today-task')).toHaveCount(10)
+  await expect(page.locator('.today-task').filter({ hasText: '项目初始化' })).toHaveCount(0)
+  await page.getByRole('button', { name: '完成任务：角色动画', exact: true }).click()
+  await expect(due.locator('.today-task')).toHaveCount(1)
+  await page.getByRole('button', { name: '查看项目：LearnOS', exact: true }).first().click()
+  await expect(page).toHaveURL(/view=board/)
+  await expect(page).toHaveURL(/project=1/)
+})
+
+test('invalid and unchanged drops do not update, drag does not open drawer, and pending moves stay in original project', async ({ page }) => {
+  const workspace = await mockWorkspace(page)
+  await page.goto('/projects')
+  const card = page.locator('[data-task-id="1"]')
+  await card.dragTo(page.locator('.projects-tabs'))
+  await expect(card).toBeVisible()
+  expect(workspace.moveCount).toBe(0)
+  await expect(page.locator('.task-drawer')).not.toBeVisible()
+  workspace.setMoveDelay(1500)
+  await card.dragTo(page.locator('[data-status="doing"]'))
+  await expect(page.locator('[data-status="doing"] [data-task-id="1"]')).toBeVisible()
+  await expect(page.locator('.task-drawer')).not.toBeVisible()
+  await expect.poll(() => workspace.moveCount).toBe(1)
+  await expect(page.locator('.projects-switcher .el-select__wrapper')).toHaveClass(/is-disabled/)
+  await expect.poll(() => workspace.tasks[0]!.status).toBe('doing')
+  expect(workspace.tasks[0]!.project_id).toBe(1)
+})
+
+for (const width of [375, 768, 1280, 1600]) {
+  test(`${width}px board scrolls locally and reading/editing drawer actions stay visible`, async ({ page }, testInfo) => {
+    const workspace = await mockWorkspace(page)
+    workspace.tasks[0].title = '长标题'.repeat(30)
+    workspace.tasks[0].description = '完整说明\n'.repeat(150)
+    await page.setViewportSize({ width, height: 800 })
+    await page.goto('/projects')
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1)
+    const card = page.locator('[data-task-id="1"]')
+    expect(await card.locator('strong').evaluate(el => el.clientHeight <= parseFloat(getComputedStyle(el).lineHeight) * 2 + 1)).toBe(true)
+    await card.click()
+    const drawer = page.locator('.task-drawer')
+    await expect(drawer.getByRole('button', { name: '编辑', exact: true })).toBeInViewport()
+    await expect.poll(async () => {
+      const box = await drawer.boundingBox()
+      return box ? Math.abs(box.x + box.width - (width > 760 ? width - 12 : width)) : 999
+    }).toBeLessThanOrEqual(1)
+    await expect(drawer.locator('input, textarea')).toHaveCount(0)
+    await drawer.evaluate(async el => { await Promise.all(el.getAnimations().map(animation => animation.finished.catch(() => {}))) })
+    expect(Math.abs((await drawer.boundingBox())!.x + (await drawer.boundingBox())!.width - (width > 760 ? width - 12 : width))).toBeLessThanOrEqual(1)
+    if (process.env.CAPTURE_VISUALS) await page.screenshot({ path: testInfo.outputPath('task-reading.png') })
+    await drawer.getByRole('button', { name: '编辑', exact: true }).click()
+    await expect(drawer.getByRole('button', { name: '保存', exact: true })).toBeInViewport()
+    expect(await drawer.evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1)
+  })
+}
+
+for (const [timezoneId, expectedDate] of [['America/Los_Angeles', '2026-10-07'], ['Asia/Tokyo', '2026-10-08']]) {
+  test(`Today uses browser calendar date in ${timezoneId}`, async ({ browser }) => {
+    const context = await browser.newContext({ timezoneId })
+    try {
+      const page = await context.newPage()
+      await page.clock.install({ time: new Date('2026-10-08T00:30:00Z') })
+      const workspace = await mockWorkspace(page)
+      workspace.tasks[1]!.due_date = expectedDate!
+      const request = page.waitForRequest(req => new URL(req.url()).pathname === '/api/v1/projects/today')
+      await page.goto('/projects?view=today&project=1')
+      expect(new URL((await request).url()).searchParams.get('date')).toBe(expectedDate)
+      const due = page.locator('.today-section').filter({ has: page.getByRole('heading', { name: '今天到期', exact: true }) })
+      await expect(due.getByRole('button', { name: /^云部署/ })).toBeVisible()
+    } finally { await context.close() }
+  })
+}

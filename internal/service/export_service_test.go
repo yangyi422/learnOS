@@ -35,6 +35,9 @@ func TestLearningDataExportIncludesFactsAndNeverIncludesAPIKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if err := db.Create(&model.LightweightRecord{UserID: 7, Content: "Exported lightweight record", ProjectID: &project.ID, ExternalURL: "obsidian://open?vault=Wiki&file=Record.md"}).Error; err != nil {
+		t.Fatal(err)
+	}
 	service := NewExportService(db)
 	jsonData, err := service.JSON(context.Background())
 	if err != nil {
@@ -53,6 +56,9 @@ func TestLearningDataExportIncludesFactsAndNeverIncludesAPIKey(t *testing.T) {
 		}
 		if !strings.Contains(string(data), "Exported project") || !strings.Contains(string(data), "Exported task") {
 			t.Fatalf("%s export omitted project facts", format)
+		}
+		if !strings.Contains(string(data), "Exported lightweight record") || !strings.Contains(string(data), "obsidian://open") {
+			t.Fatalf("%s omitted record", format)
 		}
 		if !strings.Contains(string(data), "Exported inbox item") {
 			t.Fatalf("%s export omitted inbox facts", format)

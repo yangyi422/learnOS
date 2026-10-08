@@ -16,6 +16,7 @@ const (
 	LessonStatusPending   LessonStatus = "pending"
 	LessonStatusLearning  LessonStatus = "learning"
 	LessonStatusCompleted LessonStatus = "completed"
+	LessonStatusSkipped   LessonStatus = "skipped"
 )
 
 const (
@@ -73,6 +74,7 @@ type Lesson struct {
 	UnitID                uint         `gorm:"not null;index" json:"unit_id"`
 	Title                 string       `gorm:"size:255;not null" json:"title"`
 	CoreQuestion          string       `gorm:"type:text;not null" json:"core_question"`
+	Content               string       `gorm:"type:text" json:"content"`
 	ExpectedUnderstanding string       `gorm:"type:text" json:"expected_understanding"`
 	SortOrder             int          `gorm:"not null;default:0" json:"sort_order"`
 	Status                LessonStatus `gorm:"size:32;not null;default:'pending'" json:"status"`

@@ -36,6 +36,7 @@ type Handler struct {
 	users          *service.UserService
 	projects       *service.ProjectService
 	inbox          *service.InboxService
+	records        *service.RecordService
 	workspace      *service.WorkspaceService
 }
 
@@ -56,6 +57,7 @@ func NewHandler(courses *service.CourseService, graph *service.KnowledgeGraphSer
 	var userService *service.UserService
 	var projectService *service.ProjectService
 	var inboxService *service.InboxService
+	var recordService *service.RecordService
 	var workspaceService *service.WorkspaceService
 	for _, item := range optional {
 		switch value := item.(type) {
@@ -89,13 +91,15 @@ func NewHandler(courses *service.CourseService, graph *service.KnowledgeGraphSer
 			userService = value
 		case *service.ProjectService:
 			projectService = value
+		case *service.RecordService:
+			recordService = value
 		case *service.InboxService:
 			inboxService = value
 		case *service.WorkspaceService:
 			workspaceService = value
 		}
 	}
-	return &Handler{courses: courses, graph: graph, cognitive: cognitiveService, challenges: challengeService, misconceptions: misconceptionService, exploration: explorationService, curriculum: curriculumService, grounding: groundingService, backups: backupService, databaseHealth: databaseHealthService, export: exportService, consistency: consistencyService, domainInit: domainInitService, aiConfig: aiConfigurationService, nextLesson: nextLessonService, users: userService, projects: projectService, inbox: inboxService, workspace: workspaceService}
+	return &Handler{courses: courses, graph: graph, cognitive: cognitiveService, challenges: challengeService, misconceptions: misconceptionService, exploration: explorationService, curriculum: curriculumService, grounding: groundingService, backups: backupService, databaseHealth: databaseHealthService, export: exportService, consistency: consistencyService, domainInit: domainInitService, aiConfig: aiConfigurationService, nextLesson: nextLessonService, users: userService, projects: projectService, inbox: inboxService, records: recordService, workspace: workspaceService}
 }
 
 func (h *Handler) Login(c *gin.Context) {
@@ -442,12 +446,14 @@ type currentUnitResponse struct {
 }
 
 type currentLessonResponse struct {
-	ID           uint              `json:"id"`
-	Title        string            `json:"title"`
-	CoreQuestion string            `json:"core_question"`
-	Status       string            `json:"status"`
-	ContentRole  model.ContentRole `json:"content_role"`
-	DepthLevel   int               `json:"depth_level"`
+	ID                    uint              `json:"id"`
+	Title                 string            `json:"title"`
+	CoreQuestion          string            `json:"core_question"`
+	Content               string            `json:"content"`
+	ExpectedUnderstanding string            `json:"expected_understanding"`
+	Status                string            `json:"status"`
+	ContentRole           model.ContentRole `json:"content_role"`
+	DepthLevel            int               `json:"depth_level"`
 }
 
 func (h *Handler) GetCurrentLesson(c *gin.Context) {
@@ -538,9 +544,10 @@ func (h *Handler) writeCurrentLesson(c *gin.Context, current *service.CurrentLes
 			ID:           current.Lesson.ID,
 			Title:        current.Lesson.Title,
 			CoreQuestion: current.Lesson.CoreQuestion,
-			Status:       string(current.Lesson.Status),
-			ContentRole:  current.Lesson.ContentRole,
-			DepthLevel:   current.Lesson.DepthLevel,
+			Content:      current.Lesson.Content, ExpectedUnderstanding: current.Lesson.ExpectedUnderstanding,
+			Status:      string(current.Lesson.Status),
+			ContentRole: current.Lesson.ContentRole,
+			DepthLevel:  current.Lesson.DepthLevel,
 		},
 	}})
 }

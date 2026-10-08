@@ -41,7 +41,7 @@ type curriculumDraftPayload struct {
 }
 
 func BuildCurriculumDraftSystemPrompt() string {
-	return `你是 LearnOS 的课程结构草案编辑器。你的任务是针对课程蓝图中缺失的核心知识，生成最小、可审核的课程扩充草案。只输出 JSON，不删除或修改已有课程节点，不处理用户认知状态，不生成来源、引用或搜索结果。所有新 Lesson 必须来自给定的 missing blueprint lessons。`
+	return `你是 LearnOS 的课程结构草案编辑器。你的任务是针对课程蓝图中缺失的核心知识，生成最小、可审核的课程扩充草案。只输出 JSON，不删除或修改已有课程节点，不处理用户认知状态，不生成来源、引用或搜索结果。所有新 Lesson 必须来自给定的 missing blueprint lessons。每个新 Lesson 增加 content 字段，写成可直接阅读的轻量课件，围绕一个主题提供讲解和必要案例，建议 200～400 字，不硬性截断复杂内容。`
 }
 
 func BuildCurriculumDraftUserPrompt(req CurriculumDraftRequest) string {

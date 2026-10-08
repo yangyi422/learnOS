@@ -1,17 +1,17 @@
 <template>
-  <el-dialog v-model="open" title="整理为项目任务" width="min(560px, calc(100vw - 28px))" class="convert-inbox-dialog">
-    <el-form label-position="top" @submit.prevent="submit">
-      <el-form-item label="任务标题"><el-input v-model="form.title" maxlength="240" /></el-form-item>
+  <el-dialog v-model="open" title="整理为项目任务" width="min(560px, calc(100vw - 28px))" class="convert-inbox-dialog" :before-close="close">
+    <el-form :disabled="saving" label-position="top" @submit.prevent="submit">
+      <el-form-item label="任务标题"><el-input v-model="form.title" maxlength="200" /></el-form-item>
       <el-form-item label="所属项目"><el-select v-model="form.project_id" placeholder="选择一个进行中的项目" style="width:100%"><el-option v-for="project in projects" :key="project.id" :label="project.title" :value="project.id" /></el-select></el-form-item>
-      <div class="convert-row">
-        <el-form-item label="状态"><el-select v-model="form.status"><el-option label="收件箱" value="inbox"/><el-option label="下一步" value="next"/><el-option label="进行中" value="doing"/></el-select></el-form-item>
+      <details class="convert-details"><summary>其他任务信息（可选）</summary><div class="convert-row">
+        <el-form-item label="状态"><el-select v-model="form.status"><el-option label="待整理" value="inbox"/><el-option label="下一步" value="next"/><el-option label="进行中" value="doing"/></el-select></el-form-item>
         <el-form-item label="优先级"><el-select v-model="form.priority"><el-option label="普通" value="normal"/><el-option label="高" value="high"/><el-option label="低" value="low"/></el-select></el-form-item>
         <el-form-item label="到期日"><el-date-picker v-model="form.due_date" type="date" value-format="YYYY-MM-DD" placeholder="可选" /></el-form-item>
-      </div>
+      </div></details>
       <details class="convert-details"><summary>添加说明</summary><el-input v-model="form.description" type="textarea" :rows="4" maxlength="4000" show-word-limit /></details>
     </el-form>
     <p v-if="!projects.length" class="convert-empty">需要先创建一个进行中的项目，才能转为任务。</p>
-    <template #footer><el-button @click="open = false">取消</el-button><el-button type="primary" :loading="saving" :disabled="!form.title.trim() || !form.project_id" @click="submit">转换为任务</el-button></template>
+    <template #footer><el-button :disabled="saving" @click="open = false">取消</el-button><el-button type="primary" :loading="saving" :disabled="!form.title.trim() || !form.project_id" @click="submit">转换为任务</el-button></template>
   </el-dialog>
 </template>
 
@@ -19,6 +19,7 @@
 import { reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { listProjects, type Project } from '@/api/projects'
+import { recentProject, rememberProject } from '@/utils/recentProject'
 import { convertInboxItem, type InboxItem } from '@/api/inbox'
 
 const props = defineProps<{ modelValue: boolean; item: InboxItem | null }>()
@@ -33,15 +34,17 @@ watch(() => props.modelValue, async value => {
   const first = props.item.content.split(/\r?\n/, 1)[0]?.trim() ?? ''
   form.title = [...first].slice(0, 200).join('') || props.item.content.slice(0, 200)
   form.project_id = 0; form.status = 'next'; form.priority = 'normal'; form.due_date = null; form.description = ''
-  try { projects.value = (await listProjects()).filter(project => project.status === 'active') }
+  try { projects.value = (await listProjects()).filter(project => project.status === 'active'); form.project_id = recentProject(projects.value.map(project => project.id)) ?? 0 }
   catch (reason) { ElMessage.error(reason instanceof Error ? reason.message : '项目列表读取失败') }
 })
 watch(open, value => emit('update:modelValue', value))
+function close(done: () => void) { if (!saving.value) done() }
 async function submit() {
   if (!props.item || saving.value || !form.title.trim() || !form.project_id) return
   saving.value = true
   try {
     const result = await convertInboxItem(props.item.id, { ...form, title: form.title.trim(), description: form.description.trim(), due_date: form.due_date || null })
+    rememberProject(result.task.project_id)
     open.value = false
     emit('converted', result.task.id, result.task.project_id)
     ElMessage.success('已转换为项目任务')
