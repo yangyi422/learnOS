@@ -13,6 +13,7 @@ export interface ProjectTask {
   sort_order: number
   priority: TaskPriority
   due_date: string | null
+  archived_at?: string | null
   completed_at: string | null
   created_at: string
   updated_at: string
@@ -30,6 +31,7 @@ export interface Project {
   open_task_count: number
   next_task_count: number
   doing_task_count: number
+  archived_task_count?: number
   done_task_count: number
   created_at: string
   updated_at: string
@@ -70,9 +72,10 @@ export async function updateProject(id: number, patch: Partial<ProjectInput> & {
   await request(`/api/v1/projects/${id}`, { method: 'PATCH', body: JSON.stringify(patch) })
 }
 
-export async function listTasks(filters: { projectId?: number; status?: TaskStatus; due?: string; limit?: number; offset?: number } = {}): Promise<ProjectTask[]> {
+export async function listTasks(filters: { projectId?: number; archived?: boolean; status?: TaskStatus; due?: string; limit?: number; offset?: number } = {}): Promise<ProjectTask[]> {
   const params = new URLSearchParams()
   if (filters.projectId) params.set('project_id', String(filters.projectId))
+  if (filters.archived) params.set('archived', 'true')
   if (filters.status) params.set('status', filters.status)
   if (filters.due) params.set('due', filters.due)
   if (filters.limit) params.set('limit', String(filters.limit))
@@ -105,4 +108,8 @@ export async function moveTask(id: number, move: { status: TaskStatus; before_id
 
 export async function deleteTask(id: number): Promise<void> {
   await request(`/api/v1/tasks/${id}`, { method: 'DELETE' })
+}
+
+export async function archiveTasks(taskIDs: number[], archived = true): Promise<void> {
+  await request('/api/v1/tasks/archive', { method: 'POST', body: JSON.stringify({ task_ids: taskIDs, archived }) })
 }

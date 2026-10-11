@@ -69,6 +69,7 @@ type CourseUnit struct {
 }
 
 type Lesson struct {
+	CompletedAt           *time.Time   `json:"completed_at"`
 	ID                    uint         `gorm:"primaryKey" json:"id"`
 	CourseID              uint         `gorm:"not null;index" json:"course_id"`
 	UnitID                uint         `gorm:"not null;index" json:"unit_id"`

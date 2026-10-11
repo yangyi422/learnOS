@@ -18,6 +18,8 @@ import (
 )
 
 type Handler struct {
+	library        *service.LibraryService
+	reviews        *service.MonthlyReviewService
 	courses        *service.CourseService
 	graph          *service.KnowledgeGraphService
 	cognitive      *service.CognitiveStateService
@@ -36,6 +38,8 @@ type Handler struct {
 	users          *service.UserService
 	projects       *service.ProjectService
 	inbox          *service.InboxService
+	assets         *service.AssetService
+	finance        *service.FinanceService
 	life           *service.LifeService
 	records        *service.RecordService
 	workspace      *service.WorkspaceService
@@ -58,6 +62,10 @@ func NewHandler(courses *service.CourseService, graph *service.KnowledgeGraphSer
 	var userService *service.UserService
 	var projectService *service.ProjectService
 	var inboxService *service.InboxService
+	var libraryService *service.LibraryService
+	var reviewService *service.MonthlyReviewService
+	var assetService *service.AssetService
+	var financeService *service.FinanceService
 	var lifeService *service.LifeService
 	var recordService *service.RecordService
 	var workspaceService *service.WorkspaceService
@@ -93,6 +101,14 @@ func NewHandler(courses *service.CourseService, graph *service.KnowledgeGraphSer
 			userService = value
 		case *service.ProjectService:
 			projectService = value
+		case *service.LibraryService:
+			libraryService = value
+		case *service.MonthlyReviewService:
+			reviewService = value
+		case *service.AssetService:
+			assetService = value
+		case *service.FinanceService:
+			financeService = value
 		case *service.LifeService:
 			lifeService = value
 		case *service.RecordService:
@@ -103,7 +119,7 @@ func NewHandler(courses *service.CourseService, graph *service.KnowledgeGraphSer
 			workspaceService = value
 		}
 	}
-	return &Handler{courses: courses, graph: graph, cognitive: cognitiveService, challenges: challengeService, misconceptions: misconceptionService, exploration: explorationService, curriculum: curriculumService, grounding: groundingService, backups: backupService, databaseHealth: databaseHealthService, export: exportService, consistency: consistencyService, domainInit: domainInitService, aiConfig: aiConfigurationService, nextLesson: nextLessonService, users: userService, projects: projectService, inbox: inboxService, life: lifeService, records: recordService, workspace: workspaceService}
+	return &Handler{library: libraryService, reviews: reviewService, courses: courses, graph: graph, cognitive: cognitiveService, challenges: challengeService, misconceptions: misconceptionService, exploration: explorationService, curriculum: curriculumService, grounding: groundingService, backups: backupService, databaseHealth: databaseHealthService, export: exportService, consistency: consistencyService, domainInit: domainInitService, aiConfig: aiConfigurationService, nextLesson: nextLessonService, users: userService, projects: projectService, inbox: inboxService, life: lifeService, assets: assetService, finance: financeService, records: recordService, workspace: workspaceService}
 }
 
 func (h *Handler) Login(c *gin.Context) {

@@ -1,5 +1,5 @@
 <template>
-  <el-dialog :model-value="modelValue" :title="event && !editing ? '生活事件' : event ? '编辑事件' : '记录生活事件'" width="min(640px, calc(100vw - 28px))" class="life-dialog" :before-close="close" :close-on-click-modal="false" @opened="focusTitle">
+  <el-dialog :model-value="modelValue" :title="event && !editing ? '生活事件' : event ? '编辑事件' : '记录生活事件'" width="min(640px, calc(100vw - 28px))" class="life-dialog" align-center :before-close="close" :close-on-click-modal="false" @opened="focusTitle" @closed="restoreFocus">
     <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
     <div v-if="event && !editing" class="life-reading">
       <div class="life-metadata"><span>{{ event.occurred_on }}</span><el-tag v-if="event.milestone" size="small" effect="plain">里程碑</el-tag><span v-if="event.primary_domain">{{ domainLabel(event.primary_domain) }}</span><span v-if="event.secondary_domain">{{ domainLabel(event.secondary_domain) }}</span></div>
@@ -23,7 +23,7 @@
       </details>
     </el-form>
     <template #footer><div class="life-footer">
-      <template v-if="event && !editing"><el-button text :loading="saving" @click="remove">删除</el-button><span class="life-spacer" /><el-button @click="close()">关闭</el-button><el-button type="primary" @click="beginEdit">编辑</el-button></template>
+      <template v-if="event && !editing"><el-button text :loading="saving" @click="remove">删除</el-button><span class="life-spacer" /><el-button @click="close()">关闭</el-button><el-button text :disabled="saving" @click="beginEdit">编辑</el-button></template>
       <template v-else><span class="life-spacer" /><el-button :disabled="saving" @click="cancel">取消</el-button><el-button type="primary" :loading="saving" :disabled="!form.title.trim() || !form.occurred_on" @click="save">保存</el-button></template>
     </div></template>
   </el-dialog>
@@ -42,11 +42,13 @@ const props = defineProps<{ modelValue: boolean; event?: LifeEvent | null; inbox
 const emit = defineEmits<{ 'update:modelValue': [boolean]; saved: [LifeEvent]; deleted: [number] }>()
 const form = reactive<LifeEventInput>({ title: '', occurred_on: '', description: '', primary_domain: '', secondary_domain: '', milestone: false, goal_id: null, external_url: '', link_name: '' })
 const editing = ref(false), saving = ref(false), error = ref(''), goals = ref<LifeGoal[]>([]), titleInput = ref<{ focus: () => void }>()
+let returnFocus: HTMLElement | null = null
+function restoreFocus() { if (returnFocus?.isConnected) returnFocus.focus(); else document.querySelector<HTMLElement>('.life-tabs button[aria-selected=true]')?.focus() }
 let snapshot = '', loadSequence = 0
 const sourceLabel = computed(() => ({ project: '项目', course: '课程', inbox: '收集箱' })[props.event?.source_type as 'project' | 'course' | 'inbox'] ?? '来源')
 const sourcePath = computed(() => props.event?.source_type === 'project' ? `/projects?project=${props.event.source_id}&view=board` : props.event?.source_type === 'course' ? `/courses/${props.event.source_id}/archive` : props.event?.source_type === 'inbox' ? '/inbox' : '')
 function reset() { Object.assign(form, { creation_key: lifeRequestKey(), title: '', occurred_on: localCalendarDate(new Date()), description: props.inboxItem?.content ?? '', primary_domain: '', secondary_domain: '', milestone: Boolean(props.source), goal_id: props.goalId ?? null, external_url: props.inboxItem?.source_url ?? '', link_name: '', source_type: props.source?.type ?? (props.inboxItem ? 'inbox' : ''), source_id: props.source?.id ?? props.inboxItem?.id ?? null }); if (props.source) form.title = props.source.title; if (props.event) Object.assign(form, props.event); snapshot = JSON.stringify(form) }
-watch(() => props.modelValue, async open => { const sequence = ++loadSequence; if (!open) return; editing.value = !props.event; error.value = ''; reset(); try { const result = await listLifeGoals(); if (sequence === loadSequence) goals.value = result } catch (reason) { if (sequence === loadSequence) error.value = message(reason) } })
+watch(() => props.modelValue, async open => { const sequence = ++loadSequence; if (!open) return; returnFocus = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null; editing.value = !props.event; error.value = ''; reset(); try { const result = await listLifeGoals(); if (sequence === loadSequence) goals.value = result } catch (reason) { if (sequence === loadSequence) error.value = message(reason) } })
 watch(() => props.event, () => { if (props.modelValue && !editing.value) reset() })
 function message(reason: unknown) { return reason instanceof Error ? reason.message : '操作失败，请重试。' }
 function displayTime(value: string) { return new Date(value).toLocaleString('zh-CN') }

@@ -96,7 +96,7 @@ func (r *LifeRepository) Graduate(ctx context.Context, user, id uint) error {
 		if !s.CanGraduate {
 			return ErrLifeSource
 		}
-		return tx.Model(&model.Course{}).Where("id = ? AND user_id = ?", id, user).Update("status", model.CourseStatusCompleted).Error
+		return tx.Model(&model.Course{}).Where("id = ? AND user_id = ?", id, user).Updates(map[string]interface{}{"status": model.CourseStatusCompleted, "completed_at": time.Now().UTC()}).Error
 	})
 }
 func validateLifeGoal(tx *gorm.DB, user uint, id *uint) error {
@@ -357,10 +357,50 @@ func (r *LifeRepository) AddEntry(ctx context.Context, user, goalID uint, e mode
 		if result.RowsAffected == 0 {
 			return ErrLifeConflict
 		}
-		return nil
+		return tx.Model(&model.LifeGoal{}).Where("id = ? AND user_id = ?", goalID, user).Update("updated_at", time.Now().UTC()).Error
 	})
 	if err != nil {
 		return nil, err
 	}
 	return &e, nil
+}
+
+// EditEntry changes the readable note while retaining its original status
+// transition and creation identity. All checks and the goal timestamp share a transaction.
+func (r *LifeRepository) EditEntry(ctx context.Context, user, goalID, entryID uint, input model.LifeGoalEntry) (*model.LifeGoalEntry, error) {
+	var entry model.LifeGoalEntry
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := validateLifeGoal(tx, user, &goalID); err != nil {
+			return err
+		}
+		if err := tx.Where("id = ? AND goal_id = ?", entryID, goalID).First(&entry).Error; err != nil {
+			return err
+		}
+		if input.Content == "" && entry.ToStatus == "" {
+			return gorm.ErrInvalidData
+		}
+		entry.Content = input.Content
+		entry.Reason = input.Reason
+		entry.OccurredOn = input.OccurredOn
+		if err := tx.Save(&entry).Error; err != nil {
+			return err
+		}
+		return tx.Model(&model.LifeGoal{}).Where("id = ? AND user_id = ?", goalID, user).Update("updated_at", time.Now().UTC()).Error
+	})
+	return &entry, err
+}
+func (r *LifeRepository) DeleteEntry(ctx context.Context, user, goalID, entryID uint) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := validateLifeGoal(tx, user, &goalID); err != nil {
+			return err
+		}
+		result := tx.Where("id = ? AND goal_id = ?", entryID, goalID).Delete(&model.LifeGoalEntry{})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		return tx.Model(&model.LifeGoal{}).Where("id = ? AND user_id = ?", goalID, user).Update("updated_at", time.Now().UTC()).Error
+	})
 }

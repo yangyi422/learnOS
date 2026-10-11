@@ -36,6 +36,8 @@ func projectError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, service.ErrInvalidProjectInput):
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid project input"})
+	case errors.Is(err, repository.ErrTaskArchive):
+		c.JSON(http.StatusConflict, gin.H{"error": "task archive conflict"})
 	case errors.Is(err, repository.ErrTaskOrder):
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid task order"})
 	case errors.Is(err, repository.ErrTaskConflict):
@@ -201,7 +203,12 @@ func (h *Handler) ListTasks(c *gin.Context) {
 		}
 		offset = parsed
 	}
-	tasks, err := h.projects.ListTasks(c.Request.Context(), userID, projectID, c.Query("status"), c.Query("due"), limit, offset)
+	archived := c.Query("archived")
+	if archived != "" && archived != "true" && archived != "false" {
+		projectError(c, service.ErrInvalidProjectInput)
+		return
+	}
+	tasks, err := h.projects.ListTasks(c.Request.Context(), userID, projectID, c.Query("status"), c.Query("due"), limit, offset, archived == "true")
 	if err != nil {
 		projectError(c, err)
 		return
@@ -316,4 +323,24 @@ func (h *Handler) DeleteTask(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": gin.H{"deleted": true}})
+}
+
+func (h *Handler) ArchiveTasks(c *gin.Context) {
+	user, ok := projectUserID(c)
+	if !ok {
+		return
+	}
+	var input struct {
+		TaskIDs  []uint `json:"task_ids"`
+		Archived *bool  `json:"archived"`
+	}
+	if c.ShouldBindJSON(&input) != nil || input.Archived == nil {
+		projectError(c, service.ErrInvalidProjectInput)
+		return
+	}
+	if err := h.projects.ArchiveTasks(c.Request.Context(), user, input.TaskIDs, *input.Archived); err != nil {
+		projectError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{"updated": true}})
 }

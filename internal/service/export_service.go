@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"learnos/internal/model"
+	"learnos/internal/repository"
 
 	"gorm.io/gorm"
 )
@@ -17,6 +18,17 @@ type ExportService struct{ db *gorm.DB }
 func NewExportService(db *gorm.DB) *ExportService { return &ExportService{db: db} }
 
 type ExportSnapshot struct {
+	LibraryCollections    []model.LibraryCollection           `json:"library_collections"`
+	LibrarySections       []model.LibrarySection              `json:"library_sections"`
+	LibraryPages          []model.LibraryPage                 `json:"library_pages"`
+	MonthlyReviews        []model.MonthlyReview               `json:"monthly_reviews"`
+	MonthlyReviewFacts    []model.MonthlyReviewFacts          `json:"monthly_review_facts"`
+	GoalAssetReferences   []model.GoalAssetReference          `json:"goal_asset_references"`
+	AssetSnapshots        []model.AssetSnapshot               `json:"asset_snapshots"`
+	FinanceLedgers        []model.FinanceLedger               `json:"finance_ledgers"`
+	FinanceTransactions   []repository.FinanceExportRow       `json:"finance_transactions"`
+	FinanceBatches        []model.FinanceBatch                `json:"finance_batches"`
+	FinanceChanges        []model.FinanceChange               `json:"finance_changes"`
 	LifeEvents            []model.LifeEvent                   `json:"life_events"`
 	LifeGoals             []model.LifeGoal                    `json:"life_goals"`
 	LifeGoalEntries       []model.LifeGoalEntry               `json:"life_goal_entries"`
@@ -54,10 +66,23 @@ type ExportSnapshot struct {
 
 func (s *ExportService) Snapshot(ctx context.Context) (*ExportSnapshot, error) {
 	snapshot := &ExportSnapshot{ExportVersion: "1", ExportedAt: time.Now().UTC()}
+	var financialRows []model.FinanceTransaction
+	if err := s.db.WithContext(ctx).Find(&financialRows).Error; err != nil {
+		return nil, err
+	}
+	snapshot.FinanceTransactions = []repository.FinanceExportRow{}
+	for _, row := range financialRows {
+		snapshot.FinanceTransactions = append(snapshot.FinanceTransactions, repository.NewFinanceExportRow(row))
+	}
 	queries := []struct {
 		dest interface{}
 		name string
 	}{
+		{&snapshot.LibraryCollections, "library collections"}, {&snapshot.LibrarySections, "library sections"}, {&snapshot.LibraryPages, "library pages"},
+		{&snapshot.MonthlyReviews, "monthly reviews"}, {&snapshot.MonthlyReviewFacts, "monthly review facts"},
+		{&snapshot.GoalAssetReferences, "goal asset references"},
+		{&snapshot.AssetSnapshots, "asset snapshots"},
+		{&snapshot.FinanceLedgers, "finance ledgers"}, {&snapshot.FinanceBatches, "finance batches"}, {&snapshot.FinanceChanges, "finance changes"},
 		{&snapshot.LifeEvents, "life events"}, {&snapshot.LifeGoals, "life goals"}, {&snapshot.LifeGoalEntries, "life goal entries"},
 		{&snapshot.Courses, "courses"}, {&snapshot.Units, "course units"}, {&snapshot.Lessons, "lessons"}, {&snapshot.Relations, "lesson relations"},
 		{&snapshot.LearningTurns, "learning turns"}, {&snapshot.Mastery, "mastery records"}, {&snapshot.CognitiveStates, "cognitive states"},
@@ -93,6 +118,47 @@ func (s *ExportService) Markdown(ctx context.Context) ([]byte, error) {
 	out.WriteString("# LearnOS 数据导出\n\n")
 	fmt.Fprintf(&out, "导出时间：%s\n\n", snapshot.ExportedAt.Format(time.RFC3339))
 	out.WriteString("本文件由 LearnOS 生成，记录生活档案、长期目标及历史、收集箱、项目任务、课程结构、学习记录、认知状态、误区、挑战、探索问题和来源关联。\n\n")
+	out.WriteString("## 月度生活回顾\n\n")
+	out.WriteString("\n## 我的资料库\n\n")
+	for _, collection := range snapshot.LibraryCollections {
+		fmt.Fprintf(&out, "### %s\n\n%s\n\n", collection.Name, collection.Description)
+		for _, page := range snapshot.LibraryPages {
+			if page.CollectionID != collection.ID {
+				continue
+			}
+			fmt.Fprintf(&out, "#### %s\n\n%s\n\n", page.Title, page.Body)
+			for _, source := range page.Sources {
+				fmt.Fprintf(&out, "- %s <%s> %s\n", source.Name, source.URL, source.Note)
+			}
+		}
+	}
+	for _, review := range snapshot.MonthlyReviews {
+		fmt.Fprintf(&out, "### %s\n\n- 值得记住：%s\n- 感受与思考：%s\n- 下月关注：%s\n- 外部笔记：%s\n- 保存：%s\n- 最近修改：%s\n\n", review.Month, review.Memorable, review.Thoughts, review.NextFocus, review.ExternalURL, review.CreatedAt.Format(time.RFC3339), review.UpdatedAt.Format(time.RFC3339))
+		for _, facts := range snapshot.MonthlyReviewFacts {
+			if facts.ID == review.FactsID {
+				fmt.Fprintf(&out, "当时保存的事实摘要（JSON）：\n\n```json\n%s\n```\n\n", facts.FactsJSON)
+			}
+		}
+	}
+	out.WriteString("## 资产快照\n\n")
+	for _, reference := range snapshot.GoalAssetReferences {
+		fmt.Fprintf(&out, "### 财务参考：目标 %d / 快照 %d\n\n- 判断日期：%s\n- 说明：%s\n\n", reference.GoalID, reference.AssetSnapshotID, reference.JudgmentDate, reference.Note)
+	}
+	for _, row := range snapshot.AssetSnapshots {
+		v := assetView(row)
+		money := func(n *int64) string {
+			if n == nil {
+				return "未记录"
+			}
+			return MoneyExact(*n) + " CNY"
+		}
+		fmt.Fprintf(&out, "### %s\n\n- 完整范围：%t\n- 银行存款：%s\n- 支付平台：%s\n- 投资资产：%s\n- 其他资产：%s\n- 负债：%s\n- 已填资产合计：%s\n- 已填范围差额：%s\n- 备注：%s\n\n", row.SnapshotDate, v.Complete, money(row.BankMinor), money(row.PlatformMinor), money(row.InvestmentMinor), money(row.OtherMinor), money(row.DebtMinor), money(v.AssetTotal), money(v.NetAsset), row.Note)
+	}
+	out.WriteString("## 财务档案\n\n")
+	for _, row := range snapshot.FinanceTransactions {
+		fmt.Fprintf(&out, "- %s · %s · %s %s · %s / %s · 钱迹 ID %s\n", row.Transaction.OccurredAt, row.Transaction.Kind, MoneyExact(row.Transaction.AmountMinor), row.Transaction.Currency, row.Transaction.Category, row.Transaction.Subcategory, row.Transaction.ExternalID)
+	}
+	out.WriteString("\n详细原始字段及撤销快照见 JSON / SQLite 备份。\n\n")
 	out.WriteString("## 收集箱\n\n")
 	for _, item := range snapshot.InboxItems {
 		fmt.Fprintf(&out, "- %s（%s）\n", item.Content, item.Status)

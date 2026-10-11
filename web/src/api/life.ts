@@ -34,3 +34,7 @@ export const addLifeEntry = (id: number, input: LifeEntryInput) => data<LifeEntr
 export const getLifeSource = (type: string, id: number) => data<LifeSource>(`/life/sources/${type}/${id}`)
 export const graduateCourse = (id: number) => data(`/courses/${id}/graduate`, 'POST')
 export function lifeRequestKey() { return globalThis.crypto?.randomUUID?.() ?? `life-${Date.now()}-${Math.random().toString(36).slice(2)}` }
+
+export const editLifeEntry = (goal: number, entry: number, input: LifeEntryInput) => data<LifeEntry>(`/life/goals/${goal}/entries/${entry}`, 'PUT', input)
+export const deleteLifeEntry = (goal: number, entry: number) => data(`/life/goals/${goal}/entries/${entry}`, 'DELETE')
+export function lifeUpdatedLabel(value: string) { const date = new Date(value); return value && !Number.isNaN(date.getTime()) ? date.toLocaleDateString('zh-CN') : '' }

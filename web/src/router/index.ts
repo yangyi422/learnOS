@@ -6,13 +6,17 @@ import LearningView from '@/views/LearningView.vue'
 import CourseArchiveView from '@/views/CourseArchiveView.vue'
 import KnowledgeGraphView from '@/views/KnowledgeGraphView.vue'
 import MisconceptionNetworkView from '@/views/MisconceptionNetworkView.vue'
+import LibraryView from '@/views/LibraryView.vue'
+import LibraryCollectionView from '@/views/LibraryCollectionView.vue'
 import ExplorationView from '@/views/ExplorationView.vue'
 import DomainInitializationView from '@/views/DomainInitializationView.vue'
 import LoginView from '@/views/LoginView.vue'
 import UsersView from '@/views/UsersView.vue'
 import ProjectsView from '@/views/ProjectsView.vue'
 import WorkspaceHomeView from '@/views/WorkspaceHomeView.vue'
+import MonthlyReviewView from '@/views/MonthlyReviewView.vue'
 import LifeView from '@/views/LifeView.vue'
+import FinanceView from '@/views/FinanceView.vue'
 import InboxView from '@/views/InboxView.vue'
 
 export default createRouter({
@@ -26,6 +30,8 @@ export default createRouter({
     },
     { path: '/learn', component: DashboardView, meta: { title: '学习' } },
     { path: '/life', component: LifeView, meta: { title: '生活' } },
+    { path: '/life/reviews', component: MonthlyReviewView, meta: { title: '月度回顾' } },
+    { path: '/life/finance', component: FinanceView, meta: { title: '财务档案' } },
     { path: '/inbox', component: InboxView, meta: { title: '收集箱' } },
     {
       path: '/courses',
@@ -64,6 +70,9 @@ export default createRouter({
       path: '/exploration/questions',
       redirect: '/explore',
     },
-    { path: '/explore', component: ExplorationView, meta: { title: '探索' } },
+    { path: '/explore/library', component: LibraryView, meta: { title: '我的资料库' } },
+ { path: '/explore/library/:collection', component: LibraryCollectionView, meta: { title: '资料专题' } },
+ { path: '/explore/library/:collection/pages/:page', component: LibraryCollectionView, meta: { title: '资料页面' } },
+ { path: '/explore', component: ExplorationView, meta: { title: '探索' } },
   ],
 })

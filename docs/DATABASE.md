@@ -170,3 +170,26 @@ Grounding Coverage 是来源覆盖事实，只统计 BlueprintLesson / 正式 Le
 新增 `life_events`（发生日期、主/次领域、里程碑、可选目标及真实来源 ID/标题快照）、`life_goals`（理由、当前判断、状态及可选项目）、`life_goal_entries`（阶段判断、原因、状态前后值和日期）。日期保存为已校验的 `YYYY-MM-DD` 文字，采用用户本地日历。请求键与来源键建立唯一索引，Inbox 转换及状态历史在单事务中提交。来源不配置级联删除，项目归档/课程删除不会丢失生活事实。
 
 既有迁移前整库备份、重复 AutoMigrate、JSON/Markdown 导出覆盖新数据；旧 Inbox 模型只增加 `life_event` 处理类型，原始内容不修改。详见 [LIFE_ARCHIVE.md](LIFE_ARCHIVE.md)。
+
+## Schema 22：财务档案
+
+新增 `finance_ledgers`（真实来源账本与 revision）、`finance_transactions`（账本/钱迹 ID 唯一、金额整数分、币种、原始 18 字段）、`finance_batches`（后端预览、范围声明、统计和导入/撤销状态）、`finance_changes`（完整前后快照）。AutoMigrate 可重复执行，升级前自动备份，不改写旧生活或业务数据。SQLite 备份恢复覆盖全部新表，JSON 包含原始财务字段及撤销快照。计算口径、缺失确认与顺序撤销见 [FINANCE_ARCHIVE.md](FINANCE_ARCHIVE.md)。
+
+
+## Schema 23：资产快照
+
+新增 `asset_snapshots`，用户/日历日期唯一；四类资产及总负债为可空整数分，NULL 表示未记录，零是明确记录。另含备注、乐观版本、创建与修改时间。总额和范围由服务层计算，不保存可漂移的累计总额。与钱迹账本无关联或级联操作。沿用迁移前备份及可重复 AutoMigrate，整库恢复包含新表，JSON/Markdown 导出扩展资产记录。规则见 [ASSET_ARCHIVE.md](ASSET_ARCHIVE.md)。
+
+## Schema 24：目标财务参考
+
+新增 `goal_asset_references`，目标/快照联合唯一，说明与日历判断日期独立保存，version 用于编辑/解除并发校验。外键对快照 RESTRICT、对目标 CASCADE。旧目标、阶段、资产和账本不改写；升级前沿用整库备份，整库恢复及 JSON/Markdown 导出包含关联。详见 [GOAL_FINANCIAL_REFERENCES.md](GOAL_FINANCIAL_REFERENCES.md)。
+
+## Schema 25：月度生活回顾
+
+新增 monthly_reviews（用户/年月唯一）与 monthly_review_facts（冻结事实和已确认历史）。任务新增可空 actual_completed_at；项目、课程、课时新增可空 completed_at。旧日期不回填新字段，原任务 completed_at 保留。升级前沿用整库备份和重复安全 AutoMigrate；月度数据、日期及历史均纳入整库恢复与导出。参见 [MONTHLY_REVIEW.md](MONTHLY_REVIEW.md)。
+
+Schema 26 新增 library_collections/library_sections/library_pages，见 [资料库设计](LIBRARY.md)。专题属用户，分组只一层；页面分组可空，标签与多来源为 JSON 文本。专题删除事务清理，分组非空须显式移回根目录，不改正文或稳定 ID。沿用整库备份/恢复。
+
+### Schema 27：任务归档
+
+`project_tasks` 新增可空、有索引的 `archived_at`，使用既有 AutoMigrate 和升级前备份机制。旧行保持 NULL，不回填完成时间，不修改状态或历史。无需新表。项目归档与任务归档互相独立。

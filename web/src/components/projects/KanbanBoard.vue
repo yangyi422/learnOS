@@ -6,6 +6,10 @@
           <div><div class="kanban-column__title"><span class="kanban-column__dot" aria-hidden="true" /><h2>{{ column.label }}</h2></div><small v-if="column.status === 'doing' && counts.doing > 3">建议减少同时进行的任务</small></div>
           <span class="kanban-column__count">{{ counts[column.status] }}</span>
         </header>
+        <div v-if="column.status === 'done' && lists.done.length" class="archive-controls">
+          <el-button text size="small" :disabled="busy" @click="selecting = !selecting; selectedIDs = []">{{ selecting ? '取消选择' : '批量归档' }}</el-button>
+          <el-button v-if="selecting" text size="small" :disabled="busy || !selectedIDs.length" @click="$emit('archive', selectedIDs)">归档所选（{{ selectedIDs.length }}）</el-button>
+        </div>
         <VueDraggable
           v-model="lists[column.status]"
           class="kanban-column__cards"
@@ -16,6 +20,7 @@
           :touch-start-threshold="8"
           :fallback-tolerance="8"
           :bubble-scroll="false"
+          :filter="selecting ? '.task-card' : undefined"
           :on-move="onDragMove"
           :delay-on-touch-only="true"
           :animation="150"
@@ -38,6 +43,7 @@
             @keydown.enter.stop.prevent="openTaskFromCard(task)"
             @keydown.space.stop.prevent="openTaskFromCard(task)"
           >
+            <input v-if="selecting && column.status === 'done'" class="archive-checkbox" type="checkbox" :checked="selectedIDs.includes(task.id)" :aria-label="`选择归档：${task.title}`" :disabled="busy" @click.stop @keydown.stop @change="toggleSelected(task.id)" />
             <div class="task-card__top">
               <div class="task-card__body" tabindex="-1">
                 <strong>{{ task.title }}</strong>
@@ -70,6 +76,7 @@ const emit = defineEmits<{
   (e: 'add', status: TaskStatus): void
   (e: 'move', payload: { task: ProjectTask; status: TaskStatus; before_id?: number; after_id?: number }): void
   (e: 'moreDone'): void
+  (e: 'archive', ids: number[]): void
 }>()
 const columns: { status: TaskStatus; label: string }[] = [
   { status: 'inbox', label: '待整理' },
@@ -78,6 +85,10 @@ const columns: { status: TaskStatus; label: string }[] = [
   { status: 'done', label: '已完成' },
 ]
 const lists = reactive<Record<TaskStatus, ProjectTask[]>>({ inbox: [], next: [], doing: [], done: [] })
+const selecting = ref(false)
+const selectedIDs = ref<number[]>([])
+function toggleSelected(id: number) { selectedIDs.value = selectedIDs.value.includes(id) ? selectedIDs.value.filter(value => value !== id) : [...selectedIDs.value, id] }
+watch(() => props.tasks, () => { selectedIDs.value = []; selecting.value = false })
 const suppressCardClick = ref(false)
 const dropTarget = ref<TaskStatus | null>(null)
 let dragScope: number | null = null
@@ -100,6 +111,7 @@ onBeforeUnmount(() => window.clearTimeout(clickSuppressionTimer))
 
 function openTaskFromCard(task: ProjectTask, event?: MouseEvent) {
   if (suppressCardClick.value) return
+  if (selecting.value && task.status === 'done') { toggleSelected(task.id); return }
   const clickedBody = event?.target instanceof HTMLElement ? event.target.closest<HTMLElement>('.task-card__body') : null
   const focusTarget = clickedBody || (event?.currentTarget instanceof HTMLElement ? event.currentTarget : null)
   focusTarget?.focus({ preventScroll: true })
@@ -158,6 +170,8 @@ function dueLabel(value: string, status: TaskStatus) {
 </script>
 
 <style scoped>
+.archive-checkbox { width: 16px; height: 16px; accent-color: var(--color-primary); cursor: pointer; }
+.archive-controls { display: flex; flex-wrap: wrap; margin-bottom: 8px; }
 .kanban-scroll { width: 100%; min-width: 0; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; padding: 0 0 14px; scrollbar-color: var(--border-default) transparent; }
 .kanban-grid { display: grid; grid-template-columns: repeat(4, minmax(255px, 1fr)); min-width: 1020px; align-items: start; }
 .kanban-column { min-width: 0; min-height: 360px; padding: 0 15px 12px; border-left: 1px solid var(--board-divider); }

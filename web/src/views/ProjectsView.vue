@@ -4,7 +4,7 @@
       <template #actions>
         <span v-if="view === 'today'" class="projects-muted">全部活动项目</span><el-select v-else :disabled="busy" :model-value="projectKey" class="projects-switcher" aria-label="切换项目" @change="selectProject(String($event))">
           <el-option label="全部项目" value="all" />
-          <el-option v-for="project in projects.filter(item => item.status !== 'archived')" :key="project.id" :label="`${project.title} · ${openCount(project)} 项未完成`" :value="String(project.id)" />
+          <el-option v-for="project in projects.filter(item => archivedView || item.status !== 'archived')" :key="project.id" :label="`${project.title} · ${openCount(project)} 项未完成`" :value="String(project.id)" />
           <el-option label="+ 新建项目" value="new" />
         </el-select>
         <el-button type="primary" @click="openNewTask('inbox')">+ 新建任务</el-button>
@@ -25,7 +25,7 @@
           <div><strong>{{ selectedProject.icon }} {{ selectedProject.title }}</strong><p v-if="selectedProject.description">{{ selectedProject.description }}</p></div>
           <el-tag size="small" effect="plain">{{ projectStatusLabel(selectedProject.status) }}</el-tag><LifeCaptureButton v-if="selectedProject.status === 'completed'" source-type="project" :source-id="selectedProject.id" />
         </div>
-        <KanbanBoard :tasks="tasks" :projects="projectMap" :selected-project-id="selectedProjectID" :active-task-id="taskDrawerOpen ? editingTask?.id ?? null : null" :done-count="doneCount" :busy="busy || loading" :today="today" @open="openTask" @add="openNewTask" @move="handleMove" @more-done="loadMoreDone" />
+        <KanbanBoard :tasks="tasks" :projects="projectMap" :selected-project-id="selectedProjectID" :active-task-id="taskDrawerOpen ? editingTask?.id ?? null : null" :done-count="doneCount" :busy="busy || loading" :today="today" @open="openTask" @add="openNewTask" @move="handleMove" @more-done="loadMoreDone" @archive="confirmArchive" />
         <details v-if="selectedProjectID" class="project-records" @toggle="recordsExpanded = ($event.target as HTMLDetailsElement).open"><summary>项目记录</summary><RecordsPanel v-if="recordsExpanded" :key="selectedProjectID" :project-id="selectedProjectID" /></details>
       </template>
 
@@ -47,12 +47,26 @@
 
       <div v-else class="project-list-view">
         <div class="project-list-view__heading"><h2>项目列表</h2><el-button @click="openProjectForm()">+ 新建项目</el-button></div>
+        <div class="archive-controls">
+          <el-button :type="!archivedView ? 'primary' : 'default'" text @click="setQuery({ tasks: '' })">项目</el-button>
+          <el-button :type="archivedView ? 'primary' : 'default'" text @click="setQuery({ tasks: 'archived' })">已归档任务</el-button>
+        </div>
+        <template v-if="archivedView">
+          <p class="projects-muted">仅显示手动归档的已完成任务，完成时间与历史统计保持不变。</p>
+          <p v-if="!loading && !error && !tasks.length" class="projects-muted">当前项目范围内暂无归档任务。</p>
+          <article v-for="task in tasks" :key="task.id" class="today-task">
+            <button class="today-task__open" @click="openTask(task)"><span class="today-task__title">{{ task.title }}</span><small>{{ projectMap[task.project_id]?.title }} · 完成 {{ task.completed_at ? new Date(task.completed_at).toLocaleString() : '时间未记录' }} · 归档 {{ task.archived_at ? new Date(task.archived_at).toLocaleString() : '' }}</small></button>
+            <el-button text :disabled="busy" @click="archiveTask(task)">取消归档</el-button>
+          </article>
+          <el-button v-if="archivedHasMore" :loading="busy" @click="loadMoreArchived">加载更多归档任务</el-button>
+        </template>
+        <template v-else>
         <p v-if="!projects.length" class="projects-muted">还没有项目。创建一个项目后，就可以记录任务。</p>
         <article v-for="project in projects" :key="project.id" class="project-list-card" :style="{ '--project-accent': project.accent || '#94a3b8' }">
           <div class="project-list-card__main">
             <div class="project-list-card__title"><span>{{ project.icon || '◻' }}</span><h3>{{ project.title }}</h3><el-tag size="small" effect="plain">{{ projectStatusLabel(project.status) }}</el-tag></div>
             <p v-if="project.description">{{ project.description }}</p>
-            <small>{{ openCount(project) }} 项未完成 · {{ project.doing_task_count }} 项进行中 · {{ project.done_task_count }} 项已完成</small>
+            <small>{{ openCount(project) }} 项未完成 · {{ project.doing_task_count }} 项进行中 · {{ project.done_task_count }} 项历史已完成<span v-if="project.archived_task_count"> · {{ project.archived_task_count }} 项已归档</span></small>
           </div>
           <div class="project-list-card__actions">
             <el-button text @click="openProject(project)">打开看板</el-button>
@@ -64,10 +78,11 @@
             <el-button v-if="project.status !== 'archived'" text @click="setProjectStatus(project, 'archived')">归档</el-button>
           </div>
         </article>
+        </template>
       </div>
     </div>
 
-    <TaskDrawer ref="taskDrawer" v-model="taskDrawerOpen" :task="editingTask" :projects="projects" :default-project-id="selectedProjectID" :default-status="newTaskStatus" :busy="busy" :save-error="drawerError" @save="saveTask" @status="changeTaskStatus" @delete="removeTask" />
+    <TaskDrawer ref="taskDrawer" v-model="taskDrawerOpen" :task="editingTask" :projects="projects" :default-project-id="selectedProjectID" :default-status="newTaskStatus" :busy="busy" :save-error="drawerError" @save="saveTask" @status="changeTaskStatus" @delete="removeTask" @archive="archiveTask" />
 
     <el-dialog v-model="projectDialogOpen" :title="editingProject ? '编辑项目' : '新建项目'" width="min(460px, 92vw)">
       <el-form label-position="top" @submit.prevent="saveProject">
@@ -101,7 +116,7 @@ import KanbanBoard from '@/components/projects/KanbanBoard.vue'
 import TaskDrawer from '@/components/projects/TaskDrawer.vue'
 import RecordsPanel from '@/components/RecordsPanel.vue'
 import { rememberProject } from '@/utils/recentProject'
-import { createProject, createTask, deleteTask, getTask, getTodayView, listProjects, listTasks, moveTask, updateProject, updateTask, type Project, type ProjectStatus, type ProjectTask, type TaskInput, type TaskStatus, type TodayView } from '@/api/projects'
+import { archiveTasks, createProject, createTask, deleteTask, getTask, getTodayView, listProjects, listTasks, moveTask, updateProject, updateTask, type Project, type ProjectStatus, type ProjectTask, type TaskInput, type TaskStatus, type TodayView } from '@/api/projects'
 
 import { groupTodayTasks, localCalendarDate } from '@/utils/projectTasks'
 
@@ -129,6 +144,8 @@ let loadScope = ''
 let taskOpenSequence = 0
 const donePageSize = 20
 
+const archivedView = computed(() => view.value === 'list' && route.query.tasks === 'archived')
+const archivedHasMore = ref(false)
 const projectKey = computed(() => typeof route.query.project === 'string' ? route.query.project : 'all')
 const selectedProjectID = computed(() => {
   const id = Number(projectKey.value)
@@ -137,7 +154,7 @@ const selectedProjectID = computed(() => {
 const selectedProject = computed(() => projects.value.find(project => project.id === selectedProjectID.value) ?? null)
 const view = computed<View>(() => tabs.some(tab => tab.key === route.query.view) ? route.query.view as View : 'board')
 const projectMap = computed<Record<number, Project>>(() => Object.fromEntries(projects.value.map(project => [project.id, project])))
-const doneCount = computed(() => (selectedProject.value ? selectedProject.value.done_task_count : projects.value.filter(project => project.status !== 'archived').reduce((sum, project) => sum + project.done_task_count, 0)) + optimisticDoneDelta.value)
+const doneCount = computed(() => (selectedProject.value ? selectedProject.value.done_task_count - (selectedProject.value.archived_task_count ?? 0) : projects.value.filter(project => project.status !== 'archived').reduce((sum, project) => sum + project.done_task_count - (project.archived_task_count ?? 0), 0)) + optimisticDoneDelta.value)
 const today = ref(localCalendarDate(new Date()))
 const todayView = ref<TodayView | null>(null)
 const todaySections = computed(() => groupTodayTasks(todayView.value, today.value))
@@ -150,7 +167,7 @@ function message(reason: unknown) { return reason instanceof Error ? reason.mess
 
 async function load() {
   const sequence = ++loadSequence
-  const scope = view.value === 'today' ? `today:${today.value}` : `${projectKey.value}:${view.value}`
+  const scope = view.value === 'today' ? `today:${today.value}` : `${projectKey.value}:${view.value}:${archivedView.value}`
   if (scope !== loadScope) { tasks.value = []; todayView.value = null; loadScope = scope }
   loading.value = true
   error.value = ''
@@ -165,6 +182,11 @@ async function load() {
       todayView.value = result
       tasks.value = todaySections.value.flatMap(section => section.tasks)
       return
+    }
+    if (archivedView.value) {
+      const result = await listTasks({ projectId: id ?? undefined, archived: true, limit: 51 })
+      if (sequence !== loadSequence) return
+      archivedHasMore.value = result.length > 50; tasks.value = result.slice(0, 50); return
     }
     const filter = { projectId: id ?? undefined }
     const columns = await Promise.all([
@@ -187,7 +209,7 @@ async function run(action: () => Promise<void>) {
   try { await action(); await load() } catch (reason) { ElMessage.error(message(reason)); await load() } finally { busy.value = false }
 }
 function setQuery(patch: Record<string, string>) {
-  void router.replace({ path: '/projects', query: { project: projectKey.value, view: view.value, ...patch } })
+  void router.replace({ path: '/projects', query: { project: projectKey.value, view: view.value, ...(archivedView.value ? { tasks: 'archived' } : {}), ...patch } })
 }
 function selectProject(key: string) {
   if (key === 'new') { openProjectForm(); return }
@@ -234,6 +256,25 @@ async function saveTask(input: TaskInput) {
 async function changeTaskStatus(task: ProjectTask, status: TaskStatus) {
   if (task.status === status) return
   await persistTask(() => updateTask(task.id, { status }))
+}
+async function archiveTask(task: ProjectTask) {
+  if (task.archived_at) {
+    await run(async () => { await archiveTasks([task.id], false); taskDrawerOpen.value = false; ElMessage.success('已取消归档，任务恢复至已完成列') })
+  } else await confirmArchive([task.id])
+}
+async function confirmArchive(ids: number[]) {
+  if (busy.value || !ids.length) return
+  try { await ElMessageBox.confirm(`归档 ${ids.length} 个已完成任务？任务将从日常看板隐藏，历史记录仍然保留。`, '确认归档', { confirmButtonText: '归档', cancelButtonText: '取消' }) } catch { return }
+  await run(async () => { await archiveTasks(ids); if (editingTask.value && ids.includes(editingTask.value.id)) taskDrawerOpen.value = false; ElMessage.success(`已归档 ${ids.length} 个任务`) })
+}
+async function loadMoreArchived() {
+  if (busy.value || loading.value) return
+  busy.value = true
+  const sequence = loadSequence
+  try {
+    const result = await listTasks({ projectId: selectedProjectID.value ?? undefined, archived: true, limit: 51, offset: tasks.value.length })
+    if (sequence === loadSequence) { archivedHasMore.value = result.length > 50; tasks.value.push(...result.slice(0, 50)) }
+  } catch (reason) { ElMessage.error(message(reason)) } finally { busy.value = false }
 }
 async function removeTask(task: ProjectTask) {
   try {
@@ -307,7 +348,7 @@ onMounted(() => { void load(); dateTimer = window.setInterval(refreshDate, 60_00
 onBeforeUnmount(() => { ++loadSequence; window.clearInterval(dateTimer); document.removeEventListener('visibilitychange', refreshDate) })
 onBeforeRouteLeave(async () => !taskDrawerOpen.value || !taskDrawer.value || await taskDrawer.value.canReplace())
 watch(() => [selectedProjectID.value, view.value], () => { if (view.value === 'board' && selectedProject.value?.status === 'active') rememberProject(selectedProject.value.id) })
-watch(() => [projectKey.value, view.value], () => { void load() })
+watch(() => [projectKey.value, view.value, archivedView.value], () => { void load() })
 watch(() => route.query.task, async value => {
   const sequence = ++taskOpenSequence
   const id = Number(value)
@@ -329,6 +370,7 @@ watch(() => route.query.task, async value => {
 </script>
 
 <style scoped>
+.archive-controls { display: flex; gap: 8px; margin-bottom: 14px; }
 .projects-page { max-width: 1440px; }
 .project-records { margin-top: 18px; border-top: 1px solid var(--border-subtle); padding-top: 16px; }
 .project-records summary { color: var(--text-secondary); font-size: 14px; cursor: pointer; }

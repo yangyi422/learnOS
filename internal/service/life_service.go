@@ -143,3 +143,16 @@ func (s *LifeService) AddEntry(ctx context.Context, user, id uint, in LifeEntryI
 	}
 	return s.repo.AddEntry(ctx, user, id, model.LifeGoalEntry{CreationKey: keyPointer(in.CreationKey), OccurredOn: in.OccurredOn, Content: in.Content, Reason: in.Reason})
 }
+
+func (s *LifeService) EditEntry(ctx context.Context, user, goalID, entryID uint, in LifeEntryInput) (*model.LifeGoalEntry, error) {
+	in.Content = strings.TrimSpace(in.Content)
+	in.Reason = strings.TrimSpace(in.Reason)
+	// A status-only historical record legitimately has no textual content.
+	if !lifeText(in.Content, 10000) || !lifeText(in.Reason, 4000) || !lifeDate(in.OccurredOn) {
+		return nil, ErrInvalidLifeInput
+	}
+	return s.repo.EditEntry(ctx, user, goalID, entryID, model.LifeGoalEntry{Content: in.Content, Reason: in.Reason, OccurredOn: in.OccurredOn})
+}
+func (s *LifeService) DeleteEntry(ctx context.Context, user, goalID, entryID uint) error {
+	return s.repo.DeleteEntry(ctx, user, goalID, entryID)
+}

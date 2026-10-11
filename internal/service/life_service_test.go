@@ -466,3 +466,81 @@ func TestLifeGoalUpdateFailureRollsBackHistory(t *testing.T) {
 		t.Fatal(read, entries, err)
 	}
 }
+
+func TestLifeEntryEditingDeletionAndOwnership(t *testing.T) {
+	s, db := lifeTestService(t)
+	ctx := context.Background()
+	goal, err := s.SaveGoal(ctx, 1, 0, goalInput("edit-entry-goal"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := goal.UpdatedAt
+	entry, err := s.AddEntry(ctx, 1, goal.ID, LifeEntryInput{CreationKey: "entry-edit", OccurredOn: "2020-01-01", Content: "原判断", Reason: "原原因"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed := LifeEntryInput{OccurredOn: "2027-03-01", Content: "完整的新判断", Reason: "环境变化"}
+	for _, user := range []uint{2, 1} {
+		id := goal.ID
+		if user == 1 {
+			id = 999
+		}
+		if _, err = s.EditEntry(ctx, user, id, entry.ID, changed); !errors.Is(err, gorm.ErrRecordNotFound) {
+			t.Fatal("owner/goal isolation", err)
+		}
+		if err = s.DeleteEntry(ctx, user, id, entry.ID); !errors.Is(err, gorm.ErrRecordNotFound) {
+			t.Fatal(err)
+		}
+	}
+	if _, err = s.EditEntry(ctx, 1, goal.ID, entry.ID, LifeEntryInput{OccurredOn: "2026-02-30", Content: "x"}); !errors.Is(err, ErrInvalidLifeInput) {
+		t.Fatal(err)
+	}
+	updated, err := s.EditEntry(ctx, 1, goal.ID, entry.ID, changed)
+	if err != nil || updated.ID != entry.ID || updated.Content != changed.Content || !updated.CreatedAt.Equal(entry.CreatedAt) {
+		t.Fatal(updated, err)
+	}
+	detail, entries, _, err := s.Goal(ctx, 1, goal.ID)
+	if err != nil || len(entries) != 1 || entries[0].OccurredOn != "2027-03-01" || !detail.UpdatedAt.After(old) {
+		t.Fatal(detail, entries, err)
+	}
+	status := goalInput("")
+	status.Status = "active"
+	status.StatusDate = "2026-10-09"
+	if _, err = s.SaveGoal(ctx, 1, goal.ID, status); err != nil {
+		t.Fatal(err)
+	}
+	_, entries, _, _ = s.Goal(ctx, 1, goal.ID)
+	var transition model.LifeGoalEntry
+	for _, e := range entries {
+		if e.ToStatus != "" {
+			transition = e
+		}
+	}
+	statusEntry, err := s.EditEntry(ctx, 1, goal.ID, transition.ID, LifeEntryInput{OccurredOn: "2026-10-08", Reason: "补充原因"})
+	if err != nil || statusEntry.ToStatus != "active" || statusEntry.FromStatus != "considering" {
+		t.Fatal(statusEntry, err)
+	}
+	if err = s.DeleteEntry(ctx, 1, goal.ID, transition.ID); err != nil {
+		t.Fatal(err)
+	}
+	detail, entries, _, _ = s.Goal(ctx, 1, goal.ID)
+	if detail.Status != "active" || len(entries) != 1 {
+		t.Fatal(detail, entries)
+	}
+	db.Exec("CREATE TRIGGER reject_entry_goal_update BEFORE UPDATE ON life_goals BEGIN SELECT RAISE(ABORT, 'failure'); END")
+	if err = s.DeleteEntry(ctx, 1, goal.ID, entry.ID); err == nil {
+		t.Fatal("rollback failure not detected")
+	}
+	_, entries, _, _ = s.Goal(ctx, 1, goal.ID)
+	if len(entries) != 1 {
+		t.Fatal("deleted on failed transaction")
+	}
+	db.Exec("DROP TRIGGER reject_entry_goal_update")
+	if err = s.DeleteEntry(ctx, 1, goal.ID, entry.ID); err != nil {
+		t.Fatal(err)
+	}
+	_, entries, _, _ = s.Goal(ctx, 1, goal.ID)
+	if len(entries) != 0 {
+		t.Fatal(entries)
+	}
+}

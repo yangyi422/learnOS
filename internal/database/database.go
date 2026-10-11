@@ -83,6 +83,11 @@ func Open(cfg config.Config) (*gorm.DB, error) {
 		&model.LifeEvent{},
 		&model.LifeGoal{},
 		&model.LifeGoalEntry{},
+		&model.AssetSnapshot{},
+		&model.GoalAssetReference{},
+		&model.MonthlyReview{}, &model.MonthlyReviewFacts{},
+		&model.LibraryCollection{}, &model.LibrarySection{}, &model.LibraryPage{},
+		&model.FinanceLedger{}, &model.FinanceTransaction{}, &model.FinanceBatch{}, &model.FinanceChange{},
 	); err != nil {
 		if preMigrationBackup.Path != "" {
 			return nil, fmt.Errorf("migrate database: %w (pre-migration backup: %s)", err, preMigrationBackup.Path)

@@ -75,15 +75,16 @@
       </el-form>
       <details v-if="task" class="task-drawer__activity">
         <summary>记录</summary>
-        <div><p>创建：{{ formatTime(task.created_at) }}</p><p>最近修改：{{ formatTime(task.updated_at) }}</p><p v-if="task.completed_at">完成：{{ formatTime(task.completed_at) }}</p></div>
+        <div><p>创建：{{ formatTime(task.created_at) }}</p><p>最近修改：{{ formatTime(task.updated_at) }}</p><p v-if="task.archived_at">归档：{{ formatTime(task.archived_at) }}</p><p v-if="task.completed_at">完成：{{ formatTime(task.completed_at) }}</p></div>
       </details>
       </div>
       <footer class="task-drawer__actions">
         <el-button v-if="task && !editing" text type="danger" :disabled="busy" @click="$emit('delete', task)">删除任务</el-button>
         <div class="task-drawer__actions-main">
           <template v-if="task && !editing">
-            <el-button :disabled="busy" @click="startEditing">编辑</el-button>
-            <el-button type="primary" :loading="busy" @click="$emit('status', task, task.status === 'done' ? 'next' : 'done')">{{ task.status === 'done' ? '重新打开' : '标记完成' }}</el-button>
+            <el-button v-if="!task.archived_at" :disabled="busy" @click="startEditing">编辑</el-button>
+            <el-button v-if="task.status === 'done'" :disabled="busy" @click="$emit('archive', task)">{{ task.archived_at ? '取消归档' : '归档' }}</el-button>
+            <el-button v-if="!task.archived_at" type="primary" :loading="busy" @click="$emit('status', task, task.status === 'done' ? 'next' : 'done')">{{ task.status === 'done' ? '重新打开' : '标记完成' }}</el-button>
           </template>
           <template v-else>
             <el-button :disabled="busy" @click="cancelEditing">取消</el-button>
@@ -114,6 +115,7 @@ const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
   (e: 'save', input: TaskInput): void
   (e: 'delete', task: ProjectTask): void
+  (e: 'archive', task: ProjectTask): void
   (e: 'status', task: ProjectTask, status: TaskStatus): void
 }>()
 const width = ref(window.innerWidth)

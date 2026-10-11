@@ -69,3 +69,11 @@ Inbox 的「记录」入口展示所有记录（包括未关联项目、已归�
 - 记录组件与 API：`web/src/components/RecordsPanel.vue`、`web/src/components/RecordDialog.vue`、`web/src/components/ExternalLink.vue`、`web/src/components/LinkedText.vue`、`web/src/api/records.ts`、`web/src/api/inbox.ts`。
 - 前端工具与验证：`web/src/utils/recentProject.ts`、`web/src/utils/externalLinks.ts`、`web/src/utils/externalLinks.test.ts`、`web/src/api/records.test.ts`、`web/e2e/records.spec.ts`。
 - 设计及进度：`docs/PROJECTS.md`、`docs/DATABASE.md`、`docs/ui-design.md`、`docs/ROADMAP.md`。
+
+## 手动任务归档（Schema 27）
+
+任务的 `archived_at` 是独立于业务状态的可空时间戳，旧任务默认不归档。仅 `done` 任务可归档；归档/恢复只更新归档时间及修改时间，不改变完成时间、可靠完成时间、排序、内容、项目或下一步标记，不生成新的完成事件。
+
+已完成任务阅读抽屉提供归档，已完成列提供按需展开的多选和数量确认。批量操作最多 500 项，校验所有 ID 的归属及完成状态后在同一事务写入；重复请求保持已有归档时间。归档任务详情只读，先取消归档才能编辑或重新打开。默认任务查询、看板、今天与首页不包含归档任务；项目列表中的“已归档任务”按项目筛选、每页 50 项并可恢复，URL `view=list&tasks=archived&project=ID` 保存上下文。归档列表也可访问已归档项目中的任务。
+
+新增认证接口 `POST /api/v1/tasks/archive`，请求 `{ "task_ids": [1, 2], "archived": true }`；`false` 取消归档。`GET /api/v1/tasks?archived=true` 返回归档任务，省略或 false 返回未归档任务。归档仍是正常任务记录，单个 ID 详情和原始来源引用继续有效。项目 `done_task_count` 保留所有已完成任务的历史总数，`archived_task_count` 是其中归档项；看板已完成数量为两者之差。月度回顾继续按 `actual_completed_at` 查询，包含归档任务。整库备份涵盖新字段。

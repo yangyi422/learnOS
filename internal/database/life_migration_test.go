@@ -80,7 +80,7 @@ func TestLifeSchema21MigrationAndBackup(t *testing.T) {
 	}
 	var metadata model.SystemMetadata
 	db.First(&metadata, 1)
-	if metadata.SchemaVersion != 21 {
+	if metadata.SchemaVersion != model.CurrentSchemaVersion {
 		t.Fatal(metadata)
 	}
 }

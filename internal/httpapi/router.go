@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"errors"
+	"io"
 	"io/fs"
 	"net/http"
 	"strings"
@@ -18,7 +20,17 @@ func NewRouter(cfg config.Config, handler *Handler, webFS fs.FS, userServices ..
 	}
 
 	router := gin.New()
-	router.Use(gin.Logger(), gin.Recovery())
+	// Financial search terms can contain private notes. Never put their query
+	// strings into Gin access logs; batch facts provide the financial audit trail.
+	normalRecovery := gin.Recovery()
+	financeRecovery := gin.CustomRecoveryWithWriter(io.Discard, func(c *gin.Context, _ any) { financeError(c, errors.New("finance request failed")); c.Abort() })
+	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{Skip: func(c *gin.Context) bool { return privateFinancePath(c.Request.URL.Path) }}), func(c *gin.Context) {
+		if privateFinancePath(c.Request.URL.Path) {
+			financeRecovery(c)
+		} else {
+			normalRecovery(c)
+		}
+	})
 
 	// Keep health checks public so Docker and reverse proxies can probe the app.
 	router.GET("/healthz", handler.Health)
@@ -53,6 +65,7 @@ func NewRouter(cfg config.Config, handler *Handler, webFS fs.FS, userServices ..
 		api.POST("/projects/:id/tasks", handler.CreateProjectTask)
 		api.PATCH("/projects/:id/tasks/:taskId", handler.UpdateProjectTask)
 		api.DELETE("/projects/:id/tasks/:taskId", handler.DeleteProjectTask)
+		api.POST("/tasks/archive", handler.ArchiveTasks)
 		api.GET("/tasks", handler.ListTasks)
 		api.GET("/tasks/:id", handler.GetTask)
 		api.POST("/tasks", handler.CreateTask)
@@ -66,6 +79,44 @@ func NewRouter(cfg config.Config, handler *Handler, webFS fs.FS, userServices ..
 		api.PATCH("/inbox/:id", handler.UpdateInboxItem)
 		api.POST("/inbox/:id/convert-to-task", handler.ConvertInboxItemToTask)
 		api.POST("/inbox/:id/convert-to-record", handler.ConvertInboxItemToRecord)
+		api.GET("/library/collections", handler.LibraryCollections)
+		api.POST("/library/collections", handler.SaveLibraryCollection)
+		api.GET("/library/collections/:collection", handler.LibraryCollection)
+		api.PUT("/library/collections/:collection", handler.SaveLibraryCollection)
+		api.DELETE("/library/collections/:collection", handler.DeleteLibraryCollection)
+		api.GET("/library/collections/:collection/links", handler.LibraryLinks)
+		api.GET("/library/collections/:collection/export", handler.ExportLibrary)
+		api.POST("/library/collections/:collection/sections", handler.SaveLibrarySection)
+		api.PUT("/library/collections/:collection/sections/:section", handler.SaveLibrarySection)
+		api.DELETE("/library/collections/:collection/sections/:section", handler.DeleteLibrarySection)
+		api.GET("/library/collections/:collection/pages", handler.LibraryPages)
+		api.POST("/library/collections/:collection/pages", handler.SaveLibraryPage)
+		api.GET("/library/collections/:collection/pages/:page", handler.LibraryPage)
+		api.PUT("/library/collections/:collection/pages/:page", handler.SaveLibraryPage)
+		api.DELETE("/library/collections/:collection/pages/:page", handler.DeleteLibraryPage)
+		api.GET("/life/reviews", handler.MonthlyReviews)
+		api.GET("/life/reviews/:month", handler.MonthlyReview)
+		api.POST("/life/reviews/:month/preview", handler.PreviewMonthlyReview)
+		api.PUT("/life/reviews/:month", handler.SaveMonthlyReview)
+		api.GET("/life/reviews/:month/history/:snapshot", handler.MonthlyReviewHistory)
+		api.GET("/finance/assets/:id/goals", handler.AssetGoals)
+		api.GET("/life/goals/:id/assets", handler.GoalAssets)
+		api.POST("/life/goals/:id/assets/:assetId", handler.SaveGoalAsset)
+		api.PUT("/life/goals/:id/assets/:assetId", handler.SaveGoalAsset)
+		api.DELETE("/life/goals/:id/assets/:assetId", handler.DeleteGoalAsset)
+		api.GET("/finance/assets", handler.AssetList)
+		api.POST("/finance/assets", handler.AssetSave)
+		api.GET("/finance/assets/:id", handler.AssetGet)
+		api.PUT("/finance/assets/:id", handler.AssetSave)
+		api.DELETE("/finance/assets/:id", handler.AssetDelete)
+		api.GET("/finance/ledgers", handler.FinanceLedgers)
+		api.POST("/finance/preview", handler.PreviewFinance)
+		api.POST("/finance/batches/:id/import", handler.ImportFinance)
+		api.POST("/finance/batches/:id/undo", handler.UndoFinance)
+		api.GET("/finance/ledgers/:ledger/summary", handler.FinanceSummary)
+		api.GET("/finance/ledgers/:ledger/transactions", handler.FinanceTransactions)
+		api.GET("/finance/ledgers/:ledger/transactions/:id", handler.FinanceTransaction)
+		api.GET("/finance/ledgers/:ledger/batches", handler.FinanceBatches)
 		api.GET("/life/events", handler.ListLifeEvents)
 		api.POST("/life/events", handler.CreateLifeEvent)
 		api.GET("/life/events/:id", handler.GetLifeEvent)
@@ -76,6 +127,8 @@ func NewRouter(cfg config.Config, handler *Handler, webFS fs.FS, userServices ..
 		api.GET("/life/goals/:id", handler.GetLifeGoal)
 		api.PUT("/life/goals/:id", handler.UpdateLifeGoal)
 		api.POST("/life/goals/:id/entries", handler.AddLifeGoalEntry)
+		api.PUT("/life/goals/:id/entries/:entryId", handler.UpdateLifeGoalEntry)
+		api.DELETE("/life/goals/:id/entries/:entryId", handler.DeleteLifeGoalEntry)
 		api.GET("/life/sources/:type/:id", handler.GetLifeSource)
 		api.POST("/courses/:id/graduate", handler.GraduateCourse)
 		api.POST("/inbox/:id/convert-to-life-event", handler.ConvertInboxToLifeEvent)
@@ -189,4 +242,8 @@ func NewRouter(cfg config.Config, handler *Handler, webFS fs.FS, userServices ..
 	})
 
 	return router
+}
+
+func privateFinancePath(path string) bool {
+	return strings.HasPrefix(path, "/api/v1/library") || strings.HasPrefix(path, "/api/v1/life/reviews") || strings.HasPrefix(path, "/api/v1/finance/") || (strings.HasPrefix(path, "/api/v1/life/goals/") && strings.Contains(path, "/assets"))
 }

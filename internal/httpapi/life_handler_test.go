@@ -52,6 +52,11 @@ func TestLifeAPIAndAuthentication(t *testing.T) {
 	if got := call("GET", "/api/v1/life/goals/1", "", 200); !strings.Contains(got, "开始准备") || !strings.Contains(got, "考虑通勤") {
 		t.Fatal(got)
 	}
+	call("PUT", "/api/v1/life/goals/1/entries/2", `{"occurred_on":"2020-01-01","content":"调整判断","reason":"调整日期"}`, 200)
+	call("PUT", "/api/v1/life/goals/1/entries/2", `{"occurred_on":"2020-02-30","content":"错误日期"}`, 400)
+	call("DELETE", "/api/v1/life/goals/999/entries/2", "", 404)
+	call("DELETE", "/api/v1/life/goals/1/entries/2", "", 200)
+	call("DELETE", "/api/v1/life/goals/1/entries/2", "", 404)
 	foreign := model.LifeEvent{UserID: 999, Title: "private", OccurredOn: "2020-01-01"}
 	db.Create(&foreign)
 	call("GET", "/api/v1/life/events/2", "", 404)

@@ -11,7 +11,7 @@ import (
 
 func lifeError(c *gin.Context, err error) {
 	status, code, message, retry := 500, "LIFE_SAVE_FAILED", "生活档案暂时无法保存，请重试。", true
-	if errors.Is(err, service.ErrInvalidLifeInput) {
+	if errors.Is(err, service.ErrInvalidLifeInput) || errors.Is(err, gorm.ErrInvalidData) {
 		status, code, message, retry = 400, "INVALID_LIFE_INPUT", "请检查名称、日期、领域和链接。", false
 	} else if errors.Is(err, gorm.ErrRecordNotFound) {
 		status, code, message, retry = 404, "LIFE_NOT_FOUND", "记录或关联对象已不存在，或不属于当前用户。", false
@@ -212,4 +212,49 @@ func (h *Handler) GraduateCourse(c *gin.Context) {
 		return
 	}
 	c.JSON(200, gin.H{"data": gin.H{"status": "completed"}})
+}
+
+func (h *Handler) UpdateLifeGoalEntry(c *gin.Context) {
+	user, ok := projectUserID(c)
+	if !ok {
+		return
+	}
+	goal, ok := projectPathID(c, "id")
+	if !ok {
+		return
+	}
+	entry, ok := projectPathID(c, "entryId")
+	if !ok {
+		return
+	}
+	var input service.LifeEntryInput
+	if c.ShouldBindJSON(&input) != nil {
+		lifeError(c, service.ErrInvalidLifeInput)
+		return
+	}
+	result, err := h.life.EditEntry(c.Request.Context(), user, goal, entry, input)
+	if err != nil {
+		lifeError(c, err)
+		return
+	}
+	c.JSON(200, gin.H{"data": result})
+}
+func (h *Handler) DeleteLifeGoalEntry(c *gin.Context) {
+	user, ok := projectUserID(c)
+	if !ok {
+		return
+	}
+	goal, ok := projectPathID(c, "id")
+	if !ok {
+		return
+	}
+	entry, ok := projectPathID(c, "entryId")
+	if !ok {
+		return
+	}
+	if err := h.life.DeleteEntry(c.Request.Context(), user, goal, entry); err != nil {
+		lifeError(c, err)
+		return
+	}
+	c.JSON(200, gin.H{"data": gin.H{"deleted": true}})
 }

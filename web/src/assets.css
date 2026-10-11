@@ -1,0 +1,26 @@
+.asset-archive { min-width: 0; font-variant-numeric: tabular-nums; }
+.asset-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+.asset-heading h2, .asset-heading h3 { margin: 0 0 8px; }
+.asset-archive h3 { font-size: 17px; font-weight: 600; }
+.asset-body { min-height: 200px; margin-top: 22px; }
+.asset-totals > div { min-width: 0; padding: 22px; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 9px; }
+.asset-composition { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; padding: 12px 0; }
+.asset-composition > div { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.asset-composition span { font-size: 13px; color: var(--text-secondary); }
+.asset-composition strong { font-size: 15px; font-weight: 500; overflow-wrap: anywhere; }
+.asset-note-preview { color: var(--text-secondary); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
+.asset-chart { overflow-x: auto; max-width: 100%; }
+.asset-chart svg { width: 100%; min-width: 600px; display: block; }
+.asset-grid { stroke: var(--border-subtle); stroke-width: 1; }
+.asset-axis { fill: var(--text-secondary); font-size: 12px; }
+.asset-line { fill: none; stroke: var(--color-primary); stroke-width: 2; }
+.asset-point { fill: var(--color-primary); cursor: pointer; }
+.asset-point:focus { outline: none; stroke: var(--text-primary); stroke-width: 3; }
+.asset-template, .asset-preview { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 16px 0; }
+.asset-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; }
+.asset-preview { padding: 16px; background: var(--bg-surface); border-radius: 8px; font-size: 13px; }
+.asset-preview span { overflow-wrap: anywhere; }
+.asset-validation { color: var(--text-secondary); }
+.asset-dialog-footer { display: flex; gap: 8px; align-items: center; }
+.asset-footer-spacer { flex: 1; }
+@media(max-width:700px) { .asset-composition { grid-template-columns: repeat(2,minmax(0,1fr)); } .asset-totals > div { padding: 12px; } .asset-form-grid { grid-template-columns: 1fr; } .asset-dialog-footer { flex-wrap: wrap; } }

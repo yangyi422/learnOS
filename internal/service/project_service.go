@@ -143,7 +143,7 @@ func (s *ProjectService) Update(ctx context.Context, userID, projectID uint, pat
 	return s.projects.Update(ctx, userID, projectID, changes)
 }
 
-func (s *ProjectService) ListTasks(ctx context.Context, userID uint, projectID *uint, status, due string, limit, offset int) ([]model.ProjectTask, error) {
+func (s *ProjectService) ListTasks(ctx context.Context, userID uint, projectID *uint, status, due string, limit, offset int, archived ...bool) ([]model.ProjectTask, error) {
 	if status != "" && !taskStatus(status) {
 		return nil, ErrInvalidProjectInput
 	}
@@ -161,7 +161,7 @@ func (s *ProjectService) ListTasks(ctx context.Context, userID uint, projectID *
 			return nil, err
 		}
 	}
-	tasks, err := s.projects.ListTasks(ctx, userID, projectID, status, due, limit, offset)
+	tasks, err := s.projects.ListTasks(ctx, userID, projectID, status, due, limit, offset, archived...)
 	if tasks == nil {
 		tasks = []model.ProjectTask{}
 	}
@@ -366,4 +366,18 @@ func oneOf(value string, allowed ...string) bool {
 		}
 	}
 	return false
+}
+
+func (s *ProjectService) ArchiveTasks(ctx context.Context, userID uint, ids []uint, archive bool) error {
+	if len(ids) == 0 || len(ids) > 500 {
+		return ErrInvalidProjectInput
+	}
+	seen := map[uint]bool{}
+	for _, id := range ids {
+		if id == 0 || seen[id] {
+			return ErrInvalidProjectInput
+		}
+		seen[id] = true
+	}
+	return s.projects.ArchiveTasks(ctx, userID, ids, archive)
 }

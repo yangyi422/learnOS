@@ -30,6 +30,14 @@ async function mockLife(page: Page) {
     if (eventPath) { const index = events.findIndex(e => e.id === Number(eventPath[1])); if (index < 0) return failure('生活事件已不存在。', 404); if (method === 'GET') return reply(events[index]); if (method === 'PUT') { if (state.failSave) return failure('保存失败，请重试。'); Object.assign(events[index]!, req.postDataJSON()); return reply(events[index]) }; events.splice(index, 1); return reply({ deleted: true }) }
     if (path === '/api/v1/life/goals' && method === 'GET') return reply(goals)
     if (path === '/api/v1/life/goals' && method === 'POST') { const input = req.postDataJSON(); if (state.failSave) return failure('保存失败，请重试。'); const goal = { ...input, id: goals.length + 1, created_at: time, updated_at: time }; goals.push(goal); return reply(goal) }
+    const entryPath = path.match(/^\/api\/v1\/life\/goals\/(\d+)\/entries\/(\d+)$/)
+    if (entryPath) {
+      if (state.failSave) return failure('保存失败，请重试。')
+      const index = entries.findIndex(e => e.id === Number(entryPath[2]) && e.goal_id === Number(entryPath[1]))
+      if (index < 0) return failure('阶段记录不存在', 404)
+      if (method === 'PUT') { Object.assign(entries[index]!, req.postDataJSON()); return reply(entries[index]) }
+      entries.splice(index, 1); return reply({ deleted: true })
+    }
     const goalPath = path.match(/^\/api\/v1\/life\/goals\/(\d+)(\/entries)?$/)
     if (goalPath) {
       const goal = goals.find(g => g.id === Number(goalPath[1]))!; if (!goal) return failure('目标不存在', 404)
@@ -85,4 +93,37 @@ for (const width of [1440, 1280, 768, 390]) test(`生活页面 ${width}px 与深
 
 test('课程正式结业后手动收录，结业操作不自动创建事件', async ({ page }) => {
   const state = await mockLife(page); await page.goto('/courses/2/archive'); await expect(page.getByRole('button', { name: '收录到生活档案' })).toHaveCount(0); await page.getByRole('button', { name: '确认课程结业', exact: true }).click(); await page.locator('.el-message-box').getByRole('button', { name: '确认结业', exact: true }).click(); await expect(page.getByRole('button', { name: '收录到生活档案' })).toBeVisible(); expect(state.events).toHaveLength(0); expect(state.graduateCalls).toBe(1); await page.getByRole('button', { name: '收录到生活档案' }).click(); await expect(dialog(page).getByLabel('事件名称')).toHaveValue('系统思考'); await dialog(page).getByRole('button', { name: '保存', exact: true }).click(); expect(state.events[0]!.source_type).toBe('course'); await page.getByRole('button', { name: '收录到生活档案' }).click(); await expect(dialog(page).getByRole('heading', { name: '系统思考' })).toBeVisible(); expect(state.events).toHaveLength(1)
+})
+
+test('目标概况、阶段编辑改日期与删除保留真实状态及阅读内容', async ({ page }) => {
+  const state = await mockLife(page)
+  state.goals.push({ id: 1, title: '长期居住', why: '与家人共同生活', current_note: '先评估通勤', status: 'active', domain: '', project_id: null, external_url: '', link_name: '', status_date: '', status_reason: '', created_at: time, updated_at: time, project_available: false, project_title: '' })
+  state.entries.push({ id: 1, goal_id: 1, creation_key: 'old', occurred_on: '2020-01-01', content: '原记录完整内容', reason: '最初的想法', from_status: '', to_status: '', created_at: time })
+  await page.goto('/life'); await page.getByRole('tab', { name: '长期目标' }).click()
+  const card = page.locator('.life-goal-card'); await expect(card).toContainText('先评估通勤'); await expect(card).toContainText('更新于'); await card.click()
+  const d = dialog(page); await expect(d).toContainText('与家人共同生活'); await expect(d).toContainText('最近更新'); await expect(d.getByRole('textbox')).toHaveCount(0)
+  await d.getByRole('button', { name: '编辑阶段记录：2020-01-01' }).click(); await d.getByLabel('记录日期').fill('2027-03-01'); await d.getByLabel('记录日期').press('Tab'); await d.getByLabel('进展或决定').fill('重新考虑区域'); state.failSave = true
+  await d.getByRole('button', { name: '保存阶段记录' }).click(); await expect(d.getByText('保存失败，请重试。')).toBeVisible(); await expect(d.getByLabel('进展或决定')).toHaveValue('重新考虑区域')
+  state.failSave = false; await d.getByRole('button', { name: '保存阶段记录' }).click(); await expect(d.locator('.life-history-entry')).toContainText('2027-03-01'); expect(state.entries).toHaveLength(1)
+  await d.getByRole('button', { name: '删除阶段记录：2027-03-01' }).click(); await page.getByRole('button', { name: '取消', exact: true }).click(); expect(state.entries).toHaveLength(1)
+  await d.getByRole('button', { name: '删除阶段记录：2027-03-01' }).click(); await page.getByRole('button', { name: '删除记录', exact: true }).click(); await expect(d.locator('.life-history-entry')).toHaveCount(0); expect(state.goals[0]!.status).toBe('active')
+  await page.keyboard.press('Escape'); await expect(d).not.toBeVisible(); await expect(card).toBeFocused(); await page.reload(); await page.getByRole('tab', { name: '长期目标' }).click(); await page.locator('.life-goal-card').click(); await expect(dialog(page).locator('.life-history-entry')).toHaveCount(0)
+})
+test('时间线跨年、同日记录顺序与真实关联元数据', async ({ page }) => {
+  const state = await mockLife(page)
+  state.goals.push({ id: 1, title: '独立创作', why: '', current_note: '', status: 'considering', domain: '', project_id: null, external_url: '', link_name: '', status_date: '', status_reason: '', created_at: time, updated_at: time, project_available: false, project_title: '' })
+  for (const [id, date] of [[1, '2020-02-03'], [2, '2026-10-08'], [3, '2026-10-08']] as const) state.events.push({ id, title: `经历${id}`, occurred_on: date, description: id === 1 ? '过去的经历' : '', primary_domain: '', secondary_domain: '', milestone: id === 3, goal_id: id === 3 ? 1 : null, external_url: '', link_name: '', source_type: id === 3 ? 'project' : '', source_id: id === 3 ? 1 : null, source_title: id === 3 ? '独立作品' : '', source_available: id === 3, source_status: '', created_at: time, updated_at: time })
+  await page.goto('/life'); await expect(page.locator('.life-month')).toHaveText(['2026 年 10 月', '2020 年 02 月']); await expect(page.locator('.life-event-card h3')).toHaveText(['经历3', '经历2', '经历1']); await expect(page.locator('.life-event-card').first()).toContainText('目标 · 独立创作'); await expect(page.locator('.life-event-card').first()).toContainText('来自项目 · 独立作品')
+  await page.getByRole('button', { name: '经历2', exact: true }).click(); await expect(dialog(page).getByText(/来自|长期目标：|外部资料/)).toHaveCount(0); await page.keyboard.press('Escape'); await expect(dialog(page)).not.toBeVisible()
+})
+
+test('长目标与历史内容在窄屏可阅读，Esc 保护未保存阶段修改', async ({ page }) => {
+  const state = await mockLife(page)
+  state.goals.push({ id: 1, title: '长期个人目标', why: '稳定的个人动机', current_note: '当前的阶段判断', status: 'considering', domain: '', project_id: null, external_url: '', link_name: '', status_date: '', status_reason: '', created_at: time, updated_at: time, project_available: false, project_title: '' })
+  state.entries.push({ id: 1, goal_id: 1, creation_key: 'long-old', occurred_on: '2026-10-08', content: '完整的长期回顾\n'.repeat(150) + '全文末尾', reason: '补充原因', from_status: '', to_status: '', created_at: time })
+  await page.setViewportSize({ width: 390, height: 600 }); await page.goto('/life?goal=1'); const d = dialog(page)
+  await expect(d.getByRole('button', { name: '编辑目标' })).toBeInViewport(); expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  const body = d.locator('.el-dialog__body'); expect(await body.evaluate(e => e.scrollHeight > e.clientHeight)).toBe(true)
+  if (process.env.CAPTURE_VISUALS) await page.screenshot({ path: '/app/test-results/life-goal-detail-mobile.png', fullPage: true, animations: 'disabled' })
+  await d.getByRole('button', { name: '编辑阶段记录：2026-10-08' }).click(); await d.getByLabel('进展或决定').fill('未保存的新判断'); await page.keyboard.press('Escape'); await page.getByRole('button', { name: '继续编辑', exact: true }).click(); await expect(d.getByLabel('进展或决定')).toHaveValue('未保存的新判断'); await d.getByRole('button', { name: '取消记录' }).click(); await page.getByRole('button', { name: '放弃修改', exact: true }).click(); expect(state.entries[0]!.content).toContain('全文末尾'); await page.keyboard.press('Escape'); await expect(d).not.toBeVisible()
 })

@@ -69,7 +69,11 @@ func (r *LearningRepository) AdvanceLesson(ctx context.Context, courseID, lesson
 		if course.CurrentLessonID == nil || *course.CurrentLessonID != lessonID {
 			return gorm.ErrInvalidData
 		}
-		if err := tx.Model(&lesson).Update("status", status).Error; err != nil {
+		changes := map[string]interface{}{"status": status}
+		if status == model.LessonStatusCompleted && lesson.Status != model.LessonStatusCompleted {
+			changes["completed_at"] = time.Now().UTC()
+		}
+		if err := tx.Model(&lesson).Updates(changes).Error; err != nil {
 			return err
 		}
 		var candidates []model.Lesson

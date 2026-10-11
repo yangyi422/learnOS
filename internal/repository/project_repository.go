@@ -13,6 +13,7 @@ import (
 type ProjectRepository struct{ db *gorm.DB }
 
 var ErrTaskOrder = errors.New("invalid task order")
+var ErrTaskArchive = errors.New("only completed tasks can be archived; restore archived tasks before editing")
 var ErrTaskConflict = errors.New("task changed since it was loaded")
 
 func NewProjectRepository(db *gorm.DB) *ProjectRepository { return &ProjectRepository{db: db} }
@@ -26,12 +27,13 @@ func (r *ProjectRepository) List(ctx context.Context, userID uint) ([]model.Proj
 		ProjectID uint
 		Status    string
 		Total     int64
+		Archived  int64
 	}
 	var counts []countRow
 	if err := r.db.WithContext(ctx).Model(&model.ProjectTask{}).
 		Joins("JOIN projects ON projects.id = project_tasks.project_id").
 		Where("projects.user_id = ?", userID).
-		Select("project_tasks.project_id, project_tasks.status, COUNT(*) AS total").
+		Select("project_tasks.project_id, project_tasks.status, COUNT(*) AS total, SUM(CASE WHEN project_tasks.archived_at IS NOT NULL THEN 1 ELSE 0 END) AS archived").
 		Group("project_tasks.project_id, project_tasks.status").Scan(&counts).Error; err != nil {
 		return nil, err
 	}
@@ -44,6 +46,7 @@ func (r *ProjectRepository) List(ctx context.Context, userID uint) ([]model.Proj
 		if project == nil {
 			continue
 		}
+		project.ArchivedTaskCount += row.Archived
 		if row.Status == "done" {
 			project.DoneTaskCount += row.Total
 		} else {
@@ -70,24 +73,36 @@ func (r *ProjectRepository) GetProject(ctx context.Context, userID, projectID ui
 }
 
 func (r *ProjectRepository) Update(ctx context.Context, userID, projectID uint, changes map[string]interface{}) error {
-	result := r.db.WithContext(ctx).Model(&model.Project{}).Where("id = ? AND user_id = ?", projectID, userID).Updates(changes)
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return gorm.ErrRecordNotFound
-	}
-	return nil
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var old model.Project
+		if err := tx.Where("id = ? AND user_id = ?", projectID, userID).First(&old).Error; err != nil {
+			return err
+		}
+		if status, ok := changes["status"].(string); ok {
+			if status == "completed" && old.Status != "completed" {
+				changes["completed_at"] = time.Now().UTC()
+			}
+			if status == "active" && old.Status != "active" {
+				changes["completed_at"] = nil
+			}
+		}
+		return tx.Model(&old).Updates(changes).Error
+	})
 }
 
-func (r *ProjectRepository) ListTasks(ctx context.Context, userID uint, projectID *uint, status, due string, limit, offset int) ([]model.ProjectTask, error) {
+func (r *ProjectRepository) ListTasks(ctx context.Context, userID uint, projectID *uint, status, due string, limit, offset int, archived ...bool) ([]model.ProjectTask, error) {
 	var tasks []model.ProjectTask
 	query := r.db.WithContext(ctx).Model(&model.ProjectTask{}).
 		Joins("JOIN projects ON projects.id = project_tasks.project_id").
 		Where("projects.user_id = ?", userID)
+	if len(archived) > 0 && archived[0] {
+		query = query.Where("project_tasks.archived_at IS NOT NULL")
+	} else {
+		query = query.Where("project_tasks.archived_at IS NULL")
+	}
 	if projectID != nil {
 		query = query.Where("project_tasks.project_id = ?", *projectID)
-	} else {
+	} else if !(len(archived) > 0 && archived[0]) {
 		query = query.Where("projects.status <> ?", "archived")
 	}
 	if status != "" {
@@ -147,6 +162,7 @@ func (r *ProjectRepository) CreateTaskInTx(tx *gorm.DB, userID, projectID uint, 
 	if task.Status == "done" {
 		now := time.Now().UTC()
 		task.CompletedAt = &now
+		task.ActualCompletedAt = &now
 	}
 	if err := tx.Create(task).Error; err != nil {
 		return err
@@ -160,6 +176,9 @@ func (r *ProjectRepository) UpdateTask(ctx context.Context, userID, taskID uint,
 		if err := ownedTask(tx, userID, taskID, &task); err != nil {
 			return err
 		}
+		if task.ArchivedAt != nil {
+			return ErrTaskArchive
+		}
 		if status, ok := changes["status"].(string); ok && status != task.Status {
 			var maxOrder int64
 			if err := tx.Model(&model.ProjectTask{}).Joins("JOIN projects ON projects.id = project_tasks.project_id").
@@ -170,8 +189,10 @@ func (r *ProjectRepository) UpdateTask(ctx context.Context, userID, taskID uint,
 			changes["sort_order"] = maxOrder + 1024
 			if status == "done" {
 				changes["completed_at"] = time.Now().UTC()
+				changes["actual_completed_at"] = changes["completed_at"]
 			} else {
 				changes["completed_at"] = nil
+				changes["actual_completed_at"] = nil
 			}
 		}
 		if err := tx.Model(&task).Updates(changes).Error; err != nil {
@@ -199,12 +220,15 @@ func (r *ProjectRepository) MoveTask(ctx context.Context, userID, taskID uint, s
 		if err := ownedTask(tx, userID, taskID, &task); err != nil {
 			return err
 		}
+		if task.ArchivedAt != nil {
+			return ErrTaskArchive
+		}
 		if expectedUpdatedAt != nil && !task.UpdatedAt.Equal(*expectedUpdatedAt) {
 			return ErrTaskConflict
 		}
 		var column []model.ProjectTask
 		if err := tx.Model(&model.ProjectTask{}).Joins("JOIN projects ON projects.id = project_tasks.project_id").
-			Where("projects.user_id = ? AND project_tasks.status = ? AND project_tasks.id <> ?", userID, status, taskID).
+			Where("projects.user_id = ? AND project_tasks.status = ? AND project_tasks.id <> ? AND project_tasks.archived_at IS NULL", userID, status, taskID).
 			Order("project_tasks.sort_order ASC, project_tasks.id ASC").Find(&column).Error; err != nil {
 			return err
 		}
@@ -266,9 +290,11 @@ func (r *ProjectRepository) MoveTask(ctx context.Context, userID, taskID uint, s
 		changes := map[string]interface{}{"status": status, "sort_order": order}
 		if status == "done" && task.Status != "done" {
 			changes["completed_at"] = time.Now().UTC()
+			changes["actual_completed_at"] = changes["completed_at"]
 		}
 		if status != "done" && task.Status == "done" {
 			changes["completed_at"] = nil
+			changes["actual_completed_at"] = nil
 		}
 		if err := tx.Model(&task).Updates(changes).Error; err != nil {
 			return err
@@ -309,4 +335,33 @@ func ownedTask(tx *gorm.DB, userID, taskID uint, task *model.ProjectTask) error 
 
 func touchProject(tx *gorm.DB, projectID uint) error {
 	return tx.Model(&model.Project{}).Where("id = ?", projectID).Update("updated_at", time.Now().UTC()).Error
+}
+
+// ArchiveTasks changes visibility only. Validate the entire batch before writing.
+func (r *ProjectRepository) ArchiveTasks(ctx context.Context, userID uint, ids []uint, archive bool) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		tasks := make([]model.ProjectTask, len(ids))
+		for i, id := range ids {
+			if err := ownedTask(tx, userID, id, &tasks[i]); err != nil {
+				return err
+			}
+			if tasks[i].Status != "done" {
+				return ErrTaskArchive
+			}
+		}
+		now := time.Now().UTC()
+		for _, task := range tasks {
+			if (task.ArchivedAt != nil) == archive {
+				continue
+			}
+			var at *time.Time
+			if archive {
+				at = &now
+			}
+			if err := tx.Model(&task).Updates(map[string]interface{}{"archived_at": at}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }

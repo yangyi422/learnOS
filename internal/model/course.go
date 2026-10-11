@@ -12,6 +12,7 @@ const (
 )
 
 type Course struct {
+	CompletedAt     *time.Time   `json:"completed_at"`
 	ID              uint         `json:"id" gorm:"primaryKey"`
 	UserID          uint         `json:"user_id" gorm:"not null;default:0;index"`
 	Name            string       `json:"name" gorm:"size:120;not null"`

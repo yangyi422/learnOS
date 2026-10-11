@@ -89,6 +89,19 @@ func TestProjectAPIWorkflowAndValidation(t *testing.T) {
 	if !strings.Contains(completed, `"completed_at":"`) {
 		t.Fatalf("missing completion timestamp: %s", completed)
 	}
+	call(http.MethodPost, "/api/v1/tasks/archive", `{"task_ids":[1]}`, http.StatusBadRequest)
+	call(http.MethodPost, "/api/v1/tasks/archive", `{"task_ids":[1,2],"archived":true}`, http.StatusConflict)
+	call(http.MethodPost, "/api/v1/tasks/archive", `{"task_ids":[1,999],"archived":true}`, http.StatusNotFound)
+	call(http.MethodPost, "/api/v1/tasks/archive", `{"task_ids":[1],"archived":true}`, http.StatusOK)
+	if body := call(http.MethodGet, "/api/v1/tasks?project_id=1", "", http.StatusOK); strings.Contains(body, `"First task"`) {
+		t.Fatal("archived task visible", body)
+	}
+	if body := call(http.MethodGet, "/api/v1/tasks?project_id=1&archived=true", "", http.StatusOK); !strings.Contains(body, `"First task"`) {
+		t.Fatal("missing archive", body)
+	}
+	call(http.MethodGet, "/api/v1/tasks?archived=invalid", "", http.StatusBadRequest)
+	call(http.MethodPatch, "/api/v1/tasks/1/move", `{"status":"next"}`, http.StatusConflict)
+	call(http.MethodPost, "/api/v1/tasks/archive", `{"task_ids":[1],"archived":false}`, http.StatusOK)
 	reopened := call(http.MethodPatch, "/api/v1/tasks/1/move", `{"status":"next"}`, http.StatusOK)
 	if !strings.Contains(reopened, `"completed_at":null`) {
 		t.Fatalf("reopened task remains complete: %s", reopened)

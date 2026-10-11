@@ -16,7 +16,9 @@
     "@vue-flow/controls": "1.1.2",
     "@vue-flow/core": "1.47.0",
     "dagre": "0.8.5",
+    "dompurify": "3.4.16",
     "element-plus": "2.14.0",
+    "marked": "18.1.0",
     "vue": "3.5.35",
     "vue-draggable-plus": "0.6.1",
     "vue-router": "5.0.6"

@@ -1,5 +1,6 @@
 <template>
   <section class="exploration-page">
+ <nav class="library-entry" aria-label="探索空间"><RouterLink to="/explore" aria-current="page">知识探索</RouterLink><RouterLink to="/explore/library">我的资料库</RouterLink></nav>
     <el-card v-if="!courses.length && !loading" shadow="never" class="empty-exploration">
       <el-empty description="探索空间将在你建立第一个学习领域后开始工作"><el-button type="primary" @click="router.push('/domains/new')">创建学习领域</el-button></el-empty>
     </el-card>
@@ -315,4 +316,8 @@ onBeforeUnmount(() => pageController?.abort())
   padding-top: 16px;
 }
 
+</style>
+
+<style scoped>
+.library-entry {display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;font-size:14px;} .library-entry a {color:var(--text-secondary);text-decoration:none;padding:8px 12px;border-radius:6px;} .library-entry a[aria-current=page] {color:var(--color-primary);background:var(--color-primary-soft);}
 </style>
