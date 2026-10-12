@@ -193,3 +193,7 @@ Schema 26 新增 library_collections/library_sections/library_pages，见 [资�
 ### Schema 27：任务归档
 
 `project_tasks` 新增可空、有索引的 `archived_at`，使用既有 AutoMigrate 和升级前备份机制。旧行保持 NULL，不回填完成时间，不修改状态或历史。无需新表。项目归档与任务归档互相独立。
+
+### Schema 28：资料库本地图片
+
+新增 `library_images` 保存 ID、用户归属、存储名、MIME、大小、宽高、哈希、展示名称与创建时间；实际图片保存在数据库同级 uploads/library 下。沿用 AutoMigrate 与升级前一致性备份，不改已有页面正文。完整 ZIP 备份及恢复包含元数据和所有登记图片；旧 `.db` 备份明确为仅数据库。

@@ -1,6 +1,9 @@
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { safeExternalLink } from "./externalLinks";
+export function localLibraryImage(src: string): boolean {
+  return /^\/api\/v1\/library\/images\/[a-f0-9]{32}$/.test(src);
+}
 export function internalPageID(
   href: string,
   collection: number,
@@ -89,11 +92,20 @@ export function markdownHTML(
   });
   clean.querySelectorAll("img").forEach((img) => {
     const src = img.getAttribute("src") || "";
-    if (!/^https?:\/\//i.test(src) || !safeExternalLink(src)) {
+    if (
+      !localLibraryImage(src) &&
+      (!/^https?:\/\//i.test(src) || !safeExternalLink(src))
+    ) {
       img.remove();
       return;
     }
     img.setAttribute("loading", "lazy");
+    img.setAttribute("tabindex", "0");
+    img.setAttribute("role", "button");
+    img.setAttribute(
+      "aria-label",
+      `查看大图：${img.getAttribute("alt") || "图片"}`,
+    );
     img.setAttribute("referrerpolicy", "no-referrer");
   });
   clean.querySelectorAll("input").forEach((input) => {

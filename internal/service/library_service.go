@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"learnos/internal/librarymedia"
 	"learnos/internal/links"
 	"learnos/internal/model"
 	"learnos/internal/repository"
@@ -18,10 +20,17 @@ import (
 
 var ErrLibraryInput = errors.New("invalid library input")
 
-type LibraryService struct{ repo *repository.LibraryRepository }
+type LibraryService struct {
+	repo   *repository.LibraryRepository
+	images *LibraryImageService
+}
 
-func NewLibraryService(repo *repository.LibraryRepository) *LibraryService {
-	return &LibraryService{repo}
+func NewLibraryService(repo *repository.LibraryRepository, images ...*LibraryImageService) *LibraryService {
+	s := &LibraryService{repo: repo}
+	if len(images) > 0 {
+		s.images = images[0]
+	}
+	return s
 }
 
 type LibraryCollectionInput struct {
@@ -51,7 +60,7 @@ func validLibraryText(value string, max int) bool {
 	return utf8.ValidString(value) && !strings.ContainsRune(value, 0) && utf8.RuneCountInString(value) <= max
 }
 func libraryCover(value string) bool {
-	return value == "" || (links.SafeExternal(value) && (strings.HasPrefix(strings.ToLower(value), "https://") || strings.HasPrefix(strings.ToLower(value), "http://")))
+	return value == "" || (strings.HasPrefix(value, librarymedia.Prefix) && librarymedia.IDPattern.MatchString(strings.TrimPrefix(value, librarymedia.Prefix))) || (links.SafeExternal(value) && (strings.HasPrefix(strings.ToLower(value), "https://") || strings.HasPrefix(strings.ToLower(value), "http://")))
 }
 func (s *LibraryService) List(ctx context.Context, user uint) ([]repository.LibraryCollectionRow, error) {
 	return s.repo.List(ctx, user)
@@ -61,6 +70,13 @@ func (s *LibraryService) Detail(ctx context.Context, user, id uint) (LibraryDeta
 	return LibraryDetail{c, sections}, err
 }
 func (s *LibraryService) SaveCollection(ctx context.Context, user, id uint, in LibraryCollectionInput) (model.LibraryCollection, error) {
+	if s.images != nil {
+		librarymedia.Mu.Lock()
+		defer librarymedia.Mu.Unlock()
+		if err := s.images.ValidateReferences(ctx, user, in.CoverURL); err != nil {
+			return model.LibraryCollection{}, err
+		}
+	}
 	in.Name = strings.TrimSpace(in.Name)
 	in.Category = strings.TrimSpace(in.Category)
 	in.CoverURL = strings.TrimSpace(in.CoverURL)
@@ -96,6 +112,13 @@ func (s *LibraryService) Pages(ctx context.Context, user, col uint, q string, se
 	return s.repo.Pages(ctx, user, col, strings.TrimSpace(q), section, root, page)
 }
 func (s *LibraryService) SavePage(ctx context.Context, user, col, id uint, in LibraryPageInput) (model.LibraryPage, error) {
+	if s.images != nil {
+		librarymedia.Mu.Lock()
+		defer librarymedia.Mu.Unlock()
+		if err := s.images.ValidateReferences(ctx, user, in.Body, in.CoverURL); err != nil {
+			return model.LibraryPage{}, err
+		}
+	}
 	in.Title = strings.TrimSpace(in.Title)
 	in.CoverURL = strings.TrimSpace(in.CoverURL)
 	if in.Title == "" || !validLibraryText(in.Title, 200) || !validLibraryText(in.Body, 200000) || len(in.Body) > 1000000 || len(in.Tags) > 20 || len(in.Sources) > 30 || !libraryCover(in.CoverURL) || (in.SectionID != nil && *in.SectionID == 0) {
@@ -130,12 +153,55 @@ func (s *LibraryService) DeletePage(ctx context.Context, user, col, id, version 
 
 // Export only canonical same-collection links. Stable numeric filenames are safe and rename-proof.
 func (s *LibraryService) Export(ctx context.Context, user, col uint) ([]byte, error) {
-	c, sections, pages, err := s.repo.Export(ctx, user, col)
-	if err != nil {
+	var buf bytes.Buffer
+	if err := s.ExportTo(ctx, user, col, &buf); err != nil {
 		return nil, err
 	}
-	var buf bytes.Buffer
-	z := zip.NewWriter(&buf)
+	return buf.Bytes(), nil
+}
+func (s *LibraryService) ExportTo(ctx context.Context, user, col uint, output io.Writer) error {
+	librarymedia.Mu.RLock()
+	defer librarymedia.Mu.RUnlock()
+
+	c, sections, pages, err := s.repo.Export(ctx, user, col)
+	if err != nil {
+		return err
+	}
+	z := zip.NewWriter(output)
+	defer z.Close()
+	exportedImages := map[string]string{}
+	exportImages := func(body string) (string, error) {
+		var failure error
+		body = librarymedia.References.ReplaceAllStringFunc(body, func(reference string) string {
+			if failure != nil {
+				return reference
+			}
+			id := strings.TrimPrefix(reference, librarymedia.Prefix)
+			if name, ok := exportedImages[id]; ok {
+				return "../assets/" + name
+			}
+			if s.images == nil {
+				failure = ErrImageMissing
+				return reference
+			}
+			row, data, err := s.images.ReadLocked(ctx, user, id)
+			if err != nil {
+				failure = ErrImageMissing
+				return reference
+			}
+			w, err := z.Create("assets/" + row.StorageName)
+			if err == nil {
+				_, err = w.Write(data)
+			}
+			if err != nil {
+				failure = err
+				return reference
+			}
+			exportedImages[id] = row.StorageName
+			return "../assets/" + row.StorageName
+		})
+		return body, failure
+	}
 	write := func(name, body string) error {
 		w, err := z.Create(name)
 		if err != nil {
@@ -150,9 +216,17 @@ func (s *LibraryService) Export(ctx context.Context, user, col uint) ([]byte, er
 		Pages      []model.LibraryPage     `json:"pages"`
 	}{c, sections, pages}, "", "  ")
 	if err = write("metadata.json", string(meta)); err != nil {
-		return nil, err
+		return err
 	}
 	toc := fmt.Sprintf("# %s\n\n%s\n\n", c.Name, c.Description)
+	if c.CoverURL != "" {
+		cover, e := exportImages(c.CoverURL)
+		if e != nil {
+			return e
+		}
+		cover = strings.TrimPrefix(cover, "../")
+		toc += "![封面](" + cover + ")\n\n"
+	}
 	groupNames := map[uint]string{}
 	for _, g := range sections {
 		groupNames[g.ID] = g.Name
@@ -163,6 +237,9 @@ func (s *LibraryService) Export(ctx context.Context, user, col uint) ([]byte, er
 	}
 	pattern := regexp.MustCompile(`/explore/library/` + strconv.FormatUint(uint64(col), 10) + `/pages/([0-9]+)`)
 	for _, p := range pages {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		group := "专题根目录"
 		if p.SectionID != nil {
 			group = groupNames[*p.SectionID]
@@ -176,22 +253,33 @@ func (s *LibraryService) Export(ctx context.Context, user, col uint) ([]byte, er
 			}
 			return link
 		})
+		body, err = exportImages(body)
+		if err != nil {
+			return err
+		}
+		if p.CoverURL != "" {
+			cover, e := exportImages(p.CoverURL)
+			if e != nil {
+				return e
+			}
+			body = "![封面](" + cover + ")\n\n" + body
+		}
 		body = fmt.Sprintf("# %s\n\n%s\n\n## 外部资料来源\n\n", p.Title, body)
 		for _, source := range p.Sources {
 			body += fmt.Sprintf("- %s\n  <%s>\n  %s\n", source.Name, source.URL, source.Note)
 		}
 		body += fmt.Sprintf("\n---\n最近更新：%s\n", p.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"))
 		if err = write(fmt.Sprintf("pages/%d.md", p.ID), body); err != nil {
-			return nil, err
+			return err
 		}
 	}
 	if err = write("README.md", toc); err != nil {
-		return nil, err
+		return err
 	}
 	if err = z.Close(); err != nil {
-		return nil, err
+		return err
 	}
-	return buf.Bytes(), nil
+	return nil
 }
 
 func (s *LibraryService) LinkStatus(ctx context.Context, user, col uint, ids []uint) (map[uint]bool, error) {

@@ -37,7 +37,7 @@ func Open(cfg config.Config) (*gorm.DB, error) {
 	}
 	var preMigrationBackup BackupInfo
 	if existingDatabase && migrationNeedsBackup(db) {
-		preMigrationBackup, err = CreateBackup(context.Background(), db, cfg.BackupDir, cfg.BackupRetentionCount)
+		preMigrationBackup, err = CreateMediaBackup(context.Background(), db, cfg.DatabasePath, cfg.BackupDir, cfg.BackupRetentionCount)
 		if err != nil {
 			return nil, fmt.Errorf("pre-migration backup failed: %w", err)
 		}
@@ -86,7 +86,7 @@ func Open(cfg config.Config) (*gorm.DB, error) {
 		&model.AssetSnapshot{},
 		&model.GoalAssetReference{},
 		&model.MonthlyReview{}, &model.MonthlyReviewFacts{},
-		&model.LibraryCollection{}, &model.LibrarySection{}, &model.LibraryPage{},
+		&model.LibraryImage{}, &model.LibraryCollection{}, &model.LibrarySection{}, &model.LibraryPage{},
 		&model.FinanceLedger{}, &model.FinanceTransaction{}, &model.FinanceBatch{}, &model.FinanceChange{},
 	); err != nil {
 		if preMigrationBackup.Path != "" {

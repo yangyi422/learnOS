@@ -3,3 +3,7 @@
 data
 web/node_modules
 README.local.md
+
+# Personal uploaded images and complete backup bundles
+backups/
+uploads/

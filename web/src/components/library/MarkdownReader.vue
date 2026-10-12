@@ -1,5 +1,16 @@
 <template>
-  <div class="library-markdown" @click="follow" v-html="html" />
+  <div
+    class="library-markdown"
+    @click="follow"
+    @error.capture="imageFailed"
+    @keydown="imageKey"
+    v-html="html"
+  />
+  <el-image-viewer
+    v-if="previewImage"
+    :url-list="[previewImage]"
+    @close="previewImage = ''"
+  />
 </template>
 <script setup lang="ts">
 import { computed, ref, watch, onBeforeUnmount } from "vue";
@@ -14,6 +25,7 @@ const props = defineProps<{
   router = useRouter(),
   route = useRoute(),
   available = ref(new Map<number, boolean>());
+const previewImage = ref("");
 const html = computed(() =>
   markdownHTML(props.body, props.collection, available.value),
 );
@@ -52,7 +64,53 @@ watch(
   },
   { immediate: true },
 );
+function imageFailed(event: Event) {
+  const img = event.target;
+  if (!(img instanceof HTMLImageElement) || img.hidden) return;
+  img.hidden = true;
+  const span = document.createElement("span");
+  span.className = "library-image-failed";
+  span.setAttribute("role", "status");
+  span.append(
+    document.createTextNode(
+      `${img.alt || "图片"}：无法加载，请确认登录或图片是否存在。 `,
+    ),
+  );
+  const retry = document.createElement("button");
+  retry.type = "button";
+  retry.textContent = "重试";
+  retry.setAttribute("data-image-retry", "");
+  span.append(retry);
+  img.after(span);
+}
+function imageKey(event: KeyboardEvent) {
+  if (
+    event.target instanceof HTMLImageElement &&
+    (event.key === "Enter" || event.key === " ")
+  ) {
+    event.preventDefault();
+    previewImage.value = event.target.src;
+  }
+}
 function follow(event: MouseEvent) {
+  const target = event.target as HTMLElement;
+  const retry = target.closest("button[data-image-retry]");
+  if (retry) {
+    const span = retry.parentElement;
+    const img = span?.previousElementSibling;
+    if (img instanceof HTMLImageElement) {
+      img.hidden = false;
+      img.src = img.getAttribute("src") || "";
+      span?.remove();
+    }
+    return;
+  }
+  if (target instanceof HTMLImageElement) {
+    event.preventDefault();
+    previewImage.value = target.src;
+    return;
+  }
+
   const a = (event.target as HTMLElement).closest("a[data-library-page]");
   if (!a) return;
   event.preventDefault();

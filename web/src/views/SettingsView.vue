@@ -114,7 +114,7 @@
     <el-card shadow="never" aria-labelledby="data-safety-title">
       <template #header><span id="data-safety-title">数据安全</span></template>
       <div class="settings-actions">
-        <el-button type="primary" :loading="backupLoading" @click="backup">创建数据库备份</el-button>
+        <el-button type="primary" :loading="backupLoading" @click="backup">创建完整备份</el-button>
         <el-button @click="download('json')">导出学习数据为 JSON</el-button>
         <el-button @click="download('markdown')">导出学习数据为 Markdown</el-button>
         <el-button :loading="consistencyLoading" @click="checkConsistency">检查数据一致性</el-button>
@@ -124,17 +124,17 @@
         <strong>最近备份已完成</strong>
         <span>{{ latestBackup.name }}</span>
         <span>{{ formatSize(latestBackup.size) }} · {{ formatDate(latestBackup.created_at) }}</span>
-        <span>保存位置：{{ latestBackup.path }}</span>
+        <span>范围：{{ backupScope(latestBackup) }}</span><el-button text @click="downloadBackup(latestBackup.name)">下载备份</el-button><span>保存位置：{{ latestBackup.path }}</span>
       </div>
 
       <section class="restore-panel" aria-labelledby="restore-title">
         <div>
           <h3 id="restore-title">从备份恢复</h3>
-          <p>恢复会替换当前数据库。系统会先自动备份当前数据，再优雅重启并应用所选备份。</p>
+          <p>完整备份包含数据库及资料库图片；旧 .db 仅含数据库。恢复会先备份当前数据，合并校验通过的图片并替换数据库，再安全重启。现有图片不会被清空。</p>
         </div>
         <div class="restore-controls">
           <el-select v-model="selectedBackup" placeholder="选择备份文件" aria-label="选择要恢复的备份文件">
-            <el-option v-for="item in backups" :key="item.name" :label="`${item.name} · ${formatSize(item.size)}`" :value="item.name" />
+            <el-option v-for="item in backups" :key="item.name" :label="`${item.name} · ${backupScope(item)} · ${formatSize(item.size)}`" :value="item.name" />
           </el-select>
           <el-button type="danger" plain :disabled="!selectedBackup" :loading="restoreLoading" @click="confirmRestore">确认恢复所选备份</el-button>
         </div>
@@ -270,11 +270,13 @@ async function backup() {
   } catch (reason) { ElMessage.error(reason instanceof Error ? reason.message : '备份失败') } finally { backupLoading.value = false }
 }
 
+function downloadBackup(name: string) { const link = document.createElement('a'); link.href = `/api/v1/system/backups/${encodeURIComponent(name)}/download`; link.download = name; link.click() }
+function backupScope(item: BackupInfo) { return item.scope === 'database_and_library_images' || item.name.endsWith('.zip') ? '数据库 + 资料库图片' : '仅数据库（不含图片）' }
 async function confirmRestore() {
   if (!selectedBackup.value || restoreLoading.value) return
   const expected = `恢复 ${selectedBackup.value}`
   try {
-    const result = await ElMessageBox.prompt(`恢复会替换当前数据库，并在恢复前自动备份当前数据。请输入“${expected}”继续。`, '确认恢复数据库', {
+    const result = await ElMessageBox.prompt(`恢复会替换当前数据库，并在恢复前自动完整备份当前数据。完整 ZIP 会恢复图片；旧 .db 不含图片，现有图片目录会保留。请输入“${expected}”继续。`, '确认恢复数据库', {
       confirmButtonText: '确认恢复并重启', cancelButtonText: '取消', inputPlaceholder: expected,
       inputValidator: (value) => value === expected || `请输入完整确认文字：${expected}`,
       type: 'warning',

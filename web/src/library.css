@@ -385,3 +385,8 @@
   cursor: default;
   text-decoration: none;
 }
+
+.library-markdown img { height: auto; width: auto; cursor: zoom-in; }
+.library-markdown img[hidden] { display: none; }
+.library-image-failed { display: block; padding: 12px 0; color: var(--text-secondary); font-size: 13px; }
+.library-image-failed button { border: 0; background: transparent; color: var(--color-primary); cursor: pointer; }

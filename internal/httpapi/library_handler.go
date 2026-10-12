@@ -6,9 +6,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"io"
+	"learnos/internal/librarymedia"
 	"learnos/internal/repository"
 	"learnos/internal/service"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -18,8 +20,17 @@ func libraryData(c *gin.Context, data interface{}, err error) {
 		c.JSON(200, gin.H{"data": data})
 		return
 	}
+	var maxBytes *http.MaxBytesError
 	status, code, message := 500, "LIBRARY_FAILED", "资料暂时无法读取或保存，请重试。"
 	switch {
+	case errors.Is(err, service.ErrImageMissing):
+		status, code, message = 409, "LIBRARY_IMAGE_MISSING", "本地图片不存在或不可读取，请检查图片引用；本次操作未完成。"
+	case errors.Is(err, service.ErrImageSize) || errors.As(err, &maxBytes):
+		status, code, message = 413, "IMAGE_TOO_LARGE", "单张图片不能超过 10MB。"
+	case errors.Is(err, service.ErrImageQuota):
+		status, code, message = 409, "IMAGE_QUOTA", "图片存储已达到上限，请备份并清理未使用图片，或调整服务器配额。"
+	case errors.Is(err, librarymedia.ErrInvalid):
+		status, code, message = 400, "IMAGE_INVALID", "仅支持完整的 PNG、JPEG、WebP 图片；最长边 12000px，总像素不超过 2400 万。"
 	case errors.Is(err, service.ErrLibraryInput):
 		status, code, message = 400, "LIBRARY_INVALID", "请检查名称、正文长度、分组及链接格式。"
 	case errors.Is(err, repository.ErrLibraryConflict):
@@ -226,13 +237,24 @@ func (h *Handler) ExportLibrary(c *gin.Context) {
 	if !ok {
 		return
 	}
-	data, err := h.library.Export(c.Request.Context(), user, col)
+	f, err := os.CreateTemp("", "lifeos-library-export-*.zip")
+	if err != nil {
+		libraryData(c, nil, err)
+		return
+	}
+	defer os.Remove(f.Name())
+	err = h.library.ExportTo(c.Request.Context(), user, col, f)
+	closeErr := f.Close()
+	if err == nil {
+		err = closeErr
+	}
 	if err != nil {
 		libraryData(c, nil, err)
 		return
 	}
 	c.Header("Content-Disposition", `attachment; filename="lifeos-library-`+strconv.FormatUint(uint64(col), 10)+`.zip"`)
-	c.Data(200, "application/zip", data)
+	c.Header("Content-Type", "application/zip")
+	c.File(f.Name())
 }
 
 func (h *Handler) LibraryLinks(c *gin.Context) {

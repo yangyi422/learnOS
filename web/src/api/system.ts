@@ -1,6 +1,6 @@
 import { request } from './http'
 
-export interface BackupInfo { name: string; path: string; size: number; created_at: string }
+export interface BackupInfo { scope?: 'database_only' | 'database_and_library_images'; name: string; path: string; size: number; created_at: string }
 export interface Diagnostics {
   app_version: string; environment: string; schema_version: number; database_status: { status: string; detail?: string }
   database_path: string; database_size: number; last_backup: BackupInfo | null; ai_provider: string; ai_model: string

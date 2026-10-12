@@ -45,7 +45,8 @@ func New(cfg config.Config) (*App, error) {
 	userService := service.NewUserService(userRepository)
 	projectRepository := repository.NewProjectRepository(db)
 	projectService := service.NewProjectService(projectRepository)
-	libraryService := service.NewLibraryService(repository.NewLibraryRepository(db))
+	imageService := service.NewLibraryImageService(repository.NewLibraryImageRepository(db), cfg.DatabasePath, cfg.LibraryUploadQuotaBytes)
+	libraryService := service.NewLibraryService(repository.NewLibraryRepository(db), imageService)
 	reviewService := service.NewMonthlyReviewService(repository.NewMonthlyReviewRepository(db))
 	assetService := service.NewAssetService(repository.NewAssetRepository(db))
 	financeService := service.NewFinanceService(repository.NewFinanceRepository(db))
@@ -131,7 +132,7 @@ func New(cfg config.Config) (*App, error) {
 		return nil, fmt.Errorf("load embedded web assets: %w", err)
 	}
 
-	handler := httpapi.NewHandler(courseService, knowledgeGraphService, cognitiveStateService, challengeService, misconceptionService, explorationService, curriculumService, groundingService, backupService, databaseHealthService, exportService, consistencyService, domainInitializationService, aiConfigurationService, nextLessonService, userService, projectService, inboxService, recordService, workspaceService, lifeService, financeService, assetService, reviewService, libraryService)
+	handler := httpapi.NewHandler(courseService, knowledgeGraphService, cognitiveStateService, challengeService, misconceptionService, explorationService, curriculumService, groundingService, backupService, databaseHealthService, exportService, consistencyService, domainInitializationService, aiConfigurationService, nextLessonService, userService, projectService, inboxService, recordService, workspaceService, lifeService, financeService, assetService, reviewService, libraryService, imageService)
 	router := httpapi.NewRouter(cfg, handler, dist, userService)
 
 	return &App{

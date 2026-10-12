@@ -114,3 +114,7 @@ docker compose --profile production up -d --build --force-recreate
 - `DEPLOY_PATH`：服务器上的 LearnOS 仓库绝对路径，例如 `/opt/learnos`
 
 服务器需要预先完成 Docker、Docker Compose、Git 和仓库访问权限配置；`.env`、SQLite 数据目录和备份目录应留在服务器上，不放入 Git。部署使用 `git merge --ff-only`，服务器存在未提交改动时会安全失败，不会覆盖这些改动。
+
+## 资料库图片（Schema 28）
+
+图片路径为 `APP_DATA_DIR/uploads/library`（实际由数据库路径所在目录决定），现有 Docker `/app/data` 挂载已覆盖图片，不得在部署时删除或重置 DATA_HOST_DIR。新备份为数据库 + 图片 ZIP，可在设置中下载；旧 `.db` 不包含图片。恢复保持旧图片目录，不做清空覆盖。详细格式、校验、配额与恢复边界见 [LIBRARY.md](LIBRARY.md)。反向代理应保留 Host，并允许至少 11 MiB 上传请求；图片接口保持会话认证，不公开 uploads 目录。`LIBRARY_UPLOAD_QUOTA_MB` 默认 2048。容器持久化不代替异机备份；请定期下载完整 ZIP 到独立存储。

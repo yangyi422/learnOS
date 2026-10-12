@@ -66,6 +66,7 @@ import {
   type Collection,
   type CollectionInput,
 } from "@/api/library";
+import { localLibraryImage } from "@/utils/libraryMarkdown";
 import { safeExternalLink } from "@/utils/externalLinks";
 const props = defineProps<{ open: boolean; collection?: Collection }>(),
   emit = defineEmits<{ close: []; saved: [Collection] }>(),
@@ -141,6 +142,7 @@ async function save() {
   }
   if (
     form.cover_url &&
+    !localLibraryImage(form.cover_url) &&
     (!/^https?:\/\//i.test(form.cover_url) || !safeExternalLink(form.cover_url))
   ) {
     error.value = "封面需要有效的 HTTP 或 HTTPS 图片地址。";

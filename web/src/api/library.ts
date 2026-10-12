@@ -115,7 +115,8 @@ export async function exportCollection(id: number) {
   const response = await fetch(`/api/v1/library/collections/${id}/export`);
   if (!response.ok) {
     if (response.status === 401) window.location.assign("/login");
-    throw new Error("专题导出失败，请重试。");
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.error?.message || "专题导出失败，请重试。");
   }
   const url = URL.createObjectURL(await response.blob());
   const a = document.createElement("a");
@@ -135,3 +136,36 @@ export function pageTemplate(type: Collection["template"]) {
 
 export const checkPageLinks = (col: number, ids: number[]) =>
   data<Record<string, boolean>>(`/${col}/links?ids=${ids.join(",")}`);
+
+export interface LibraryImage {
+  id: string;
+  url: string;
+  mime: string;
+  size: number;
+  width: number;
+  height: number;
+  original_name: string;
+  created_at: string;
+}
+export async function uploadLibraryImage(
+  file: File,
+  signal?: AbortSignal,
+): Promise<LibraryImage> {
+  const body = new FormData();
+  body.append("image", file);
+  return (
+    await request<{ data: LibraryImage }>("/api/v1/library/images", {
+      method: "POST",
+      body,
+      signal,
+    })
+  ).data;
+}
+export async function cleanupLibraryImages(): Promise<number> {
+  return (
+    await request<{ data: { removed: number } }>(
+      "/api/v1/library/images/cleanup",
+      { method: "POST", body: JSON.stringify({ confirm: true }) },
+    )
+  ).data.removed;
+}

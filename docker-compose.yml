@@ -24,6 +24,7 @@ services:
       DEMO_SEED_ENABLED: ${DEMO_SEED_ENABLED:-false}
       BACKUP_DIR: ${BACKUP_DIR:-/app/backups}
       BACKUP_RETENTION_COUNT: ${BACKUP_RETENTION_COUNT:-20}
+      LIBRARY_UPLOAD_QUOTA_MB: ${LIBRARY_UPLOAD_QUOTA_MB:-2048}
     ports:
       - "${APP_BIND_HOST:-0.0.0.0}:${APP_PORT:-8888}:8080"
     volumes:

@@ -19,6 +19,7 @@ type Config struct {
 	DataDir                              string
 	DatabasePath                         string
 	BackupDir                            string
+	LibraryUploadQuotaBytes              int64
 	BackupRetentionCount                 int
 	Username                             string
 	PasswordHash                         string
@@ -70,7 +71,16 @@ func Load() (Config, error) {
 		retention = parsed
 	}
 
+	quota := int64(2048)
+	if raw := strings.TrimSpace(os.Getenv("LIBRARY_UPLOAD_QUOTA_MB")); raw != "" {
+		value, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || value < 10 || value > 1048576 {
+			return Config{}, errors.New("LIBRARY_UPLOAD_QUOTA_MB must be between 10 and 1048576")
+		}
+		quota = value
+	}
 	cfg := Config{
+		LibraryUploadQuotaBytes:              quota << 20,
 		AppName:                              envOrDefault("APP_NAME", "LearnOS"),
 		AppVersion:                           envOrDefault("APP_VERSION", "0.1.0"),
 		Environment:                          environment,

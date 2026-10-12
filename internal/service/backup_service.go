@@ -14,6 +14,7 @@ import (
 
 	"learnos/internal/config"
 	"learnos/internal/database"
+	"learnos/internal/librarymedia"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -49,7 +50,7 @@ func NewBackupService(db *gorm.DB, cfg config.Config) *BackupService {
 func (s *BackupService) SetRestartSignal(signal chan<- struct{}) { s.restartSignal = signal }
 
 func (s *BackupService) Create(ctx context.Context) (database.BackupInfo, error) {
-	return database.CreateBackup(ctx, s.db, s.cfg.BackupDir, s.cfg.BackupRetentionCount)
+	return database.CreateMediaBackup(ctx, s.db, s.cfg.DatabasePath, s.cfg.BackupDir, s.cfg.BackupRetentionCount)
 }
 
 func (s *BackupService) List(_ context.Context) ([]database.BackupInfo, error) {
@@ -156,7 +157,7 @@ func ApplyPendingRestore(cfg config.Config) (bool, error) {
 		return false, fmt.Errorf("invalid pending restore request")
 	}
 	backupPath := pendingRestoreSourcePath(cfg)
-	if _, err := RestoreDatabase(cfg.DatabasePath, backupPath, cfg.BackupDir, cfg.BackupRetentionCount); err != nil {
+	if _, err := RestoreWithMedia(cfg.DatabasePath, backupPath, cfg.BackupDir, cfg.BackupRetentionCount); err != nil {
 		archiveFailedRestore(marker)
 		_ = os.Remove(backupPath)
 		return false, err
@@ -217,6 +218,16 @@ func (s *BackupService) ValidateBackup(path string) error {
 	if err != nil {
 		return fmt.Errorf("stat backup: %w", err)
 	}
+	if filepath.Ext(path) == ".zip" {
+		librarymedia.Mu.Lock()
+		defer librarymedia.Mu.Unlock()
+		stage, err := stageMediaBackup(path)
+		if err != nil {
+			return err
+		}
+		defer os.RemoveAll(stage)
+		return validateSQLiteFile(filepath.Join(stage, "learnos.db"))
+	}
 	if info.IsDir() || filepath.Ext(path) != ".db" {
 		return fmt.Errorf("backup must be a sqlite .db file")
 	}
@@ -259,7 +270,7 @@ func RestoreDatabase(targetPath, backupPath, backupDir string, retention int) (d
 		if openErr != nil {
 			return database.BackupInfo{}, fmt.Errorf("open current database: %w", openErr)
 		}
-		preRestore, openErr = database.CreateBackup(context.Background(), currentDB, backupDir, retention)
+		preRestore, openErr = database.CreateMediaBackup(context.Background(), currentDB, targetPath, backupDir, retention)
 		if sqlDB, dbErr := currentDB.DB(); dbErr == nil {
 			_ = sqlDB.Close()
 		}

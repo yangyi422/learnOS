@@ -820,7 +820,7 @@ test('系统设置展示生效模型、连接测试、高级超时与安全恢�
   await expect(page.getByText('回答评价')).toBeVisible()
   await expect(page.getByText('45 秒')).toBeVisible()
 
-  await page.getByRole('button', { name: '创建数据库备份' }).click()
+  await page.getByRole('button', { name: '创建完整备份' }).click()
   await expect(page.locator('.sr-only[aria-live="polite"]')).toHaveText(`备份已创建：${testBackup.name}`)
   await expect(page.getByText(`保存位置：${testBackup.path}`)).toBeVisible()
   await page.getByRole('button', { name: '检查数据一致性' }).click()

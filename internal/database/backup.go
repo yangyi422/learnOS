@@ -13,6 +13,7 @@ import (
 )
 
 type BackupInfo struct {
+	Scope     string    `json:"scope"`
 	Name      string    `json:"name"`
 	Path      string    `json:"path"`
 	Size      int64     `json:"size"`
@@ -51,7 +52,7 @@ func CreateBackup(ctx context.Context, db *gorm.DB, backupDir string, retention 
 			return BackupInfo{}, err
 		}
 	}
-	return BackupInfo{Name: name, Path: path, Size: info.Size(), CreatedAt: info.ModTime().UTC()}, nil
+	return BackupInfo{Scope: "database_only", Name: name, Path: path, Size: info.Size(), CreatedAt: info.ModTime().UTC()}, nil
 }
 
 func ListBackups(backupDir string) ([]BackupInfo, error) {
@@ -64,14 +65,18 @@ func ListBackups(backupDir string) ([]BackupInfo, error) {
 	}
 	backups := make([]BackupInfo, 0)
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasPrefix(entry.Name(), "learnos-") || !strings.HasSuffix(entry.Name(), ".db") {
+		if entry.IsDir() || !strings.HasPrefix(entry.Name(), "learnos-") || (!strings.HasSuffix(entry.Name(), ".db") && !strings.HasSuffix(entry.Name(), ".zip")) {
 			continue
 		}
 		info, statErr := entry.Info()
 		if statErr != nil {
 			return nil, fmt.Errorf("stat backup %s: %w", entry.Name(), statErr)
 		}
-		backups = append(backups, BackupInfo{Name: entry.Name(), Path: filepath.Join(backupDir, entry.Name()), Size: info.Size(), CreatedAt: info.ModTime().UTC()})
+		scope := "database_only"
+		if strings.HasSuffix(entry.Name(), ".zip") {
+			scope = FullBackupScope
+		}
+		backups = append(backups, BackupInfo{Scope: scope, Name: entry.Name(), Path: filepath.Join(backupDir, entry.Name()), Size: info.Size(), CreatedAt: info.ModTime().UTC()})
 	}
 	sort.Slice(backups, func(i, j int) bool { return backups[i].CreatedAt.After(backups[j].CreatedAt) })
 	return backups, nil

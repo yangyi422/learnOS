@@ -28,16 +28,16 @@
         </div>
         <div class="library-actions">
           <el-button
-            :disabled="busy || editing || loading"
+            :disabled="busy || uploading || editing || loading"
             @click="collectionDialog = true"
             >编辑专题</el-button
           ><el-button
-            :disabled="busy || editing || loading"
+            :disabled="busy || uploading || editing || loading"
             @click="exportTopic"
             >导出</el-button
           ><el-button
             type="primary"
-            :disabled="busy || editing || loading"
+            :disabled="busy || uploading || editing || loading"
             @click="startNew"
             >新建页面</el-button
           >
@@ -47,7 +47,7 @@
         <el-radio-group
           :model-value="collection.display_mode"
           aria-label="专题展示方式"
-          :disabled="busy || editing || loading"
+          :disabled="busy || uploading || editing || loading"
           @change="changeMode"
           ><el-radio-button value="wiki">Wiki 目录</el-radio-button
           ><el-radio-button value="list"
@@ -55,13 +55,18 @@
           ></el-radio-group
         ><el-button
           text
-          :disabled="busy || editing || loading"
+          :disabled="busy || uploading || editing || loading"
           @click="newSection"
           >新建分组</el-button
         ><el-button
           text
+          :disabled="busy || uploading || editing || loading"
+          @click="cleanupImages"
+          >清理未使用图片</el-button
+        ><el-button
+          text
           type="danger"
-          :disabled="busy || editing || loading"
+          :disabled="busy || uploading || editing || loading"
           @click="removeCollection"
           >删除专题</el-button
         >
@@ -101,13 +106,13 @@
                 >{{ s.name }}</RouterLink
               ><el-button
                 text
-                :disabled="busy || editing || loading"
+                :disabled="busy || uploading || editing || loading"
                 :aria-label="`重命名分组 ${s.name}`"
                 @click="renameSection(s)"
                 >改名</el-button
               ><el-button
                 text
-                :disabled="busy || editing || loading"
+                :disabled="busy || uploading || editing || loading"
                 :aria-label="`删除分组 ${s.name}`"
                 @click="removeSection(s)"
                 >删除</el-button
@@ -182,32 +187,35 @@
                 ><el-input v-model="tagsInput" aria-label="页面标签"
               /></el-form-item>
             </div>
-            <el-form-item label="页面封面 URL（可选）"
-              ><el-input v-model="form.cover_url" placeholder="https://…"
-            /></el-form-item>
+            <el-form-item label="页面封面（可选）">
+              <PageCoverEditor
+                v-model="form.cover_url"
+                :body="form.body"
+                :collection="collection.id"
+                :disabled="busy || bodyUploading"
+                @uploading="coverUploading = $event"
+              />
+            </el-form-item>
             <div class="library-editor-tabs">
-              <el-radio-group v-model="editorTab"
+              <el-radio-group v-model="editorTab" :disabled="uploading"
                 ><el-radio-button value="edit">Markdown 正文</el-radio-button
                 ><el-radio-button value="preview"
                   >阅读预览</el-radio-button
                 ></el-radio-group
               >
             </div>
-            <el-input
+            <LibraryImageEditor
               v-if="editorTab === 'edit'"
               v-model="form.body"
-              type="textarea"
-              :rows="18"
-              maxlength="200000"
-              aria-label="Markdown 正文"
-              class="library-body-input"
+              :disabled="busy || coverUploading"
+              @uploading="bodyUploading = $event"
             /><MarkdownReader
               v-else
               :body="form.body"
               :collection="collection.id"
             />
             <p class="library-muted">
-              支持 Markdown 表格、待办清单和图片
+              支持 Markdown 表格、待办清单、本地图片和外部图片
               URL。内部链接可从其他页面复制后粘贴；HTML 脚本与危险链接不会执行。
             </p>
             <h3>外部资料来源</h3>
@@ -248,7 +256,11 @@
           >
           <footer class="library-editor-footer">
             <el-button :disabled="busy" @click="cancelEdit">取消编辑</el-button
-            ><el-button type="primary" :loading="busy" @click="save"
+            ><el-button
+              type="primary"
+              :loading="busy"
+              :disabled="uploading"
+              @click="save"
               >保存页面</el-button
             >
           </footer>
@@ -343,6 +355,7 @@ import {
   deleteCollection,
   saveCollection,
   exportCollection,
+  cleanupLibraryImages,
   pageTemplate,
   type Collection,
   type Section,
@@ -351,8 +364,11 @@ import {
   type PageInput,
   type CollectionInput,
 } from "@/api/library";
+import { localLibraryImage } from "@/utils/libraryMarkdown";
 import { safeExternalLink } from "@/utils/externalLinks";
 import CollectionDialog from "@/components/library/CollectionDialog.vue";
+import PageCoverEditor from "@/components/library/PageCoverEditor.vue";
+import LibraryImageEditor from "@/components/library/LibraryImageEditor.vue";
 import MarkdownReader from "@/components/library/MarkdownReader.vue";
 import ExternalLink from "@/components/ExternalLink.vue";
 import "@/library.css";
@@ -365,6 +381,9 @@ const route = useRoute(),
   current = ref<LibraryPage>(),
   loading = ref(false),
   busy = ref(false),
+  bodyUploading = ref(false),
+  coverUploading = ref(false),
+  uploading = computed(() => bodyUploading.value || coverUploading.value),
   error = ref(""),
   collectionDialog = ref(false),
   editing = ref(false),
@@ -420,7 +439,10 @@ function filterURL(section: string) {
   };
 }
 function safeCover(url: string) {
-  return /^https?:\/\//i.test(url) && safeExternalLink(url);
+  return (
+    localLibraryImage(url) ||
+    (/^https?:\/\//i.test(url) && safeExternalLink(url))
+  );
 }
 function sectionName(id: number | null) {
   return sections.value.find((s) => s.id === id)?.name || "专题根目录";
@@ -467,6 +489,10 @@ async function load() {
   }
 }
 async function canLeave() {
+  if (uploading.value) {
+    ElMessage.warning("图片仍在上传，请稍候。");
+    return false;
+  }
   if (busy.value) return false;
   if (!dirty.value) return true;
   try {
@@ -494,7 +520,7 @@ watch(
 onMounted(load);
 onBeforeUnmount(() => sequence++);
 function beforeUnload(event: BeforeUnloadEvent) {
-  if (dirty.value) {
+  if (dirty.value || uploading.value) {
     event.preventDefault();
     event.returnValue = "";
   }
@@ -543,7 +569,7 @@ async function cancelEdit() {
   }
 }
 async function save() {
-  if (busy.value) return;
+  if (busy.value || uploading.value) return;
   const payload = input();
   if (!payload.title.trim()) {
     error.value = "请填写页面标题。";
@@ -597,6 +623,19 @@ async function paginate(p: number) {
     query: { ...route.query, p: String(p) },
   });
 }
+async function cleanupImages() {
+  if (
+    !(await confirm(
+      "清理所有专题中上传超过 7 天、未被任何已保存页面或封面引用的图片？未保存的草稿不计入引用；请先保存草稿并确认已备份。不会删除其他页面仍在使用的图片。",
+      "清理未使用图片",
+    ))
+  )
+    return;
+  await action(async () => {
+    const count = await cleanupLibraryImages();
+    ElMessage.success(`已清理 ${count} 张未使用图片`);
+  });
+}
 async function confirm(text: string, title = "确认操作") {
   try {
     await ElMessageBox.confirm(text, title, {
@@ -610,7 +649,7 @@ async function confirm(text: string, title = "确认操作") {
   }
 }
 async function action(fn: () => Promise<unknown>) {
-  if (busy.value) return;
+  if (busy.value || uploading.value) return;
   busy.value = true;
   error.value = "";
   try {
