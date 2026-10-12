@@ -321,6 +321,15 @@
 .library-topic-layout.is-list:not(.has-reader) {
   grid-template-columns: 1fr;
 }
+.library-topic-layout.is-card-reading {
+  grid-template-columns: minmax(0, 1fr);
+}
+.is-card-reading .library-reader {
+  width: 100%;
+  margin-inline: auto;
+  padding-left: 0;
+  border-left: 0;
+}
 .is-list:not(.has-reader) .library-reading-hint {
   display: none;
 }

@@ -7,6 +7,7 @@ import (
 	"learnos/internal/service"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -62,17 +63,45 @@ func (h *Handler) ReadLibraryImage(c *gin.Context) {
 	if !ok {
 		return
 	}
-	row, data, err := h.images.Read(c.Request.Context(), user, c.Param("image"))
+	variant := c.Query("variant")
+	if variant != "" && variant != service.LibraryCardVariant {
+		libraryData(c, nil, service.ErrLibraryInput)
+		return
+	}
+	row, err := h.images.Metadata(c.Request.Context(), user, c.Param("image"))
 	if err != nil {
 		libraryData(c, nil, err)
 		return
 	}
 	c.Header("X-Content-Type-Options", "nosniff")
-	c.Header("Cache-Control", "private, no-store")
+	// Private storage is permitted, but every reuse must authenticate/revalidate.
+	c.Header("Cache-Control", "private, no-cache")
+	c.Header("Vary", "Cookie, Authorization")
+	etag := `"` + row.SHA256 + `-` + variant + `"`
+	c.Header("ETag", etag)
 	c.Header("Cross-Origin-Resource-Policy", "same-origin")
 	c.Header("Content-Security-Policy", "default-src 'none'; sandbox")
 	c.Header("Content-Disposition", "inline")
-	c.Data(200, row.MIME, data)
+	for _, candidate := range strings.Split(c.GetHeader("If-None-Match"), ",") {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "*" || strings.TrimPrefix(candidate, "W/") == etag {
+			c.Status(http.StatusNotModified)
+			return
+		}
+	}
+	data, err := h.images.ResponseBytes(c.Request.Context(), row, variant)
+	if err != nil {
+		c.Header("Cache-Control", "private, no-store")
+		c.Header("ETag", "")
+		libraryData(c, nil, err)
+		return
+	}
+	mime := row.MIME
+	if variant != "" {
+		mime = "image/jpeg"
+	}
+	c.Header("Content-Length", strconv.Itoa(len(data)))
+	c.Data(200, mime, data)
 }
 func (h *Handler) CleanupLibraryImages(c *gin.Context) {
 	user, ok := projectUserID(c)

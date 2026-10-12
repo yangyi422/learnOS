@@ -22,16 +22,17 @@ var ErrImageQuota = errors.New("image storage quota exceeded")
 var ErrImageMissing = errors.New("image missing or corrupt")
 
 type LibraryImageService struct {
-	repo  *repository.LibraryImageRepository
-	dir   string
-	quota int64
+	repo          *repository.LibraryImageRepository
+	dir           string
+	quota         int64
+	thumbnailGate chan struct{}
 }
 
 func NewLibraryImageService(repo *repository.LibraryImageRepository, databasePath string, quota int64) *LibraryImageService {
 	if quota <= 0 {
 		quota = 2 << 30
 	}
-	return &LibraryImageService{repo, librarymedia.Directory(databasePath), quota}
+	return &LibraryImageService{repo: repo, dir: librarymedia.Directory(databasePath), quota: quota, thumbnailGate: make(chan struct{}, 1)}
 }
 func (s *LibraryImageService) Upload(ctx context.Context, user uint, name string, reader io.Reader) (model.LibraryImage, error) {
 	librarymedia.Mu.Lock()
@@ -193,6 +194,7 @@ func (s *LibraryImageService) Cleanup(ctx context.Context, user uint) (int, erro
 				return removed, err
 			}
 		}
+		_ = os.Remove(s.thumbnailPath(row))
 		removed++
 	}
 	names, err := s.repo.StorageNames(ctx)

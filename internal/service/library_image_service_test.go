@@ -255,6 +255,9 @@ func TestLibraryPageCoversShareImagesExportAndSurviveBackup(t *testing.T) {
 	if n, e := images.Cleanup(ctx, 1); e != nil || n != 0 {
 		t.Fatal("cover or body reference not protected", n, e)
 	}
+	if _, e = images.ResponseBytes(ctx, cover, LibraryCardVariant); e != nil {
+		t.Fatal(e)
+	}
 	data, e := library.Export(ctx, 1, col.ID)
 	if e != nil {
 		t.Fatal(e)

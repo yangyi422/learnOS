@@ -51,9 +51,10 @@
           class="library-collection-card"
           ><img
             v-if="safeCover(c.cover_url)"
-            :src="c.cover_url"
+            :src="libraryCardImageURL(c.cover_url)"
             alt=""
             loading="lazy"
+            decoding="async"
             referrerpolicy="no-referrer"
           /><span class="library-muted"
             >{{ c.category || "未分类" }} · {{ templateName(c.template) }}</span
@@ -79,6 +80,7 @@ import PageHeader from "@/components/PageHeader.vue";
 import CollectionDialog from "@/components/library/CollectionDialog.vue";
 import { listCollections, type Collection } from "@/api/library";
 import { safeExternalLink } from "@/utils/externalLinks";
+import { localLibraryImage, libraryCardImageURL } from "@/utils/libraryMarkdown";
 import "@/library.css";
 const collections = ref<Collection[]>([]),
   loading = ref(false),
@@ -98,7 +100,7 @@ const categories = computed(() => [
     ),
   );
 function safeCover(url: string) {
-  return /^https?:\/\//i.test(url) && safeExternalLink(url);
+  return localLibraryImage(url) || (/^https?:\/\//i.test(url) && safeExternalLink(url));
 }
 function templateName(t: string) {
   return (

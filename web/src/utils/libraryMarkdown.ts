@@ -4,6 +4,10 @@ import { safeExternalLink } from "./externalLinks";
 export function localLibraryImage(src: string): boolean {
   return /^\/api\/v1\/library\/images\/[a-f0-9]{32}$/.test(src);
 }
+// Only display URLs use this rendition; stored references and exports keep originals.
+export function libraryCardImageURL(src: string): string {
+  return localLibraryImage(src) ? `${src}?variant=card-v1` : src;
+}
 export function internalPageID(
   href: string,
   collection: number,

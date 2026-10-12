@@ -255,6 +255,62 @@ async function createTopic(page: Page, name: string, template: string) {
   await dialog.getByRole("button", { name: "保存专题" }).click();
   await expect(dialog).not.toBeVisible();
 }
+test("Cards 独立阅读、返回、刷新、编辑及前进后退保留视图与搜索", async ({ page }) => {
+  const state = await mock(page);
+  seed(state, 1, 2, "合成菜品", "## 做法\n\n自己的心得");
+  await page.goto("/explore/library/2?q=合成");
+  await expect(page).toHaveURL(/view=list/);
+  await page.locator(".library-page-link").first().click();
+  await expect(page.locator(".library-reader-header h2")).toHaveText("合成菜品");
+  await expect(page.locator(".library-directory")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "卡片清单", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await page.reload();
+  await expect(page.locator(".library-directory")).toHaveCount(0);
+  await page.getByRole("button", { name: "编辑页面", exact: true }).click();
+  await page.getByLabel("页面标题").fill("合成菜品改名");
+  await page.getByRole("button", { name: "保存页面", exact: true }).click();
+  await expect(page.locator(".library-reader-header h2")).toHaveText("合成菜品改名");
+  await expect(page.locator(".library-directory")).toHaveCount(0);
+  await page.getByRole("button", { name: "卡片清单", exact: true }).click();
+  await expect(page.locator(".library-page-link")).toBeVisible();
+  await expect(page).toHaveURL(/\/library\/2\?q=.*view=list/);
+  await page.goBack();
+  await expect(page.locator(".library-reader-header h2")).toHaveText("合成菜品改名");
+  await expect(page.locator(".library-directory")).toHaveCount(0);
+  await page.goForward();
+  await expect(page.locator(".library-page-link")).toBeVisible();
+  await page.locator(".library-page-link").click();
+  await page.getByRole("button", { name: "返回卡片画廊" }).click();
+  await expect(page.locator(".library-page-link")).toBeVisible();
+});
+
+test("Wiki 页面双向切换与历史来源独立于专题默认模式", async ({ page }) => {
+  const state = await mock(page);
+  state.sections.push({ id: 1, collection_id: 1, name: "章节" }, { id: 2, collection_id: 1, name: "角色" });
+  seed(state, 1, 1, "第四章", "## 说明", 1);
+  seed(state, 2, 1, "角色培养", "## 培养", 2);
+  await page.goto("/explore/library/1/pages/1");
+  await expect(page.locator(".library-reader-header h2")).toHaveText("第四章");
+  await expect(page.locator(".library-directory")).toBeVisible();
+  await page.locator(".library-page-link").filter({ hasText: "角色培养" }).click();
+  await expect(page.locator(".library-reader-header h2")).toHaveText("角色培养");
+  await expect(page.locator(".library-directory")).toBeVisible();
+  await page.getByRole("button", { name: "卡片清单", exact: true }).click();
+  await expect(page.locator(".library-reader-header")).toHaveCount(0);
+  await expect(page.locator(".library-page-link")).toHaveCount(2);
+  await page.goBack();
+  await expect(page.locator(".library-reader-header h2")).toHaveText("角色培养");
+  await expect(page.getByRole("button", { name: "Wiki 目录", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await page.goForward();
+  await page.locator(".library-page-link").filter({ hasText: "第四章" }).click();
+  await expect(page.locator(".library-directory")).toHaveCount(0);
+  await page.getByRole("button", { name: "Wiki 目录", exact: true }).click();
+  await expect(page.locator(".library-reader-header h2")).toHaveText("第四章");
+  await expect(page.locator(".library-directory")).toBeVisible();
+  await page.reload();
+  await expect(page.locator(".library-directory")).toBeVisible();
+});
+
 test("Wiki 与菜谱处于同一级，空专题不自动写入页面，菜谱根目录模板可保存", async ({
   page,
 }) => {

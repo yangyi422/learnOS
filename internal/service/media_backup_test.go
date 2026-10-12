@@ -34,6 +34,9 @@ func TestFullBackupRestoreImagesAndLegacyDatabaseCompatibility(t *testing.T) {
 		t.Fatal(e)
 	}
 	svc := NewBackupService(db, cfg)
+	if _, e = images.ResponseBytes(ctx, row, LibraryCardVariant); e != nil {
+		t.Fatal(e)
+	}
 	backup, e := svc.Create(ctx)
 	if e != nil {
 		t.Fatal(e)
@@ -44,6 +47,16 @@ func TestFullBackupRestoreImagesAndLegacyDatabaseCompatibility(t *testing.T) {
 	if e = svc.ValidateBackup(backup.Path); e != nil {
 		t.Fatal(e)
 	}
+	archive, e := zip.OpenReader(backup.Path)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, file := range archive.File {
+		if strings.Contains(file.Name, "thumbnails") {
+			t.Fatal("regenerable cache included in archival backup")
+		}
+	}
+	archive.Close()
 	db.Model(&model.LibraryPage{}).Where("id = ?", page.ID).Update("title", "changed")
 	if _, e = svc.RequestRestore(ctx, backup.Name, "恢复 "+backup.Name); e != nil {
 		t.Fatal(e)
@@ -65,6 +78,12 @@ func TestFullBackupRestoreImagesAndLegacyDatabaseCompatibility(t *testing.T) {
 	conn, _ = restored.DB()
 	defer conn.Close()
 	check := NewLibraryImageService(repository.NewLibraryImageRepository(restored), cfg.DatabasePath, 0)
+	if _, e = os.Stat(check.thumbnailPath(row)); !os.IsNotExist(e) {
+		t.Fatal("expected cold cache after migration")
+	}
+	if _, e = check.ResponseBytes(ctx, row, LibraryCardVariant); e != nil {
+		t.Fatal("restored historical image cannot regenerate thumbnail", e)
+	}
 	_, data, e := check.Read(ctx, 1, row.ID)
 	if e != nil || !bytes.Equal(data, syntheticImage(t, "png")) {
 		t.Fatal("restored image missing", e)

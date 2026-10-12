@@ -44,15 +44,13 @@
         </div>
       </header>
       <div class="library-topic-tools">
-        <el-radio-group
-          :model-value="collection.display_mode"
+        <el-button-group
           aria-label="专题展示方式"
-          :disabled="busy || uploading || editing || loading"
-          @change="changeMode"
-          ><el-radio-button value="wiki">Wiki 目录</el-radio-button
-          ><el-radio-button value="list"
-            >卡片清单</el-radio-button
-          ></el-radio-group
+          role="group"
+          ><el-button :type="viewMode === 'wiki' ? 'primary' : 'default'" :aria-pressed="viewMode === 'wiki'" :disabled="busy || uploading || editing || loading" @click="changeMode('wiki')">Wiki 目录</el-button
+          ><el-button :type="viewMode === 'list' ? 'primary' : 'default'" :aria-pressed="viewMode === 'list'" :disabled="busy || uploading || editing || loading" @click="changeMode('list')">卡片清单</el-button
+          ></el-button-group
+        ><el-button v-if="cardsReading" text :disabled="busy || uploading || editing || loading" @click="returnToGallery">返回卡片画廊</el-button
         ><el-button
           text
           :disabled="busy || uploading || editing || loading"
@@ -74,11 +72,12 @@
       <div
         class="library-topic-layout"
         :class="{
-          'is-list': collection.display_mode === 'list',
+          'is-list': viewMode === 'list',
+          'is-card-reading': cardsReading,
           'has-reader': current || editing,
         }"
       >
-        <aside class="library-directory" aria-label="专题目录">
+        <aside v-if="!cardsReading" class="library-directory" aria-label="专题目录">
           <form class="library-search" @submit.prevent="search">
             <el-input
               v-model="searchInput"
@@ -138,12 +137,13 @@
               :aria-current="current?.id === p.id ? 'page' : undefined"
               ><img
                 v-if="
-                  collection.display_mode === 'list' && safeCover(p.cover_url)
+                  viewMode === 'list' && safeCover(p.cover_url)
                 "
-                :src="p.cover_url"
+                :src="libraryCardImageURL(p.cover_url)"
                 alt=""
                 referrerpolicy="no-referrer"
                 loading="lazy"
+                decoding="async"
               />
               <h3>{{ p.title }}</h3>
               <span class="library-muted"
@@ -312,7 +312,7 @@
         <div v-else-if="!loading" class="library-reading-hint">
           <h2>
             {{
-              collection.display_mode === "wiki"
+              viewMode === "wiki"
                 ? "从目录打开一篇资料"
                 : "自己的常用资料，随时翻阅"
             }}
@@ -364,7 +364,7 @@ import {
   type PageInput,
   type CollectionInput,
 } from "@/api/library";
-import { localLibraryImage } from "@/utils/libraryMarkdown";
+import { localLibraryImage, libraryCardImageURL } from "@/utils/libraryMarkdown";
 import { safeExternalLink } from "@/utils/externalLinks";
 import CollectionDialog from "@/components/library/CollectionDialog.vue";
 import PageCoverEditor from "@/components/library/PageCoverEditor.vue";
@@ -406,9 +406,11 @@ const collectionID = computed(() => Number(route.params.collection)),
   query = computed(() => String(route.query.q || "")),
   sectionFilter = computed(() => String(route.query.section || "")),
   pageNumber = computed(() => Math.max(1, Number(route.query.p) || 1)),
+  viewMode = computed<"wiki" | "list">(() => route.query.view === "wiki" || route.query.view === "list" ? route.query.view : collection.value?.display_mode || "wiki"),
+  cardsReading = computed(() => viewMode.value === "list" && (Boolean(route.params.page) || editing.value)),
   collectionURL = computed(() => ({
     path: `/explore/library/${collectionID.value}`,
-    query: route.query,
+    query: { ...route.query, view: viewMode.value },
   }));
 const input = () => ({
   title: form.title,
@@ -429,13 +431,13 @@ let sequence = 0;
 function pageURL(id: number) {
   return {
     path: `/explore/library/${collectionID.value}/pages/${id}`,
-    query: route.query,
+    query: { ...route.query, view: viewMode.value },
   };
 }
 function filterURL(section: string) {
   return {
     path: `/explore/library/${collectionID.value}`,
-    query: { q: query.value || undefined, section: section || undefined },
+    query: { q: query.value || undefined, section: section || undefined, view: viewMode.value },
   };
 }
 function safeCover(url: string) {
@@ -461,6 +463,7 @@ async function load() {
     col = collectionID.value;
   loading.value = true;
   if (collection.value?.id !== col) collection.value = undefined;
+  if (current.value?.id !== Number(route.params.page)) current.value = undefined;
   error.value = "";
   copied.value = "";
   searchInput.value = query.value;
@@ -474,6 +477,11 @@ async function load() {
     sections.value = detail.sections;
     rows.value = list.items;
     total.value = list.total;
+    // Canonicalize once: browser history must not inherit a changed default.
+    if (route.query.view !== "wiki" && route.query.view !== "list") {
+      await router.replace({ path: route.path, query: { ...route.query, view: detail.collection.display_mode } });
+      if (seq !== sequence) return;
+    }
     current.value = undefined;
     if (route.params.page) {
       const row = await getPage(col, Number(route.params.page));
@@ -512,7 +520,7 @@ onBeforeRouteUpdate(async () => {
   editing.value = false;
 });
 watch(
-  () => route.fullPath,
+  () => JSON.stringify([route.params.collection, route.params.page, route.query.q, route.query.section, route.query.p]),
   () => {
     if (route.path.startsWith("/explore/library/")) load();
   },
@@ -614,6 +622,7 @@ async function search() {
     query: {
       q: searchInput.value.trim() || undefined,
       section: sectionFilter.value || undefined,
+      view: viewMode.value,
     },
   });
 }
@@ -770,13 +779,20 @@ function collectionInput(c: Collection): CollectionInput {
   };
 }
 async function changeMode(value: unknown) {
-  if (!collection.value) return;
+  if (!collection.value || busy.value || uploading.value || editing.value || loading.value || (value !== "wiki" && value !== "list")) return;
+  let saved = false;
   await action(async () => {
-    collection.value = await saveCollection(collectionID.value, {
-      ...collectionInput(collection.value!),
-      display_mode: value as "wiki" | "list",
-    });
+    if (collection.value!.display_mode !== value) {
+      collection.value = await saveCollection(collectionID.value, {
+        ...collectionInput(collection.value!), display_mode: value,
+      });
+    }
+    saved = true;
   });
+  if (saved) await router.push({ path: value === "list" ? `/explore/library/${collectionID.value}` : route.path, query: { ...route.query, view: value } });
+}
+async function returnToGallery() {
+  await router.push({ path: `/explore/library/${collectionID.value}`, query: { ...route.query, view: "list" } });
 }
 async function collectionSaved(row: Collection) {
   collection.value = row;

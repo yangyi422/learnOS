@@ -63,6 +63,37 @@ func TestLibraryImageAPIAuthenticationLimitsAndOrigin(t *testing.T) {
 	if res.Code != 200 || res.Header().Get("Content-Type") != "image/png" || res.Header().Get("X-Content-Type-Options") != "nosniff" || !strings.Contains(res.Header().Get("Cache-Control"), "private") || !bytes.Equal(res.Body.Bytes(), pngData.Bytes()) {
 		t.Fatal(res.Code, res.Header())
 	}
+	for _, variant := range []string{"", "?variant=card-v1"} {
+		first := httptest.NewRecorder()
+		router.ServeHTTP(first, httptest.NewRequest("GET", result.Data.URL+variant, nil))
+		etag := first.Header().Get("ETag")
+		if first.Code != 200 || etag == "" || first.Header().Get("Cache-Control") != "private, no-cache" || first.Header().Get("Vary") != "Cookie, Authorization" {
+			t.Fatal("unsafe or missing cache policy", first.Code, first.Header())
+		}
+		if variant != "" && first.Header().Get("Content-Type") != "image/jpeg" {
+			t.Fatal("thumbnail MIME")
+		}
+		for _, value := range []string{etag, "W/" + etag, `"unrelated", ` + etag, "*"} {
+			req := httptest.NewRequest("GET", result.Data.URL+variant, nil)
+			req.Header.Set("If-None-Match", value)
+			cached := httptest.NewRecorder()
+			router.ServeHTTP(cached, req)
+			if cached.Code != 304 || cached.Body.Len() != 0 {
+				t.Fatal("conditional GET", cached.Code)
+			}
+			private := NewRouter(config.Config{Environment: "production"}, handler, web)
+			unauthorized := httptest.NewRecorder()
+			private.ServeHTTP(unauthorized, req)
+			if unauthorized.Code != 401 {
+				t.Fatal("cache bypassed authentication", unauthorized.Code)
+			}
+		}
+	}
+	invalidVariant := httptest.NewRecorder()
+	router.ServeHTTP(invalidVariant, httptest.NewRequest("GET", result.Data.URL+"?variant=50000", nil))
+	if invalidVariant.Code != 400 {
+		t.Fatal("unbounded thumbnail variant accepted")
+	}
 	upload(pngData.Bytes(), "https://evil.example.com", 403)
 	upload([]byte("<svg onload='alert(1)'></svg>"), "", 400)
 	upload(make([]byte, librarymedia.MaxBytes+1), "", 413)

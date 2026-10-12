@@ -173,6 +173,23 @@ test("click upload inserts at caret, preview and saved reading show authenticate
   expect(state.uploads).toBe(1);
 });
 
+test("card directory requests one lazy async rendition and does not download its original", async ({ page }) => {
+  const state = await mock(page);
+  state.collection.display_mode = "list";
+  state.saved.cover_url = imageURL;
+  const requests: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === imageURL) requests.push(new URL(request.url()).search);
+  });
+  await page.goto("/explore/library/1");
+  const cover = page.locator(".library-page-link img");
+  await expect(cover).toHaveAttribute("src", `${imageURL}?variant=card-v1`);
+  await expect(cover).toHaveAttribute("loading", "lazy");
+  await expect(cover).toHaveAttribute("decoding", "async");
+  await expect.poll(() => cover.evaluate((image) => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0)).toBe(true);
+  expect(requests).toEqual(["?variant=card-v1"]);
+});
+
 test("paste image is uploaded once, concurrent typing is preserved, plain clipboard text retains native behavior", async ({
   page,
 }) => {
@@ -366,10 +383,7 @@ test("cover upload previews, saves and refreshes in reader and page cards; failu
     "src",
     imageURL,
   );
-  await expect(page.locator(".library-page-link img")).toHaveAttribute(
-    "src",
-    imageURL,
-  );
+  await expect(page.locator(".library-directory")).toHaveCount(0);
   await page.reload();
   await expect(page.getByAltText("页面封面", { exact: true })).toHaveAttribute(
     "src",
@@ -377,6 +391,8 @@ test("cover upload previews, saves and refreshes in reader and page cards; failu
   );
   expect(state.saved.cover_url).toBe(imageURL);
   expect(state.saved.body).toBe("原有正文");
+  await page.getByRole("button", { name: "返回卡片画廊" }).click();
+  await expect(page.locator(".library-page-link img")).toHaveAttribute("src", `${imageURL}?variant=card-v1`);
 });
 
 test("body image cover reuses stable ID without upload, clear preserves body, HTTPS cover remains supported", async ({
