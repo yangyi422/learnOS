@@ -1,5 +1,9 @@
 # LearnOS 界面设计规范
 
+## 共享页面基础（UI Foundation V1）
+
+新页面使用 PageShell standard/wide/reading，不另设根容器最大宽度。默认 1320px、多列 1600px；reading 的文章栏 860px，目录和标题保持外层宽度。AppShell 统一页面内边距，PageHeader 统一面包屑、标题、说明与操作。普通控件采用 36px 基线，保留业务专用的小/大号控件和内部布局；Markdown 不使用应用标题规则。具体 Token、页面分配与兼容边界见 [UI_FOUNDATION.md](UI_FOUNDATION.md)。
+
 LearnOS 是个人学习、探索和项目管理空间。界面采用**极简未来感个人工作空间**的方向：信息清楚、操作明确、材质克制。此文档约束后续前端设计决策；现有主题实现与已完成的看板细节见 [WORKSPACE_VISUAL.md](WORKSPACE_VISUAL.md)。
 
 ## 视觉语言

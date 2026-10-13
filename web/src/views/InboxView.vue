@@ -1,5 +1,5 @@
 <template>
-  <section class="inbox-page page-stack">
+  <PageShell class="inbox-page" variant="standard">
     <PageHeader title="收集箱" description="先记下来，稍后再整理。">
       <template #actions><el-button type="primary" @click="captureOpen = true">快速记录</el-button></template>
     </PageHeader>
@@ -42,10 +42,11 @@
       <el-input v-model="editContent" type="textarea" :rows="5" maxlength="10000" show-word-limit />
       <template #footer><el-button @click="editOpen = false">取消</el-button><el-button type="primary" :loading="saving" :disabled="!editContent.trim()" @click="saveEdit">保存</el-button></template>
     </el-dialog>
-  </section>
+  </PageShell>
 </template>
 
 <script setup lang="ts">
+import PageShell from '@/components/PageShell.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -137,10 +138,10 @@ onBeforeUnmount(() => { ++loadSequence })
 </script>
 
 <style scoped>
-.inbox-page { max-width: 1080px; }
+
 .inbox-page :deep(.page-header) { margin-bottom:20px; }
 .inbox-tabs { display:flex; gap:18px; border-bottom:1px solid var(--border-subtle); }
-.inbox-tabs button { display:flex; align-items:center; gap:8px; position:relative; min-height:42px; padding:0 3px; border:0; background:transparent; color:var(--text-secondary); font-size:14px; cursor:pointer; }
+.inbox-tabs button { display:flex; align-items:center; gap:8px; position:relative; min-height:var(--control-height); padding:0 3px; border:0; background:transparent; color:var(--text-secondary); font-size:14px; cursor:pointer; }
 .inbox-tabs button.active { color:var(--color-primary); font-weight:650; }
 .inbox-tabs button.active::after { position:absolute; right:0; bottom:-1px; left:0; height:2px; background:var(--color-primary); content:''; }
 .inbox-tabs span { color:var(--text-tertiary); font-size:12px; }

@@ -1,9 +1,7 @@
 <template>
-  <section class="exploration-page">
- <nav class="library-entry" aria-label="探索空间"><RouterLink to="/explore" aria-current="page">知识探索</RouterLink><RouterLink to="/explore/library">我的资料库</RouterLink></nav>
-    <el-card v-if="!courses.length && !loading" shadow="never" class="empty-exploration">
-      <el-empty description="探索空间将在你建立第一个学习领域后开始工作"><el-button type="primary" @click="router.push('/domains/new')">创建学习领域</el-button></el-empty>
-    </el-card>
+  <PageShell class="exploration-page" variant="wide">
+
+
     <PageHeader eyebrow="探索引擎" title="探索空间" description="从当前课程旁支看看其他知识连接。探索不会改变课程主线。">
       <template #actions>
         <div v-if="courses.length" class="exploration-domain-selector">
@@ -25,6 +23,10 @@
         </div>
       </template>
     </PageHeader>
+    <nav class="library-entry" aria-label="探索空间"><RouterLink to="/explore" aria-current="page">知识探索</RouterLink><RouterLink to="/explore/library">我的资料库</RouterLink></nav>
+    <el-card v-if="!courses.length && !loading" shadow="never" class="empty-exploration">
+      <el-empty description="探索空间将在你建立第一个学习领域后开始工作"><el-button type="primary" @click="router.push('/domains/new')">创建学习领域</el-button></el-empty>
+    </el-card>
 
     <el-alert v-if="error" :title="error" type="error" show-icon :closable="false" />
     <el-tabs v-model="activeTab" class="exploration-tabs">
@@ -95,10 +97,11 @@
         </el-card>
       </el-tab-pane>
     </el-tabs>
-  </section>
+  </PageShell>
 </template>
 
 <script setup lang="ts">
+import PageShell from '@/components/PageShell.vue'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { listCourses } from '@/api/courses'

@@ -1,5 +1,5 @@
 <template>
-  <section v-if="view" class="page-stack source-page">
+  <PageShell v-if="view" class="source-page" variant="reading">
     <div class="section-heading"><div><el-button text @click="router.push('/sources')">← 返回来源</el-button><h2>{{ view.source.title }}</h2><p class="muted">{{ sourceTypeText(view.source.source_type) }} · {{ statusText(view.source.verification_status) }}</p></div></div>
     <el-alert title="可信度评分评价来源质量和适用性，不等于自动证明来源中的每个结论正确。" type="info" :closable="false" />
     <el-card shadow="never"><el-descriptions :column="2" border><el-descriptions-item label="作者 / 组织">{{ view.source.authors || view.source.organization || '—' }}</el-descriptions-item><el-descriptions-item label="年份">{{ view.source.publication_year || '—' }}</el-descriptions-item><el-descriptions-item label="网址">{{ view.source.url || '—' }}</el-descriptions-item><el-descriptions-item label="DOI / ISBN">{{ view.source.doi || view.source.isbn || '—' }}</el-descriptions-item></el-descriptions></el-card>
@@ -10,10 +10,11 @@
     <el-dialog v-model="showEvidence" title="添加来源证据"><el-form label-position="top"><el-form-item label="定位"><el-input v-model="evidence.locator" placeholder="例如：第 1 节" /></el-form-item><el-form-item label="摘要或摘录"><el-input v-model="evidence.summary" type="textarea" /></el-form-item></el-form><template #footer><el-button @click="showEvidence=false">取消</el-button><el-button type="primary" @click="saveEvidence">保存来源证据</el-button></template></el-dialog>
     <el-dialog v-model="showCredibility" title="创建可信度草案"><el-form label-position="top"><el-form-item v-for="field in scoreFields" :key="field.key" :label="field.label"><el-input-number v-model="(credibility as any)[field.key]" :min="0" :max="20" /></el-form-item></el-form><template #footer><el-button @click="showCredibility=false">取消</el-button><el-button type="primary" @click="saveCredibility">创建可信度草案</el-button></template></el-dialog>
     <el-dialog v-model="showLinkDialog" title="建立证据关联"><el-form label-position="top"><el-form-item label="关联对象类型"><el-select v-model="link.target_type" style="width:100%"><el-option label="蓝图节点" value="blueprint_lesson" /><el-option label="正式课程节点" value="lesson" /><el-option label="课程蓝图" value="curriculum_blueprint" /></el-select></el-form-item><el-form-item label="关联对象 ID"><el-input-number v-model="link.target_id" :min="1" /></el-form-item><el-form-item label="关系"><el-select v-model="link.relation"><el-option label="支持" value="supports" /><el-option label="限制" value="limits" /><el-option label="补充背景" value="contextualizes" /><el-option label="矛盾" value="contradicts" /></el-select></el-form-item><el-form-item label="证据强度"><el-select v-model="link.strength"><el-option label="弱" value="weak" /><el-option label="中等" value="moderate" /><el-option label="强" value="strong" /></el-select></el-form-item></el-form><template #footer><el-button @click="showLinkDialog=false">取消</el-button><el-button type="primary" @click="saveLink">创建待审核关联</el-button></template></el-dialog>
-  </section>
+  </PageShell>
 </template>
 
 <script setup lang="ts">
+import PageShell from '@/components/PageShell.vue'
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
@@ -48,7 +49,7 @@ onMounted(load)
 </script>
 
 <style scoped>
-.source-page { max-width: 1100px; margin: 0 auto; }
+
 .muted { color: var(--text-secondary); }
 .card-header, .review-row, .evidence-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
 .review-row, .evidence-row { padding: 10px 0; border-bottom: 1px solid var(--border-subtle); }

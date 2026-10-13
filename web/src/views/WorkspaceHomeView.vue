@@ -1,5 +1,5 @@
 <template>
-  <section class="workspace-home page-stack">
+  <PageShell class="workspace-home" variant="standard">
     <PageHeader title="今天继续什么？" :description="dateLabel">
       <template #actions>
         <el-button type="primary" @click="captureOpen = true">快速记录</el-button>
@@ -191,10 +191,11 @@
     </div>
 
     <QuickCaptureDialog v-model="captureOpen" @created="load" />
-  </section>
+  </PageShell>
 </template>
 
 <script setup lang="ts">
+import PageShell from '@/components/PageShell.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -388,9 +389,7 @@ onMounted(load)
 </script>
 
 <style scoped>
-.workspace-home { max-width: 1280px; }
-.workspace-home :deep(.page-header) { margin-bottom: 22px; }
-.workspace-home :deep(.page-header h1) { font-size: clamp(27px, 2.2vw, 32px); }
+
 .workspace-home__refresh-error { display: flex; align-items: center; gap: 8px; margin: -8px 0 14px; color: var(--color-warning); font-size: 13px; }
 .workspace-home__fatal-error { max-width: 560px; margin: 8vh auto 0; }
 .workspace-home__grid { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 18px 24px; margin-top: 4px; }

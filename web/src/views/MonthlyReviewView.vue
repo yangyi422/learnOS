@@ -1,7 +1,7 @@
 <template>
-  <section class="page-stack life-page monthly-review-page">
-    <nav class="life-breadcrumb" aria-label="当前位置"><RouterLink :to="lifeReturn">生活</RouterLink><span>/</span><span aria-current="page">月度回顾</span></nav>
-    <PageHeader :title="`我的 ${month.slice(0,4)} 年 ${Number(month.slice(5))} 月`" description="把真实记录与自己的想法留在一起，不必每个月都写。"><template #actions><RouterLink :to="lifeReturn">返回生活</RouterLink></template></PageHeader>
+  <PageShell class="life-page monthly-review-page" variant="standard">
+
+    <PageHeader :title="`我的 ${month.slice(0,4)} 年 ${Number(month.slice(5))} 月`" description="把真实记录与自己的想法留在一起，不必每个月都写。"><template #breadcrumbs><nav class="life-breadcrumb" aria-label="当前位置"><RouterLink :to="lifeReturn">生活</RouterLink><span>/</span><span aria-current="page">月度回顾</span></nav></template><template #actions><RouterLink :to="lifeReturn">返回生活</RouterLink></template></PageHeader>
     <div class="review-toolbar"><label for="review-month">回顾月份</label><el-date-picker :key="pickerKey" id="review-month" :model-value="month" type="month" value-format="YYYY-MM" format="YYYY 年 MM 月" aria-label="回顾月份" :clearable="false" :disabled="busy" @update:model-value="selectMonth" /><el-button :disabled="busy || loading || Boolean(historyID)" @click="regenerate">重新汇总</el-button><el-select v-if="savedMonths.length" :model-value="month" placeholder="已保存回顾" aria-label="已保存回顾" :disabled="busy" @update:model-value="selectMonth"><el-option v-for="row in savedMonths" :key="row.month" :label="row.month + ' · 已保存'" :value="row.month" /></el-select></div>
     <el-alert v-if="error" :title="error" type="error" :closable="false"><el-button :disabled="busy" text @click="retry">重试读取</el-button></el-alert>
     <div v-loading="loading" class="review-content">
@@ -25,9 +25,10 @@
         <details class="review-limits"><summary>数据范围与历史限制</summary><p v-for="limit in document.facts.limits" :key="limit" class="life-muted">{{ limit }}</p></details>
       </template>
     </div>
-  </section>
+  </PageShell>
 </template>
 <script setup lang="ts">
+import PageShell from '@/components/PageShell.vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'

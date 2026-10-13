@@ -1,5 +1,5 @@
 <template>
-  <section class="learning-page">
+  <PageShell class="learning-page" variant="reading">
     <PageHeader eyebrow="学习模式" title="误区网络" description="查看影响学习判断的底层思维模式与具体误区。">
       <template #actions><el-button text @click="router.push(`/courses/${courseID}/learn`)">返回学习</el-button><el-button text :loading="loading" @click="loadNetwork">刷新网络</el-button></template>
     </PageHeader>
@@ -44,10 +44,11 @@
         </div>
       </el-card>
     </div>
-  </section>
+  </PageShell>
 </template>
 
 <script setup lang="ts">
+import PageShell from '@/components/PageShell.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'

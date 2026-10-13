@@ -1,5 +1,5 @@
 <template>
-  <section class="learning-page editorial-learning-page">
+  <PageShell class="learning-page editorial-learning-page" variant="reading">
     <header class="learning-context-header">
       <div class="learning-context-header__copy">
         <nav class="editorial-breadcrumb"><button type="button" @click="router.push('/learn')">学习</button><span>›</span><span>{{ current?.course.name || '正在学习' }}</span><span v-if="current">›</span><strong v-if="current">{{ current.unit.title }}</strong></nav>
@@ -68,10 +68,11 @@
         </div>
       </el-form>
     </footer>
-  </section>
+  </PageShell>
 </template>
 
 <script setup lang="ts">
+import PageShell from '@/components/PageShell.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { retryConversation, getConversation, sendConversation, advanceConversation, type ConversationData, type ConversationTurn, getCurrentLesson, getLessonForLearning, listLearningTurns, submitAnswer, submitLessonAnswer } from '@/api/learning'
@@ -591,7 +592,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .learning-page { position: relative; padding-bottom: 180px; }
-.learning-page .editorial-layout { display: block; max-width: 980px; margin-inline: auto; }
+.learning-page .editorial-layout { display: block; max-width: var(--page-reading-width); margin-inline: auto; }
 .learning-context-header h1 { font-size: clamp(22px, 2vw, 30px); }
 .learning-context-header h1 small { font-size: 14px; font-weight: 400; margin-left: 12px; }
 .lesson-notes { padding: 20px 0; border-bottom: 1px solid var(--border-default); }

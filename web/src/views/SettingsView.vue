@@ -1,5 +1,5 @@
 <template>
-  <section class="page-stack settings-page">
+  <PageShell class="settings-page" variant="standard">
     <PageHeader eyebrow="系统管理" title="系统设置" description="管理 AI 连接、备份恢复、数据导出和运行状态。">
       <template #actions><el-button :loading="loading" @click="load">刷新系统状态</el-button></template>
     </PageHeader>
@@ -162,10 +162,11 @@
         <p class="settings-help">超时由服务器环境配置。AI 失败或超时不会写入半成品学习数据。</p>
       </el-collapse-item>
     </el-collapse>
-  </section>
+  </PageShell>
 </template>
 
 <script setup lang="ts">
+import PageShell from '@/components/PageShell.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import StatusTag from '@/components/StatusTag.vue'
 import WorkspaceIcon from '@/components/WorkspaceIcon.vue'
@@ -323,7 +324,7 @@ onMounted(load)
 </script>
 
 <style scoped>
-.settings-page { max-width: 1040px; margin: 0 auto; }
+
 .appearance-settings { margin-bottom: 18px; }
 .appearance-settings__copy { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
 .appearance-settings__eyebrow { color: var(--text-tertiary); font-size: 10px; font-weight: 700; letter-spacing: .14em; }

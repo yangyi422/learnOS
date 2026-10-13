@@ -10,6 +10,7 @@ const emptyToday = { date: '2026-09-29', doing: [], due: [], next: [] }
 
 interface MockOptions {
   homeDelayMs?: number
+  homeGate?: Promise<void>
   failHomeTimes?: number
   failCreateTimes?: number
   firstHomeOverrides?: Partial<WorkspaceHome>
@@ -26,6 +27,7 @@ async function installWorkspaceMocks(page: Page, homeOverrides: Partial<Workspac
     if (pathname === '/api/v1/auth/me') return reply({ id: 1, username: 'isolated-test', role: 'admin', status: 'active' })
     if (pathname === '/api/v1/workspace/home') {
       homeCalls += 1
+      if (homeCalls === 1 && options.homeGate) await options.homeGate
       if (options.homeDelayMs) await new Promise(resolve => setTimeout(resolve, options.homeDelayMs))
       if (homeCalls <= (options.failHomeTimes ?? 0)) {
         return route.fulfill({
@@ -257,10 +259,13 @@ test('Inline Quick Capture 失败时保留输入并显示可读错误', async ({
 })
 
 test('首页显示各区骨架，首屏请求失败后可重试', async ({ page }) => {
-  await installWorkspaceMocks(page, {}, { homeDelayMs: 250, failHomeTimes: 1 })
+  let release!: () => void
+  const homeGate = new Promise<void>(resolve => { release = resolve })
+  await installWorkspaceMocks(page, {}, { homeGate, failHomeTimes: 1 })
   await page.goto('/')
   await expect(page.locator('.focus-card--skeleton')).toBeVisible()
   await expect(page.locator('.home-section--skeleton')).toHaveCount(4)
+  release()
   await expect(page.locator('.workspace-home__fatal-error')).toBeVisible()
   await page.getByRole('button', { name: '重试' }).click()
   await expect(page.locator('#focus-title')).toHaveText(task.title)

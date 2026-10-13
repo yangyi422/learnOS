@@ -1,5 +1,5 @@
 <template>
-  <section class="page-stack curriculum-page coverage-page">
+  <PageShell class="curriculum-page coverage-page" variant="standard">
     <PageHeader eyebrow="知识盘点" title="课程档案与覆盖度" description="盘点课程蓝图已经覆盖什么，以及下一步应该补齐哪里。">
       <template #actions><LifeCaptureButton v-if="lifeSource?.eligible" source-type="course" :source-id="courseID" /><el-button v-else-if="lifeSource?.can_graduate" :loading="graduating" @click="graduate">确认课程结业</el-button><el-button text @click="router.push(`/courses/${courseID}/learn`)">返回学习</el-button><el-button type="primary" @click="router.push(`/courses/${courseID}/map`)">查看知识结构 →</el-button></template>
     </PageHeader>
@@ -26,10 +26,11 @@
       <EmptyState v-if="!drafts.length" title="暂无课程扩充草案" description="当课程蓝图出现核心缺口时，可以在这里生成待审核草案。" />
       <div v-else class="curriculum-draft-list"><CurriculumDraftRow v-for="item in drafts" :key="item.draft.id" :item="item" @reject="rejectDraft" @apply="applyDraft" /></div>
     </section>
-  </section>
+  </PageShell>
 </template>
 
 <script setup lang="ts">
+import PageShell from '@/components/PageShell.vue'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
@@ -98,5 +99,5 @@ onBeforeUnmount(() => { if (generationPollTimer !== null) window.clearTimeout(ge
 </script>
 
 <style scoped>
-.curriculum-page { max-width: 1180px; margin: 0 auto; }
+
 </style>

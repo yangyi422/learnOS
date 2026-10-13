@@ -1,5 +1,5 @@
 <template>
-  <section class="knowledge-graph-page">
+  <PageShell class="knowledge-graph-page" variant="wide">
     <PageHeader eyebrow="知识世界" :title="graph?.course.name || '知识结构'" description="在知识地图与路径列表之间切换，理解每个学习节点的位置与进展。">
       <template #actions>
         <el-button text @click="router.push(`/courses/${courseID}/learn`)">返回学习</el-button>
@@ -122,10 +122,11 @@
         />
       </div>
     </div>
-  </section>
+  </PageShell>
 </template>
 
 <script setup lang="ts">
+import PageShell from '@/components/PageShell.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'

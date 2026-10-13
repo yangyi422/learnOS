@@ -1,14 +1,14 @@
 <template>
-  <section class="library-page">
-    <nav class="library-breadcrumb">
-      <RouterLink to="/explore">探索</RouterLink><span>/</span
-      ><span>我的资料库</span>
-    </nav>
+  <PageShell class="library-page" variant="standard">
+
     <PageHeader
       eyebrow="个人资料"
       title="我的资料库"
       description="整理常用资料，留下自己的结论与实践心得。"
-      ><template #actions
+      ><template #breadcrumbs><nav class="library-breadcrumb">
+      <RouterLink to="/explore">探索</RouterLink><span>/</span
+      ><span>我的资料库</span>
+    </nav></template><template #actions
         ><el-button type="primary" @click="creating = true"
           >新建专题</el-button
         ></template
@@ -72,9 +72,10 @@
       @close="creating = false"
       @saved="load"
     />
-  </section>
+  </PageShell>
 </template>
 <script setup lang="ts">
+import PageShell from '@/components/PageShell.vue'
 import { computed, onMounted, ref, onBeforeUnmount } from "vue";
 import PageHeader from "@/components/PageHeader.vue";
 import CollectionDialog from "@/components/library/CollectionDialog.vue";

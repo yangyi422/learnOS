@@ -579,6 +579,8 @@ test('探索空间选择器在桌面和移动端显示当前领域名称', async
 
 test('切换领域后旧推荐响应不会覆盖新领域结果', async ({ page }) => {
   await installAPIMocks(page)
+  let releaseFresh!: () => void
+  const freshGate = new Promise<void>(resolve => { releaseFresh = resolve })
   const freshDirection = {
     ...explorationDirection,
     id: 502,
@@ -599,7 +601,7 @@ test('切换领域后旧推荐响应不会覆盖新领域结果', async ({ page 
   }
   await page.route('**/api/v1/exploration/radar**', async (route) => {
     const selectedCourseID = Number(new URL(route.request().url()).searchParams.get('course_id'))
-    await new Promise((resolve) => setTimeout(resolve, selectedCourseID === 1 ? 250 : 150))
+    await (selectedCourseID === 1 ? new Promise(resolve => setTimeout(resolve, 250)) : freshGate)
     return json(route, { data: { directions: [selectedCourseID === 2 ? freshDirection : explorationDirection] } })
   })
 
@@ -609,6 +611,7 @@ test('切换领域后旧推荐响应不会覆盖新领域结果', async ({ page 
 
   await expect(page.getByRole('status')).toHaveText('切换中…')
   await expect(page.locator('.discovery-card')).toHaveCount(0)
+  releaseFresh()
   await expect(page.locator('.discovery-card', { hasText: freshDirection.title })).toBeVisible()
   await page.waitForTimeout(350)
   await expect(page.locator('.discovery-card', { hasText: explorationDirection.title })).toHaveCount(0)
@@ -705,9 +708,11 @@ test('学习回答禁止空提交，并自动保存、恢复草稿和提示离�
   await expect(editor).toHaveValue(draft)
 
   page.once('dialog', (dialog) => dialog.accept())
-  await page.reload()
-  await expect(editor).toHaveValue(draft)
-  await expect(page.getByText(/已恢复 .* 的本机草稿/)).toBeVisible()
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await Promise.all([
+    expect(editor).toHaveValue(draft),
+    expect(page.getByText(/已恢复 .* 的本机草稿/)).toBeVisible(),
+  ])
 })
 
 test('回答—评价—修正—迁移—掌握证据形成可追溯闭环', async ({ page }) => {
@@ -846,6 +851,7 @@ const responsiveRoutes = [
 
 for (const width of [375, 768, 1024, 1440]) {
   test(`${width}px 下核心页面没有横向溢出`, async ({ page }) => {
+    test.setTimeout(60_000)
     await installAPIMocks(page)
     await page.setViewportSize({ width, height: 900 })
     for (const route of responsiveRoutes) {

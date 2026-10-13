@@ -1,7 +1,7 @@
 <template>
-  <section class="page-stack life-page">
-    <nav class="life-breadcrumb" aria-label="当前位置"><span>生活</span><span>/</span><span aria-current="page">{{ tab === 'timeline' ? '生活时间线' : '长期目标' }}</span></nav>
-    <PageHeader title="生活" description="留下重要经历，也留住当时的想法。"><template #actions><el-button type="primary" @click="create">{{ tab === 'timeline' ? '+ 记录生活事件' : '+ 写下长期目标' }}</el-button></template></PageHeader>
+  <PageShell class="life-page" variant="standard">
+
+    <PageHeader title="生活" description="留下重要经历，也留住当时的想法。"><template #breadcrumbs><nav class="life-breadcrumb" aria-label="当前位置"><span>生活</span><span>/</span><span aria-current="page">{{ tab === 'timeline' ? '生活时间线' : '长期目标' }}</span></nav></template><template #actions><el-button type="primary" @click="create">{{ tab === 'timeline' ? '+ 记录生活事件' : '+ 写下长期目标' }}</el-button></template></PageHeader>
     <div class="life-toolbar"><nav class="life-tabs" aria-label="生活视图"><button type="button" role="tab" :aria-selected="tab === 'timeline'" @click="tab = 'timeline'">生活时间线</button><button type="button" role="tab" :aria-selected="tab === 'goals'" @click="tab = 'goals'">长期目标</button><RouterLink :to="{ path: '/life/finance', query: { life_view: tab, life_domain: domain || undefined, life_milestones: milestones ? 'true' : undefined } }">财务档案</RouterLink><RouterLink :to="{path:'/life/reviews',query:{life_view:tab,life_domain:domain||undefined}}">月度回顾</RouterLink></nav><el-select v-model="domain" clearable placeholder="全部生活领域" aria-label="筛选生活领域" style="width:190px"><el-option v-for="d in lifeDomains" :key="d[0]" :value="d[0]" :label="d[1]" /></el-select><el-checkbox v-if="tab === 'timeline'" v-model="milestones">只看里程碑</el-checkbox></div>
     <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon><el-button text @click="load">重试</el-button></el-alert>
     <div v-loading="loading">
@@ -13,9 +13,10 @@
     </div>
     <LifeEventDialog v-model="eventOpen" :event="selectedEvent" @saved="eventSaved" @deleted="load" />
     <LifeGoalDialog v-model="goalOpen" :detail="selectedGoal" @saved="goalSaved" @detail="goalDetailUpdated" @event="openRelatedEvent" @asset="openRelatedAsset" />
-  </section>
+  </PageShell>
 </template>
 <script setup lang="ts">
+import PageShell from '@/components/PageShell.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useArchiveScroll } from '@/composables/useArchiveScroll'

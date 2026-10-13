@@ -1,5 +1,5 @@
 <template>
-  <section class="page-stack course-library-page">
+  <PageShell class="course-library-page" variant="wide">
     <PageHeader title="你的知识世界" description="每个学习领域都拥有独立的课程结构与学习记录。">
       <template #actions>
         <el-button type="primary" @click="router.push('/domains/new')">+ 新建学习领域</el-button>
@@ -13,10 +13,11 @@
       <button class="add-domain-tile" type="button" @click="router.push('/domains/new')"><span>＋</span><strong>新建学习领域</strong><small>建立一个独立的知识世界</small></button>
     </div>
     <EmptyState v-if="!loading && courses.length === 0" title="你的知识世界还是空的" description="从一个你真正想了解的领域开始。" action-label="创建第一个学习领域" @action="router.push('/domains/new')" />
-  </section>
+  </PageShell>
 </template>
 
 <script setup lang="ts">
+import PageShell from '@/components/PageShell.vue'
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { listCourses } from '@/api/courses'

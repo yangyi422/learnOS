@@ -158,8 +158,10 @@ test('keeps manual theme choice and follows system when requested', async ({ pag
   await expect(page.locator('.task-card')).toHaveCount(4)
   await expect(page.getByRole('navigation', { name: '主要导航' }).getByRole('link', { name: '项目' })).toHaveAttribute('aria-current', 'page')
   const boardTop = (await page.locator('.kanban-column__header').first().boundingBox())?.y ?? 0
-  expect(boardTop).toBeGreaterThanOrEqual(180)
-  expect(boardTop).toBeLessThanOrEqual(220)
+  const toolbar = (await page.locator('.projects-toolbar').boundingBox())!
+  const gap = boardTop - (toolbar.y + toolbar.height)
+  expect(gap).toBeGreaterThanOrEqual(0)
+  expect(gap).toBeLessThanOrEqual(32)
   expect(await page.locator('.sidebar').evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true)
   if (process.env.CAPTURE_VISUALS) await page.screenshot({ path: testInfo.outputPath('workspace-dark.png'), fullPage: true })
   await page.locator('.task-card').filter({ hasText: '云部署' }).locator('.task-card__body').click()

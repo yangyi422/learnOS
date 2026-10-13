@@ -457,3 +457,10 @@ Phase 6 不实现探索雷达、问题池、Agent 导航、知识来源可信度
 - URL 保存视图模式，Cards 详情独立阅读、显式返回画廊、重复点击 Cards 仍可返回。
 - Wiki 分栏保留，切换、刷新、前进后退与编辑保存保持当前专题及筛选上下文。
 - 无新 API 或迁移；资料库及图片浏览器回归 20 项通过。
+
+### UI Foundation V1
+
+- 新增 PageShell standard/wide/reading，主要页面外层渐进迁移。
+- PageHeader、面包屑、标题/操作基线、主题几何 Token 与默认控件高度统一。
+- 保留工作台网格、看板、学习聊天、Wiki/Cards 及 Markdown 专用布局。
+- 四种窗口宽度的合成数据巡检与截图；35 项单元测试、147 项浏览器测试及构建通过。设计及范围见 [UI_FOUNDATION.md](UI_FOUNDATION.md)。

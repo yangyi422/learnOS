@@ -1,5 +1,5 @@
 <template>
-  <section class="page-stack">
+  <PageShell  variant="standard">
     <PageHeader eyebrow="用户管理" title="用户与学习空间" description="管理员可以创建用户、查看用户课程，并暂时停用账号。">
       <template #actions><el-button type="primary" @click="dialogOpen = true">+ 添加用户</el-button></template>
     </PageHeader>
@@ -25,10 +25,11 @@
       <el-table v-loading="coursesLoading" :data="courses"><el-table-column prop="name" label="课程" /><el-table-column prop="status" label="状态" /><el-table-column prop="learning_status" label="学习状态" /><el-table-column prop="mastery_progress" label="掌握度"><template #default="scope">{{ scope.row.mastery_progress }}%</template></el-table-column></el-table>
       <el-empty v-if="!coursesLoading && !courses.length" description="该用户还没有课程" />
     </el-dialog>
-  </section>
+  </PageShell>
 </template>
 
 <script setup lang="ts">
+import PageShell from '@/components/PageShell.vue'
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'

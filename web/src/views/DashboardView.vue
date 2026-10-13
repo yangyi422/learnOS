@@ -1,5 +1,5 @@
 <template>
-  <section class="dashboard-page">
+  <PageShell class="dashboard-page" variant="wide">
     <PageHeader v-if="loading || error || courses.length > 0" :title="pageTitle" />
 
     <el-alert v-if="error" :title="error" type="error" show-icon :closable="false" />
@@ -40,10 +40,11 @@
         <p v-else-if="!radarLoading" class="dashboard-exploration-empty">完成一些学习回答后，这里会逐步出现值得追问的方向。</p>
       </section>
     </template>
-  </section>
+  </PageShell>
 </template>
 
 <script setup lang="ts">
+import PageShell from '@/components/PageShell.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import CurrentFocusPanel from '@/components/CurrentFocusPanel.vue'
@@ -141,7 +142,7 @@ onMounted(loadCourses)
 </script>
 
 <style scoped>
-.dashboard-page { max-width: 1440px; }
+
 .dashboard-page :deep(.page-header) { margin-bottom: 20px; }
 .dashboard-page :deep(.page-header h1) { font-size: clamp(29px, 2.5vw, 36px); line-height: 1.15; }
 .dashboard-loading { min-height: 160px; }

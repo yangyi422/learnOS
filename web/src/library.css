@@ -1,18 +1,4 @@
-.library-page {
-  max-width: 1400px;
-  margin: 0 auto;
-  min-width: 0;
-}
-.library-breadcrumb {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin-bottom: 20px;
-  overflow-wrap: anywhere;
-}
+.library-breadcrumb { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); font-size: var(--font-caption); line-height: 1.5; color: var(--text-secondary); overflow-wrap: anywhere; }
 .library-breadcrumb a {
   color: var(--color-primary);
   text-decoration: none;
@@ -37,7 +23,7 @@
 .library-collection-card {
   padding: 22px;
   border: 1px solid var(--border-subtle);
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   background: var(--card-surface);
   color: var(--text-primary);
   text-decoration: none;
@@ -158,7 +144,7 @@
   background: var(--card-surface-hover);
 }
 .library-page-link h3 {
-  font-size: 16px;
+  font-size: var(--font-card-title);
   font-weight: 550;
   margin: 0 0 6px;
 }
@@ -194,7 +180,7 @@
 }
 .library-reader {
   min-width: 0;
-  max-width: 860px;
+  max-width: var(--page-reading-width);
   padding-left: 28px;
   border-left: 1px solid var(--border-subtle);
 }

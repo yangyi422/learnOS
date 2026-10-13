@@ -1,6 +1,8 @@
 <template>
-  <section class="library-page">
-    <nav class="library-breadcrumb">
+  <PageShell class="library-page" variant="reading">
+    <template #header>
+      <PageHeader :title="collection?.name || '资料专题'" :description="collection?.description" :eyebrow="collection?.category">
+        <template #breadcrumbs><nav class="library-breadcrumb">
       <RouterLink to="/explore">探索</RouterLink><span>/</span
       ><RouterLink to="/explore/library">我的资料库</RouterLink
       ><template v-if="collection"
@@ -10,23 +12,8 @@
           ><span>/</span><span>{{ current.title }}</span></template
         ></template
       >
-    </nav>
-    <el-alert v-if="error" :title="error" type="error" :closable="false"
-      ><el-button v-if="!editing" text @click="load"
-        >重新读取</el-button
-      ></el-alert
-    >
-    <p v-if="loading" role="status">正在读取资料…</p>
-    <template v-if="collection"
-      ><header class="library-topic-header">
-        <div>
-          <span class="library-muted">{{
-            collection.category || "个人专题"
-          }}</span>
-          <h1>{{ collection.name }}</h1>
-          <p>{{ collection.description }}</p>
-        </div>
-        <div class="library-actions">
+    </nav></template>
+        <template v-if="collection" #actions>
           <el-button
             :disabled="busy || uploading || editing || loading"
             @click="collectionDialog = true"
@@ -41,8 +28,18 @@
             @click="startNew"
             >新建页面</el-button
           >
-        </div>
-      </header>
+        </template>
+      </PageHeader>
+    </template>
+
+    <el-alert v-if="error" :title="error" type="error" :closable="false"
+      ><el-button v-if="!editing" text @click="load"
+        >重新读取</el-button
+      ></el-alert
+    >
+    <p v-if="loading" role="status">正在读取资料…</p>
+    <template v-if="collection"
+      >
       <div class="library-topic-tools">
         <el-button-group
           aria-label="专题展示方式"
@@ -326,9 +323,11 @@
       @close="collectionDialog = false"
       @saved="collectionSaved"
     />
-  </section>
+  </PageShell>
 </template>
 <script setup lang="ts">
+import PageShell from '@/components/PageShell.vue'
+import PageHeader from '@/components/PageHeader.vue'
 import {
   computed,
   onMounted,

@@ -1,5 +1,5 @@
 <template>
-  <section class="page-stack domain-init-page">
+  <PageShell class="domain-init-page" variant="standard">
     <PageHeader eyebrow="新建学习领域" title="创建学习领域" description="LearnOS 会先建立领域地图，再逐步展开起步区域和第一批课程。">
       <template #actions><el-button text @click="router.push('/')">返回首页</el-button></template>
     </PageHeader>
@@ -69,10 +69,11 @@
 
       <el-card v-if="view.initial_world" shadow="never"><template #header><div class="card-header-row"><span>第一批课程</span><el-button size="small" :loading="loading" @click="generateWorld">重新生成第一批课程</el-button></div></template><p class="muted">已准备 {{ view.initial_world.initial_lessons.length }} 个正式课程节点草案。创建前仍不会写入正式课程、课程蓝图或个人认知数据。</p><div class="lesson-preview"><article v-for="lesson in view.initial_world.initial_lessons" :key="lesson.blueprint_lesson_key"><el-tag size="small" type="success">{{ lesson.blueprint_lesson_key === view.initial_world.recommended_first_lesson_key ? '建议第一课' : '初始课程节点' }}</el-tag><h3>{{ lesson.title }}</h3><p><strong>核心问题：</strong>{{ lesson.core_question }}</p><p class="muted">{{ lesson.expected_understanding }}</p></article></div><div class="actions"><el-button type="primary" :loading="loading" @click="apply">确认并创建学习领域</el-button><el-button @click="router.push('/')">稍后再说</el-button></div></el-card>
     </template>
-  </section>
+  </PageShell>
 </template>
 
 <script setup lang="ts">
+import PageShell from '@/components/PageShell.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -152,7 +153,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.domain-init-page { max-width: 980px; margin: 0 auto; }
+
 .form-card { max-width: 680px; margin: 0 auto; }
 .duplicate-domain-card { max-width: 680px; margin: 0 auto 18px; }
 .duplicate-domain-card h3 { margin-bottom: 8px; }

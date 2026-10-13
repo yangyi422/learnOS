@@ -1,5 +1,5 @@
 <template>
-  <section class="page-stack projects-page">
+  <PageShell class="projects-page" variant="wide">
     <PageHeader title="项目">
       <template #actions>
         <span v-if="view === 'today'" class="projects-muted">全部活动项目</span><el-select v-else :disabled="busy" :model-value="projectKey" class="projects-switcher" aria-label="切换项目" @change="selectProject(String($event))">
@@ -103,10 +103,11 @@
       </el-form>
       <template #footer><el-button @click="projectDialogOpen = false">取消</el-button><el-button type="primary" :loading="busy" :disabled="!projectForm.title.trim()" @click="saveProject">保存</el-button></template>
     </el-dialog>
-  </section>
+  </PageShell>
 </template>
 
 <script setup lang="ts">
+import PageShell from '@/components/PageShell.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -371,20 +372,13 @@ watch(() => route.query.task, async value => {
 
 <style scoped>
 .archive-controls { display: flex; gap: 8px; margin-bottom: 14px; }
-.projects-page { max-width: 1440px; }
+
 .project-records { margin-top: 18px; border-top: 1px solid var(--border-subtle); padding-top: 16px; }
 .project-records summary { color: var(--text-secondary); font-size: 14px; cursor: pointer; }
-.projects-page :deep(.page-header) { align-items: flex-end; gap: 16px; margin-bottom: 17px; }
-.projects-page :deep(.page-header__copy) { min-width: 0; }
-.projects-page :deep(.page-header .eyebrow) { margin-bottom: 5px; }
-.projects-page :deep(.page-header h1) { font-size: clamp(29px, 2.5vw, 36px); line-height: 1.15; }
-.projects-page :deep(.page-header__actions) { display: flex; align-items: center; gap: 10px; margin-left: auto; }
-.projects-page :deep(.page-header__actions .el-button) { min-height: 38px; padding: 0 17px; box-shadow: 0 3px 12px var(--focus-ring); }
 .projects-switcher { width: clamp(190px, 21vw, 270px); }
-.projects-page :deep(.projects-switcher .el-select__wrapper) { min-height: 38px; border-radius: var(--radius-control); }
 .projects-toolbar { display: flex; align-items: center; min-height: 40px; margin-bottom: 18px; padding-bottom: 8px; border-bottom: 1px solid var(--border-subtle); }
-.projects-tabs { display: flex; align-items: center; gap: 22px; }
-.projects-tabs button { position: relative; min-height: 31px; padding: 0 2px; border: 0; background: transparent; color: var(--text-secondary); font-size: 13px; cursor: pointer; }
+.projects-tabs { display: flex; align-items: center; gap: var(--space-6); }
+.projects-tabs button { position: relative; min-height: var(--control-height); padding: 0 2px; border: 0; background: transparent; color: var(--text-secondary); font-size: var(--font-body); cursor: pointer; }
 .projects-tabs button:hover { color: var(--text-primary); }
 .projects-tabs button.is-active { color: var(--color-primary); font-weight: 670; }
 .projects-tabs button.is-active::after { position: absolute; right: 0; bottom: -9px; left: 0; height: 2px; border-radius: 2px; background: var(--color-primary); content: ''; }

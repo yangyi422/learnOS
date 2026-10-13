@@ -1,7 +1,7 @@
 <template>
-  <section class="page-stack finance-page">
-    <nav class="life-breadcrumb" aria-label="当前位置"><RouterLink :to="lifeReturn">生活</RouterLink><span>/</span><span>财务档案</span><span>/</span><span aria-current="page">{{ tabs.find(t => t[0] === tab)?.[1] }}</span></nav>
-    <PageHeader title="财务档案" description="保存收支历史与资产快照，回顾变化并追溯原始记录。"><template #actions><RouterLink class="finance-back" :to="lifeReturn">返回生活</RouterLink><el-button type="primary" @click="switchTab('imports')">导入钱迹 CSV</el-button></template></PageHeader>
+  <PageShell class="finance-page" variant="standard">
+
+    <PageHeader title="财务档案" description="保存收支历史与资产快照，回顾变化并追溯原始记录。"><template #breadcrumbs><nav class="life-breadcrumb" aria-label="当前位置"><RouterLink :to="lifeReturn">生活</RouterLink><span>/</span><span>财务档案</span><span>/</span><span aria-current="page">{{ tabs.find(t => t[0] === tab)?.[1] }}</span></nav></template><template #actions><RouterLink class="finance-back" :to="lifeReturn">返回生活</RouterLink><el-button type="primary" @click="switchTab('imports')">导入钱迹 CSV</el-button></template></PageHeader>
     <nav class="life-tabs finance-tabs" aria-label="财务视图" role="tablist"><button v-for="item in tabs" :key="item[0]" role="tab" type="button" :aria-selected="tab === item[0]" @click="switchTab(item[0])">{{ item[1] }}</button></nav>
     <el-alert v-if="error && tab !== 'assets'" :title="error" type="error" :closable="false" show-icon><el-button text @click="refresh">重试读取</el-button></el-alert>
     <div class="finance-filters" v-if="ledgers.length && tab !== 'imports' && tab !== 'assets'">
@@ -72,9 +72,10 @@
       <template v-if="detail"><h2>{{ kindLabel(detail.kind) }} {{ financeMoney(detail.amount_minor) }} {{ detail.currency }}</h2><p class="finance-muted">{{ detail.occurred_at }} · 来源：钱迹 / {{ detail.source }} · 最近写入批次 #{{ detail.batch_id }}</p><p class="finance-muted">只读档案。需要修改时，请到钱迹编辑并重新导入。</p><dl class="finance-raw"><template v-for="key in financeHeaders" :key="key"><template v-if="detail.raw?.[key]"><dt>{{ key }}</dt><dd>{{ detail.raw[key] }}</dd></template></template></dl><p class="finance-muted">首次入库 {{ localTime(detail.created_at) }} · 最近更新 {{ localTime(detail.updated_at) }}</p></template>
       <template #footer><el-button @click="detailOpen = false">关闭</el-button></template>
     </el-dialog>
-  </section>
+  </PageShell>
 </template>
 <script setup lang="ts">
+import PageShell from '@/components/PageShell.vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 import { nextTick, computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
