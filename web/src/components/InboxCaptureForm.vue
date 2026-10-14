@@ -28,7 +28,7 @@ async function submit() {
   catch (reason) { error.value = reason instanceof Error ? reason.message : '保存失败，请重试。' }
   finally { saving.value = false }
 }
-defineExpose({ focus: () => input.value?.focus(), isSaving: () => saving.value })
+defineExpose({ focus: () => input.value?.focus(), isSaving: () => saving.value, hasDraft: () => Boolean(content.value.trim()), discard: () => { content.value = ''; error.value = ''; captureKey.value = '' } })
 </script>
 <style scoped>
 .inbox-capture { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 18px; }

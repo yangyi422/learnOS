@@ -17,7 +17,7 @@
       </section>
       <section v-for="section in loadingSections" :key="section" class="home-section home-section--skeleton" :class="sectionClass(section)">
         <SectionHeader :title="sectionTitle(section)" />
-        <el-skeleton animated :rows="section === 'inbox' ? 2 : 3" />
+        <el-skeleton animated :rows="3" />
       </section>
     </div>
 
@@ -164,59 +164,84 @@
         />
       </section>
 
-      <section class="home-section inbox-section" aria-labelledby="inbox-title">
-        <SectionHeader title="Inbox" id="inbox-title">
-          <template #actions>
-            <el-button text @click="router.push('/inbox')">打开收集箱{{ home.inbox?.count ? ' · ' + home.inbox.count : '' }} →</el-button>
-          </template>
-        </SectionHeader>
-        <InboxCaptureForm button-text="+" @created="captured" />
-        <div v-if="home.errors.inbox" class="module-error" role="alert">
-          <span>{{ home.errors.inbox }}</span>
-          <button class="inline-action" type="button" @click="load">重试</button>
-        </div>
-        <template v-else-if="home.inbox?.items.length">
-          <button v-for="item in home.inbox.items.slice(0, 3)" :key="item.id" class="inbox-row" type="button" @click="router.push('/inbox')">
-            <span class="inbox-row__content">{{ inboxPreviewLabel(item) }}</span>
-            <span v-if="item.source_type === 'url'" class="inbox-row__source">链接</span>
-            <time>{{ formatDate(item.created_at) }}</time>
-          </button>
-        </template>
-        <EmptyState
-          v-else-if="!home.errors.inbox"
-          title="收集箱是空的"
-          description="有想法时先记下来，不需要马上决定它属于什么。"
-        />
+      <section v-if="recentItems.length || recentLoading || recentError || recentProblems.length" class="home-section recent-section" aria-labelledby="recent-title">
+        <SectionHeader title="最近留下的内容" id="recent-title" />
+        <p v-if="recentLoading && !recent" class="home-muted" role="status">正在读取最近记录…</p>
+        <RouterLink v-for="item in recentItems" :key="item.key" :to="item.to" class="home-recent-row">
+          <span v-if="item.cover" class="home-recent-cover"><img :src="item.cover" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" @error="hideFailedImage" /></span>
+          <span class="home-recent-copy"><strong>{{ item.title }}</strong><small>{{ item.source }} · {{ item.dateLabel }}</small></span>
+          <span class="home-muted" aria-hidden="true">→</span>
+        </RouterLink>
+        <p v-if="recentError || recentProblems.length" class="module-error" role="status">
+          <span>{{ recentError || recentProblems.join(' ') }}</span>
+          <button class="inline-action" type="button" @click="loadRecent">重试最近内容</button>
+        </p>
       </section>
+      <nav class="home-shortcuts" aria-label="个人档案快捷入口">
+        <RouterLink to="/inbox">收集箱 · {{ home.errors.inbox ? '数量暂不可用' : (home.inbox?.count ?? 0) + ' 条待整理' }}</RouterLink>
+        <button v-if="home.errors.inbox" class="inline-action" type="button" @click="load">重试收集箱</button>
+        <RouterLink to="/explore/library">我的资料库</RouterLink>
+        <RouterLink to="/life">生活档案</RouterLink>
+        <RouterLink to="/life/finance">财务档案<small v-if="recent?.asset_date"> · 最近快照 {{ formatShortDate(recent.asset_date) }}</small></RouterLink>
+      </nav>
     </div>
 
-    <QuickCaptureDialog v-model="captureOpen" @created="load" />
+    <QuickCaptureDialog v-model="captureOpen" @created="captured" />
   </PageShell>
 </template>
 
 <script setup lang="ts">
 import PageShell from '@/components/PageShell.vue'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
 import { APIRequestError } from '@/api/http'
 import { type InboxItem } from '@/api/inbox'
 import type { ProjectTask } from '@/api/projects'
-import { getWorkspaceHome, type WorkspaceHome, type WorkspaceLearningItem } from '@/api/workspace'
+import { getWorkspaceHome, getWorkspaceRecent, type WorkspaceRecent, type WorkspaceHome, type WorkspaceLearningItem } from '@/api/workspace'
 import EmptyState from '@/components/EmptyState.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
 import QuickCaptureDialog from '@/components/QuickCaptureDialog.vue'
-import InboxCaptureForm from '@/components/InboxCaptureForm.vue'
+import { libraryCardImageURL, localLibraryImage } from '@/utils/libraryMarkdown'
+import { safeExternalLink } from '@/utils/externalLinks'
+import { domainLabel } from '@/api/life'
 
-type HomeSection = 'today' | 'projects' | 'learning' | 'inbox'
+type HomeSection = 'today' | 'projects' | 'learning'
 
 const router = useRouter()
 const home = ref<WorkspaceHome | null>(null)
 const loading = ref(true)
 const loadError = ref('')
 const captureOpen = ref(false)
-const loadingSections: HomeSection[] = ['today', 'projects', 'learning', 'inbox']
+const loadingSections: HomeSection[] = ['today', 'projects', 'learning']
+const recent = ref<WorkspaceRecent | null>(null)
+const recentLoading = ref(true), recentError = ref('')
+const recentProblems = computed(() => Object.values(recent.value?.errors ?? {}))
+const recentItems = computed(() => {
+  const facts = recent.value
+  if (!facts) return []
+  const library = (facts.library ?? []).map(item => ({
+    key: 'library-' + item.id, title: item.title, source: '资料库 · ' + item.collection_name,
+    dateLabel: '更新 ' + formatDate(item.updated_at), sort: new Date(item.updated_at).getTime(),
+    to: { path: `/explore/library/${item.collection_id}/pages/${item.id}`, query: { view: item.display_mode } },
+    cover: localLibraryImage(item.cover_url) || (/^https?:\/\//i.test(item.cover_url) && safeExternalLink(item.cover_url)) ? libraryCardImageURL(item.cover_url) : '',
+  }))
+  // Calendar dates are interpreted at local midnight, never as UTC timestamps.
+  const occurrence = (date: string) => new Date(date + 'T00:00:00').getTime()
+  const events = (facts.events ?? []).map(item => ({
+    key: 'event-' + item.id, title: item.title, source: '生活' + (domainLabel(item.primary_domain) ? ' · ' + domainLabel(item.primary_domain) : ''),
+    dateLabel: '发生 ' + formatShortDate(item.occurred_on), sort: occurrence(item.occurred_on),
+    to: { path: '/life', query: { event: String(item.id) } }, cover: '',
+  }))
+  const goals = (facts.goals ?? []).map(item => ({
+    key: 'goal-' + item.id, title: item.content || '阶段变化', source: '长期目标 · ' + item.goal_title,
+    dateLabel: '变化 ' + formatShortDate(item.occurred_on), sort: occurrence(item.occurred_on),
+    to: { path: '/life', query: { view: 'goals', goal: String(item.goal_id) } }, cover: '',
+  }))
+  return [...library, ...events, ...goals].sort((a, b) => b.sort - a.sort || a.key.localeCompare(b.key)).slice(0, 6)
+})
+let homeRequest: AbortController | undefined, recentRequest: AbortController | undefined
+let disposed = false
 const dateLabel = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(new Date())
 const todayPreview = computed(() => {
   const view = home.value?.today
@@ -276,7 +301,7 @@ function localDate() {
 }
 function sectionClass(section: HomeSection) { return section + '-section' }
 function sectionTitle(section: HomeSection) {
-  return ({ today: 'Today', projects: 'Active Projects', learning: 'Continue Learning', inbox: 'Inbox' })[section]
+  return ({ today: 'Today', projects: 'Active Projects', learning: 'Continue Learning' })[section]
 }
 function taskStatusLabel(status?: string) {
   return ({ doing: '进行中', next: '下一步', inbox: '待整理' } as Record<string, string>)[status ?? ''] ?? '项目任务'
@@ -340,24 +365,41 @@ function formatShortDate(value: string) {
   const [year, month, day] = value.split('-')
   return year + '年' + Number(month) + '月' + Number(day) + '日'
 }
-function inboxPreviewLabel(item: InboxItem) {
-  if (item.source_type !== 'url') return item.content
-  try { return new URL(item.source_url || item.content).hostname }
-  catch { return item.content }
-}
 function safeMessage(reason: unknown, fallback: string) {
   return reason instanceof APIRequestError ? reason.message : fallback
 }
 async function load() {
+  homeRequest?.abort()
+  const controller = homeRequest = new AbortController()
   loading.value = true
   loadError.value = ''
   try {
-    home.value = await getWorkspaceHome(localDate())
+    const result = await getWorkspaceHome(localDate(), controller.signal)
+    if (!disposed && controller === homeRequest) home.value = result
   } catch (reason) {
-    loadError.value = safeMessage(reason, '工作区暂时无法加载，请检查连接后重试。')
+    if (!disposed && !controller.signal.aborted) loadError.value = safeMessage(reason, '工作区暂时无法加载，请检查连接后重试。')
   } finally {
-    loading.value = false
+    if (!disposed && controller === homeRequest) loading.value = false
   }
+}
+async function loadRecent() {
+  recentRequest?.abort()
+  const controller = recentRequest = new AbortController()
+  recentLoading.value = true
+  recentError.value = ''
+  // Clear transient recent links on refresh so removed sources are not retained.
+  recent.value = null
+  try {
+    const result = await getWorkspaceRecent(controller.signal)
+    if (!disposed && controller === recentRequest) recent.value = result
+  } catch (reason) {
+    if (!disposed && !controller.signal.aborted) recentError.value = safeMessage(reason, '最近内容暂时无法读取，其他功能仍可使用。')
+  } finally {
+    if (!disposed && controller === recentRequest) recentLoading.value = false
+  }
+}
+function hideFailedImage(event: Event) {
+  if (event.target instanceof HTMLImageElement) event.target.hidden = true
 }
 
 function captured(item: InboxItem) {
@@ -385,7 +427,8 @@ function continueFocus() {
 function openLearning(item: WorkspaceLearningItem) {
   router.push(item.has_current_lesson ? '/courses/' + item.course_id + '/learn' : '/courses/' + item.course_id + '/map')
 }
-onMounted(load)
+onMounted(() => { void load(); void loadRecent() })
+onBeforeUnmount(() => { disposed = true; homeRequest?.abort(); recentRequest?.abort() })
 </script>
 
 <style scoped>
@@ -407,7 +450,7 @@ onMounted(load)
 .focus-card--skeleton :deep(.el-skeleton) { width: 72%; }
 .today-section { grid-column: span 3; }
 .projects-section, .learning-section { grid-column: span 5; }
-.inbox-section { grid-column: span 10; }
+.recent-section { grid-column: span 10; }
 .home-section { min-width: 0; padding: 2px 0 8px; }
 .home-section :deep(.section-header) { margin-bottom: 10px; }
 .home-section :deep(.section-header h2) { font-size: 16px; }
@@ -421,15 +464,15 @@ onMounted(load)
 .today-summary strong { font-size: 21px; font-weight: 650; font-variant-numeric: tabular-nums; }
 .today-summary span, .home-muted { color: var(--text-tertiary); font-size: 13px; }
 .today-task-list { border-top: 1px solid var(--border-subtle); }
-.home-task, .project-row, .learning-row, .inbox-row { display: flex; align-items: center; width: 100%; min-width: 0; text-align: left; border: 0; border-bottom: 1px solid var(--border-subtle); background: transparent; color: var(--text-primary); transition: background-color 140ms ease, color 140ms ease; }
+.home-task, .project-row, .learning-row { display: flex; align-items: center; width: 100%; min-width: 0; text-align: left; border: 0; border-bottom: 1px solid var(--border-subtle); background: transparent; color: var(--text-primary); transition: background-color 140ms ease, color 140ms ease; }
 .home-task { gap: 9px; padding: 10px 2px; cursor: pointer; }
-.home-task:hover, .project-row:hover, .learning-row:hover, .inbox-row:hover { background: var(--bg-subtle); }
+.home-task:hover, .project-row:hover, .learning-row:hover { background: var(--bg-subtle); }
 .home-task__dot { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--color-primary); }
 .home-task__dot.is-overdue { background: var(--color-danger); }
 .home-task__dot.is-due-today { background: var(--color-warning); }
 .home-task__dot.is-doing { background: var(--color-primary); }
 .home-task__dot.is-next { background: var(--text-tertiary); }
-.home-task__title, .inbox-row__content { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.home-task__title { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
 .home-task small { flex: none; color: var(--text-tertiary); font-size: 12px; }
 .home-task small.is-overdue { color: var(--color-danger); }
 .home-task small.is-due-today { color: var(--color-warning); }
@@ -450,53 +493,52 @@ onMounted(load)
 .learning-row__text > small { color: var(--text-tertiary); font-size: 12px; }
 .learning-row__text .learning-row__level { color: var(--text-secondary); }
 .learning-row__action { display: inline-flex; flex: none; align-items: center; gap: 4px; color: var(--color-primary); font-size: 13px; }
-.inbox-capture { display: flex; gap: 8px; margin: 0 0 12px; }
-.inbox-capture :deep(.el-input__wrapper) { min-height: 42px; border: 1px solid var(--border-subtle); background: var(--bg-surface); box-shadow: none; transition: border-color 140ms ease, box-shadow 140ms ease; }
-.inbox-capture :deep(.el-input__wrapper:hover) { border-color: var(--border-default); }
-.inbox-capture :deep(.el-input__wrapper.is-focus) { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--focus-ring); }
-.inbox-capture__submit { width: 42px; min-height: 42px; padding: 0; font-size: 22px; }
-.inbox-capture__submit span { line-height: 1; }
-.capture-error { margin: -5px 0 10px; color: var(--color-danger); font-size: 13px; }
-.inbox-row { gap: 12px; padding: 10px 2px; cursor: pointer; }
-.inbox-row__source { flex: none; color: var(--text-tertiary); font-size: 12px; }
-.inbox-row time { flex: none; color: var(--text-tertiary); font-size: 12px; font-variant-numeric: tabular-nums; }
 .workspace-home__grid--loading { grid-template-rows: auto auto auto; }
 .workspace-home__grid--loading .focus-card { grid-row: span 1; }
 .workspace-home__grid--loading .today-section { grid-column: span 3; }
 .workspace-home__grid--loading .projects-section, .workspace-home__grid--loading .learning-section { grid-column: span 5; }
-.workspace-home__grid--loading .inbox-section { grid-column: span 10; }
+.workspace-home__grid--loading .recent-section { grid-column: span 10; }
 @media (max-width: 1020px) {
   .workspace-home__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 20px; }
   .focus-card, .today-section { grid-column: span 2; }
   .projects-section, .learning-section { grid-column: span 1; }
-  .inbox-section { grid-column: span 2; }
+  .recent-section { grid-column: span 2; }
   .workspace-home__grid--loading .focus-card, .workspace-home__grid--loading .today-section { grid-column: span 2; }
   .workspace-home__grid--loading .projects-section, .workspace-home__grid--loading .learning-section { grid-column: span 1; }
-  .workspace-home__grid--loading .inbox-section { grid-column: span 2; }
+  .workspace-home__grid--loading .recent-section { grid-column: span 2; }
 }
 @media (max-width: 760px) {
   .workspace-home :deep(.page-header) { align-items: flex-start; }
   .workspace-home__grid { grid-template-columns: 1fr; gap: 12px; margin-top: 2px; }
   .focus-card { align-items: flex-start; flex-direction: column; padding: 20px; }
   .focus-card > :deep(.el-button) { align-self: flex-start; }
-  .focus-card, .today-section, .projects-section, .learning-section, .inbox-section,
+  .focus-card, .today-section, .projects-section, .learning-section, .recent-section,
   .workspace-home__grid--loading .focus-card, .workspace-home__grid--loading .today-section,
   .workspace-home__grid--loading .projects-section, .workspace-home__grid--loading .learning-section,
-  .workspace-home__grid--loading .inbox-section { grid-column: span 1; }
+  .workspace-home__grid--loading .recent-section { grid-column: span 1; }
   .today-section { order: 2; }
   .learning-section { order: 3; }
   .projects-section { order: 4; }
-  .inbox-section { order: 5; }
+  .recent-section { order: 5; }
   .home-task { align-items: flex-start; }
   .home-task small { max-width: 84px; text-align: right; }
   .project-row__counts { gap: 4px 8px; }
   .learning-row { align-items: flex-start; }
   .learning-row__action { margin-left: auto; padding-top: 7px; }
-  .inbox-row { align-items: flex-start; }
-  .inbox-row time { font-size: 11px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .home-task, .project-row, .learning-row, .inbox-row, .project-row__arrow,
-  .inbox-capture :deep(.el-input__wrapper) { transition: none; }
+  .home-task, .project-row, .learning-row, .project-row__arrow { transition: none; }
 }
+.home-shortcuts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 12px 24px; padding: 12px 0; border-top: 1px solid var(--border-subtle); order: 6; }
+.home-shortcuts a { color: var(--text-secondary); text-decoration: none; font-size: 13px; line-height: 1.7; }
+.home-shortcuts a:hover { color: var(--color-primary); }
+.home-shortcuts small { font-size: 12px; color: var(--text-tertiary); }
+.home-recent-row { display: flex; align-items: center; gap: 12px; padding: 12px 2px; min-width: 0; text-decoration: none; border-bottom: 1px solid var(--border-subtle); color: var(--text-primary); }
+.home-recent-row:hover { background: var(--bg-subtle); }
+.home-recent-cover { width: 48px; height: 48px; flex: none; overflow: hidden; border-radius: var(--radius-control); background: var(--bg-subtle); }
+.home-recent-cover img { width: 100%; height: 100%; object-fit: cover; }
+.home-recent-copy { display: grid; flex: 1; min-width: 0; gap: 4px; }
+.home-recent-copy strong { font-size: 14px; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-recent-copy small { font-size: 12px; color: var(--text-tertiary); line-height: 1.6; overflow-wrap: anywhere; }
+.home-shortcuts a:focus-visible, .home-recent-row:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; }
 </style>

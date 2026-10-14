@@ -18,6 +18,7 @@ import (
 )
 
 type Handler struct {
+	recent         *service.WorkspaceRecentService
 	images         *service.LibraryImageService
 	library        *service.LibraryService
 	reviews        *service.MonthlyReviewService
@@ -71,6 +72,7 @@ func NewHandler(courses *service.CourseService, graph *service.KnowledgeGraphSer
 	var lifeService *service.LifeService
 	var recordService *service.RecordService
 	var workspaceService *service.WorkspaceService
+	var recentService *service.WorkspaceRecentService
 	for _, item := range optional {
 		switch value := item.(type) {
 		case *service.CognitiveStateService:
@@ -119,11 +121,13 @@ func NewHandler(courses *service.CourseService, graph *service.KnowledgeGraphSer
 			recordService = value
 		case *service.InboxService:
 			inboxService = value
+		case *service.WorkspaceRecentService:
+			recentService = value
 		case *service.WorkspaceService:
 			workspaceService = value
 		}
 	}
-	return &Handler{images: imageService, library: libraryService, reviews: reviewService, courses: courses, graph: graph, cognitive: cognitiveService, challenges: challengeService, misconceptions: misconceptionService, exploration: explorationService, curriculum: curriculumService, grounding: groundingService, backups: backupService, databaseHealth: databaseHealthService, export: exportService, consistency: consistencyService, domainInit: domainInitService, aiConfig: aiConfigurationService, nextLesson: nextLessonService, users: userService, projects: projectService, inbox: inboxService, life: lifeService, assets: assetService, finance: financeService, records: recordService, workspace: workspaceService}
+	return &Handler{recent: recentService, images: imageService, library: libraryService, reviews: reviewService, courses: courses, graph: graph, cognitive: cognitiveService, challenges: challengeService, misconceptions: misconceptionService, exploration: explorationService, curriculum: curriculumService, grounding: groundingService, backups: backupService, databaseHealth: databaseHealthService, export: exportService, consistency: consistencyService, domainInit: domainInitService, aiConfig: aiConfigurationService, nextLesson: nextLessonService, users: userService, projects: projectService, inbox: inboxService, life: lifeService, assets: assetService, finance: financeService, records: recordService, workspace: workspaceService}
 }
 
 func (h *Handler) Login(c *gin.Context) {

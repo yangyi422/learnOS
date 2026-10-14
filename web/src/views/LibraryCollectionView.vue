@@ -131,25 +131,23 @@
               :key="p.id"
               :to="pageURL(p.id)"
               class="library-page-link"
+              :class="{ 'is-grouped': p.section_id !== null }"
               :aria-current="current?.id === p.id ? 'page' : undefined"
-              ><img
-                v-if="
-                  viewMode === 'list' && safeCover(p.cover_url)
-                "
-                :src="libraryCardImageURL(p.cover_url)"
-                alt=""
-                referrerpolicy="no-referrer"
-                loading="lazy"
-                decoding="async"
+              >
+              <LibraryCover
+                v-if="viewMode === 'list'"
+                :src="safeCover(p.cover_url) ? libraryCardImageURL(p.cover_url) : ''"
+                :label="p.title"
+                class="library-card-cover"
               />
               <h3>{{ p.title }}</h3>
               <span class="library-muted"
                 >{{ sectionName(p.section_id) }} ·
                 {{ date(p.updated_at) }}</span
               >
-              <p>{{ summary(p.summary) }}</p>
-              <div class="library-tags">
-                <span v-for="tag in p.tags" :key="tag">{{ tag }}</span>
+              <p v-if="viewMode === 'wiki' && query">{{ summary(p.summary) }}</p>
+              <div v-if="p.tags.length" class="library-tags">
+                <span v-for="tag in p.tags.slice(0, 3)" :key="tag">{{ tag }}</span>
               </div></RouterLink
             >
           </div>
@@ -287,12 +285,12 @@
               <span v-for="tag in current.tags" :key="tag">{{ tag }}</span>
             </div>
           </header>
-          <img
-            v-if="safeCover(current.cover_url)"
+          <LibraryCover
+            v-if="showReaderCover"
             class="library-reader-cover"
             :src="current.cover_url"
-            alt="页面封面"
-            referrerpolicy="no-referrer"
+            label="页面封面"
+            preview
           /><MarkdownReader
             :body="current.body"
             :collection="collection.id"
@@ -363,11 +361,12 @@ import {
   type PageInput,
   type CollectionInput,
 } from "@/api/library";
-import { localLibraryImage, libraryCardImageURL } from "@/utils/libraryMarkdown";
+import { localLibraryImage, libraryCardImageURL, markdownHTML } from "@/utils/libraryMarkdown";
 import { safeExternalLink } from "@/utils/externalLinks";
 import CollectionDialog from "@/components/library/CollectionDialog.vue";
 import PageCoverEditor from "@/components/library/PageCoverEditor.vue";
 import LibraryImageEditor from "@/components/library/LibraryImageEditor.vue";
+import LibraryCover from "@/components/library/LibraryCover.vue";
 import MarkdownReader from "@/components/library/MarkdownReader.vue";
 import ExternalLink from "@/components/ExternalLink.vue";
 import "@/library.css";
@@ -411,6 +410,16 @@ const collectionID = computed(() => Number(route.params.collection)),
     path: `/explore/library/${collectionID.value}`,
     query: { ...route.query, view: viewMode.value },
   }));
+// Inspect the sanitized rendered images, including reference-style Markdown;
+// do not alter stored content or suppress any user-authored body image.
+const showReaderCover = computed(() => {
+  if (!current.value || !safeCover(current.value.cover_url)) return false;
+  const content = document.createElement("div");
+  content.innerHTML = markdownHTML(current.value.body, collectionID.value);
+  return !Array.from(content.querySelectorAll("img")).some(
+    (image) => image.getAttribute("src") === current.value?.cover_url,
+  );
+});
 const input = () => ({
   title: form.title,
   body: form.body,

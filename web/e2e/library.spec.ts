@@ -593,3 +593,69 @@ test("深色主题菜谱清单无需分组，URL 图片与专题封面可阅读"
       fullPage: true,
     });
 });
+
+for (const width of [1920, 1440, 390]) {
+  test(`gallery reading keeps covers, content and navigation distinct at ${width}px`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 960 });
+    const state = await mock(page);
+    const image = 'https://example.com/gallery.png';
+    await page.route(image, (route) => route.fulfill({ contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jpV8AAAAASUVORK5CYII=', 'base64') }));
+    const original = `# 菜名\n\n![菜品](${image})\n\n## 食材与用量\n\n- 番茄\n- 鸡蛋\n\n|用料|分量|\n|---|---|\n|番茄|两个|`;
+    const row = seed(state, 31, 2, '番茄炒鸡蛋', original);
+    row.cover_url = image;
+    seed(state, 32, 2, '无封面的菜谱', '## 不该成为卡片摘要的标题');
+    await page.goto('/explore/library/2?view=list');
+    const cards = page.locator('.library-page-link');
+    await expect(cards).toHaveCount(2);
+    await expect(cards.locator('p')).toHaveCount(0);
+    await expect(cards.nth(1)).toContainText('暂无封面');
+    const first = await cards.first().boundingBox();
+    expect(first!.width).toBeLessThanOrEqual(320);
+    if (width > 800) {
+      const second = await cards.nth(1).boundingBox();
+      expect(second!.y).toBe(first!.y);
+      expect(first!.x).toBe((await page.locator('.library-directory').boundingBox())!.x);
+    }
+    if (process.env.CAPTURE_VISUALS) await page.screenshot({ path: info.outputPath(`gallery-${width}.png`), fullPage: true });
+    await cards.first().focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.library-markdown table')).toBeVisible();
+    await expect(page.locator('.library-directory')).toHaveCount(0);
+    await expect(page.locator('.library-reader-cover')).toHaveCount(0);
+    await expect(page.locator('.library-markdown img')).toHaveCount(1);
+    expect(row.body).toBe(original);
+    await page.reload();
+    await expect(page.locator('.library-markdown img')).toHaveCount(1);
+    if (process.env.CAPTURE_VISUALS) await page.screenshot({ path: info.outputPath(`recipe-${width}.png`), fullPage: true });
+    await page.getByRole('button', { name: '返回卡片画廊' }).click();
+    await expect(cards).toHaveCount(2);
+    await page.goBack();
+    await expect(page.locator('.library-markdown table')).toBeVisible();
+    await page.getByRole('button', { name: 'Wiki 目录', exact: true }).click();
+    await expect(page.locator('.library-directory')).toBeVisible();
+    await expect(page.locator('.library-markdown table')).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    if (process.env.CAPTURE_VISUALS) await page.screenshot({ path: info.outputPath(`wiki-${width}.png`), fullPage: true });
+    await page.getByRole('button', { name: '卡片清单', exact: true }).click();
+    await expect(cards).toHaveCount(2);
+    await expect(page.locator('.library-reader')).toHaveCount(0);
+  });
+}
+
+test('failed gallery cover keeps a stable frame and reference-style body cover is not duplicated', async ({ page }) => {
+  const state = await mock(page);
+  const image = 'https://example.com/missing-cover.png';
+  await page.route(image, route => route.fulfill({ status: 404 }));
+  const original = `![正文图片][cover]\n\n[cover]: ${image}`;
+  const row = seed(state, 41, 2, '封面失败仍可阅读', original);
+  row.cover_url = image;
+  await page.goto('/explore/library/2?view=list');
+  const card = page.locator('.library-page-link');
+  await expect(card).toContainText('封面暂时无法加载');
+  const frame = await card.locator('.library-card-cover').boundingBox();
+  expect(frame!.width / frame!.height).toBeCloseTo(4 / 3, 1);
+  await card.click();
+  await expect(page.locator('.library-reader-cover')).toHaveCount(0);
+  await expect(page.locator('.library-image-failed')).toBeVisible();
+  expect(row.body).toBe(original);
+});

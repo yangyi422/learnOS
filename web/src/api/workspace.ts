@@ -15,6 +15,18 @@ export interface WorkspaceHome {
   date: string; focus: WorkspaceFocus; today: TodayView | null; projects: Project[]; learning: WorkspaceLearningItem[]
   inbox: InboxSummary | null; errors: Record<string, string>
 }
-export async function getWorkspaceHome(date: string): Promise<WorkspaceHome> {
-  return (await request<{ data: WorkspaceHome }>(`/api/v1/workspace/home?date=${encodeURIComponent(date)}`)).data
+export async function getWorkspaceHome(date: string, signal?: AbortSignal): Promise<WorkspaceHome> {
+  return (await request<{ data: WorkspaceHome }>(`/api/v1/workspace/home?date=${encodeURIComponent(date)}`, { signal })).data
+}
+
+
+export interface WorkspaceRecent {
+  library: { id: number; collection_id: number; title: string; collection_name: string; display_mode: 'wiki' | 'list'; cover_url: string; updated_at: string }[]
+  events: { id: number; title: string; occurred_on: string; primary_domain: string }[]
+  goals: { id: number; goal_id: number; goal_title: string; content: string; occurred_on: string }[]
+  asset_date: string
+  errors: Record<string, string>
+}
+export async function getWorkspaceRecent(signal?: AbortSignal): Promise<WorkspaceRecent> {
+  return (await request<{ data: WorkspaceRecent }>('/api/v1/workspace/recent', { signal })).data
 }

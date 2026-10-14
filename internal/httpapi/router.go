@@ -74,6 +74,7 @@ func NewRouter(cfg config.Config, handler *Handler, webFS fs.FS, userServices ..
 		api.PATCH("/tasks/:id/move", handler.MoveTask)
 		api.GET("/projects/today", handler.GetToday)
 		api.GET("/workspace/home", handler.GetWorkspaceHome)
+		api.GET("/workspace/recent", handler.GetWorkspaceRecent)
 		api.GET("/inbox", handler.ListInbox)
 		api.POST("/inbox", handler.CreateInboxItem)
 		api.PATCH("/inbox/:id", handler.UpdateInboxItem)

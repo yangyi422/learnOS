@@ -198,3 +198,16 @@ func inboxError(c *gin.Context, err error) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "INBOX_OPERATION_FAILED", "message": "操作失败，请稍后重试。", "retryable": true}})
 	}
 }
+
+func (h *Handler) GetWorkspaceRecent(c *gin.Context) {
+	userID, ok := projectUserID(c)
+	if !ok {
+		return
+	}
+	c.Header("Cache-Control", "private, no-store")
+	if h.recent == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": gin.H{"code": "WORKSPACE_RECENT_UNAVAILABLE", "message": "最近内容暂时无法读取。", "retryable": true}})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": h.recent.Recent(c.Request.Context(), userID)})
+}
