@@ -1,5 +1,5 @@
 <template>
-  <PageShell class="learning-page editorial-learning-page" variant="reading">
+  <PageShell class="learning-page editorial-learning-page" variant="lesson">
     <header class="learning-context-header">
       <div class="learning-context-header__copy">
         <nav class="editorial-breadcrumb"><button type="button" @click="router.push('/learn')">学习</button><span>›</span><span>{{ current?.course.name || '正在学习' }}</span><span v-if="current">›</span><strong v-if="current">{{ current.unit.title }}</strong></nav>
@@ -593,22 +593,22 @@ onBeforeUnmount(() => {
 <style scoped>
 .learning-page { position: relative; padding-bottom: 180px; }
 .learning-page .editorial-layout { display: block; max-width: var(--page-reading-width); margin-inline: auto; }
-.learning-context-header h1 { font-size: clamp(22px, 2vw, 30px); }
+.learning-context-header h1 { font-size: var(--font-page-title); }
 .learning-context-header h1 small { font-size: 14px; font-weight: 400; margin-left: 12px; }
 .lesson-notes { padding: 20px 0; border-bottom: 1px solid var(--border-default); }
 .notes-toggle { background: transparent; border: 0; color: var(--text-secondary); cursor: pointer; padding: 4px 0; font: inherit; }
-.lesson-copy, .guiding-question { white-space: pre-wrap; line-height: 1.85; max-width: 78ch; }
+.lesson-copy, .guiding-question { font-size: var(--font-reading); white-space: pre-wrap; line-height: 1.85; max-width: 78ch; }
 .guiding-question strong { color: var(--text-secondary); font-size: 13px; margin-right: 8px; }
 .conversation-stream { height: clamp(240px, 45dvh, 650px); overflow-y: auto; overscroll-behavior: contain; padding: 16px 8px 20px 0; }
 .conversation-stream.is-empty { height: auto; min-height: 100px; }
 .conversation-turn { margin-bottom: 24px; }
-.conversation-user, .conversation-assistant { display: flex; gap: 14px; white-space: pre-wrap; line-height: 1.8; }
+.conversation-user, .conversation-assistant { font-size: var(--font-reading); display: flex; gap: 14px; white-space: pre-wrap; line-height: 1.8; }
 .conversation-turn strong { flex: 0 0 42px; font-size: 12px; color: var(--text-secondary); }
 .conversation-user { background: var(--bg-subtle); padding: 12px; border-radius: var(--radius-control); }
 .conversation-assistant { padding: 8px 12px; }
-.learning-details, .supplemental-rail, .legacy-history { max-width: 980px; margin: 20px auto; color: var(--text-secondary); }
+.learning-details, .supplemental-rail, .legacy-history { max-width: var(--width-lesson); margin: 20px auto; color: var(--text-secondary); }
 .learning-details summary, .supplemental-rail summary, .legacy-history summary { cursor: pointer; padding: 10px 0; }
-.learning-composer { position: fixed; z-index: 20; bottom: 16px; left: 116px; right: 32px; padding: 14px 20px; background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-control); box-shadow: var(--shadow-card); }
+.learning-composer { position: fixed; z-index: 20; bottom: 16px; left: calc(var(--sidebar-width) + var(--page-gutter)); right: var(--page-gutter); max-width: var(--width-lesson); margin-inline: auto; padding: 14px 20px; background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-control); box-shadow: var(--shadow-card); }
 .learning-composer form { max-width: 940px; margin: auto; }
 .composer-actions { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
 .composer-actions > span { flex: 1; font-size: 12px; }

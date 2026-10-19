@@ -173,8 +173,8 @@ function dueLabel(value: string, status: TaskStatus) {
 .archive-checkbox { width: 16px; height: 16px; accent-color: var(--color-primary); cursor: pointer; }
 .archive-controls { display: flex; flex-wrap: wrap; margin-bottom: 8px; }
 .kanban-scroll { width: 100%; min-width: 0; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; padding: 0 0 14px; scrollbar-color: var(--border-default) transparent; }
-.kanban-grid { display: grid; grid-template-columns: repeat(4, minmax(255px, 1fr)); min-width: 1020px; align-items: start; }
-.kanban-column { min-width: 0; min-height: 360px; padding: 0 15px 12px; border-left: 1px solid var(--board-divider); }
+.kanban-grid { display: grid; grid-template-columns: repeat(4, minmax(260px, 1fr)); gap: 16px; min-width: 1088px; align-items: start; }
+.kanban-column { min-width: 0; min-height: 360px; padding: 0 0 12px; border-left: 0; }
 .kanban-column.is-drop-target { background: var(--color-primary-soft); outline: 1px solid var(--color-primary); outline-offset: -1px; border-radius: 8px; }
 .kanban-column:first-child { padding-left: 0; border-left: 0; }
 .kanban-column:last-child { padding-right: 0; }
@@ -188,7 +188,7 @@ function dueLabel(value: string, status: TaskStatus) {
 .kanban-column__header small { display: block; margin: 7px 0 0 16px; color: var(--color-warning); font-size: 11px; line-height: 1.4; }
 .kanban-column__count { display: grid; min-width: 23px; height: 22px; place-items: center; padding: 0 6px; border-radius: 6px; background: var(--board-count-bg); color: var(--text-tertiary); font-size: 11px; font-variant-numeric: tabular-nums; }
 .kanban-column__cards { display: grid; align-content: start; gap: 9px; min-height: 42px; }
-.task-card { position: relative; display: grid; min-width: 0; gap: 13px; padding: 15px 16px 14px; border: 1px solid var(--card-border); border-radius: 9px; background: var(--card-surface); box-shadow: var(--shadow-card); cursor: grab; transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease; }
+.task-card { position: relative; display: grid; min-width: 0; gap: 13px; padding: 15px 16px 14px; border: 1px solid var(--card-border); border-radius: var(--radius-card); background: var(--card-surface); box-shadow: var(--shadow-card); cursor: grab; transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease; }
 .task-card:active { cursor: grabbing; }
 .task-card::before { position: absolute; top: 0; right: 8px; left: 8px; height: 1px; background: linear-gradient(90deg, transparent, var(--card-highlight), transparent); content: ''; pointer-events: none; }
 .task-card:hover { border-color: var(--card-border-hover); background: var(--card-surface-hover); box-shadow: var(--shadow-card-hover); }

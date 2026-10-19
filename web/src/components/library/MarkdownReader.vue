@@ -21,14 +21,27 @@ const props = defineProps<{
     body: string;
     collection: number;
     revision?: number;
+    articleTitle?: string;
   }>(),
   router = useRouter(),
   route = useRoute(),
   available = ref(new Map<number, boolean>());
 const previewImage = ref("");
-const html = computed(() =>
-  markdownHTML(props.body, props.collection, available.value),
-);
+const html = computed(() => {
+  const container = document.createElement('div');
+  container.innerHTML = markdownHTML(props.body, props.collection, available.value);
+  // Keep the stored Markdown intact; the application owns the page's sole h1.
+  container.querySelectorAll('h1').forEach(heading => {
+    if (heading === container.firstElementChild && heading.textContent?.trim() === props.articleTitle?.trim()) {
+      heading.remove();
+    } else {
+      const section = document.createElement('h2');
+      section.append(...heading.childNodes);
+      heading.replaceWith(section);
+    }
+  });
+  return container.innerHTML;
+});
 let sequence = 0;
 onBeforeUnmount(() => sequence++);
 watch(

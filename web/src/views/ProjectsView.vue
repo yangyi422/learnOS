@@ -84,7 +84,7 @@
 
     <TaskDrawer ref="taskDrawer" v-model="taskDrawerOpen" :task="editingTask" :projects="projects" :default-project-id="selectedProjectID" :default-status="newTaskStatus" :busy="busy" :save-error="drawerError" @save="saveTask" @status="changeTaskStatus" @delete="removeTask" @archive="archiveTask" />
 
-    <el-dialog v-model="projectDialogOpen" :title="editingProject ? '编辑项目' : '新建项目'" width="min(460px, 92vw)">
+    <el-dialog append-to-body v-model="projectDialogOpen" :title="editingProject ? '编辑项目' : '新建项目'" width="min(460px, 92vw)">
       <el-form label-position="top" @submit.prevent="saveProject">
         <el-form-item label="项目名称"><el-input v-model="projectForm.title" maxlength="160" show-word-limit /></el-form-item>
         <el-form-item label="项目目标 / 说明"><el-input v-model="projectForm.description" type="textarea" :rows="3" maxlength="4000" show-word-limit /></el-form-item>
@@ -390,7 +390,7 @@ watch(() => route.query.task, async value => {
 .projects-context .el-tag { margin-left: auto; }
 .projects-muted { color: var(--text-tertiary); font-size: 13px; }
 .today-view { max-width: 800px; }
-.today-view h2, .project-list-view h2 { margin: 0 0 6px; font-size: 23px; }
+.today-view h2, .project-list-view h2 { margin: 0 0 6px; font-size: var(--font-section-title); }
 .today-section { margin-top: 30px; }
 .today-section__heading { display: flex; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid var(--border-default); }
 .today-section__heading h3 { margin: 0; font-size: 15px; }
@@ -403,7 +403,7 @@ watch(() => route.query.task, async value => {
 .today-task__complete:hover { color: var(--color-primary); border-color: var(--color-primary); }
 .today-task__project { max-width: 35%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 6px 0; border: 0; background: transparent; color: var(--text-secondary); font-size: 12px; cursor: pointer; }
 .today-task small.is-overdue { color: var(--color-danger); }
-.today-task__marker { width: 16px; height: 16px; flex: 0 0 16px; border: 1px solid #b5c2d2; border-radius: 5px; }
+.today-task__marker { width: 16px; height: 16px; flex: 0 0 16px; border: 1px solid var(--color-border-strong); border-radius: 5px; }
 .today-task__title { flex: 1; font-size: 14px; }
 .today-task small { color: var(--text-tertiary); }
 .project-list-view { max-width: 920px; }

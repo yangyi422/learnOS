@@ -1,5 +1,5 @@
 <template>
-  <el-drawer
+  <el-drawer append-to-body
     class="task-drawer"
     modal-class="task-drawer-overlay"
     :model-value="modelValue"
@@ -233,7 +233,7 @@ onUnmounted(() => window.removeEventListener('resize', onResize))
 .task-drawer__empty-description { color: var(--text-tertiary); font-size: 13px; }
 .task-drawer__field-label { display: block; margin-bottom: 4px; color: var(--text-tertiary); font-size: 12px; }
 .task-drawer__title-field { margin-bottom: 24px; }
-.task-drawer__title-field .el-input__wrapper { margin: 0 -7px; padding: 7px 7px 10px; border-bottom: 1px solid var(--border-subtle); border-radius: 6px 6px 0 0; background: transparent; box-shadow: none !important; transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease; }
+.task-drawer__title-field .el-input__wrapper { margin: 0 -7px; padding: 7px 7px 10px; border-bottom: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: transparent; box-shadow: none !important; transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease; }
 .task-drawer__title-field .el-input__wrapper:hover { border-color: var(--drawer-control-border-hover); background: var(--drawer-attribute-bg); }
 .task-drawer__title-field .el-input__wrapper:focus-within { border-color: var(--color-primary); box-shadow: 0 1px 0 var(--color-primary) !important; }
 .task-drawer__title-field .el-input__inner { height: auto; color: var(--text-primary); font-size: 23px; font-weight: 650; line-height: 1.45; }
@@ -243,11 +243,11 @@ onUnmounted(() => window.removeEventListener('resize', onResize))
 .task-drawer__attributes .el-form-item__label, .task-drawer__description .el-form-item__label { margin-bottom: 6px; color: var(--text-tertiary); font-size: 12px; font-weight: 500; line-height: 1.4; }
 .task-drawer__attribute--wide { grid-column: 1 / -1; }
 .task-drawer__attributes .el-select, .task-drawer__attributes .el-date-editor, .task-drawer__attributes .el-config-provider { width: 100%; }
-.task-drawer__attributes .el-select__wrapper, .task-drawer__attributes .el-input__wrapper { min-height: 37px; border-radius: 7px; background: var(--drawer-control); box-shadow: 0 0 0 1px var(--drawer-control-border) inset; transition: box-shadow 140ms ease, background-color 140ms ease; }
-.task-drawer__attributes .el-select__wrapper:hover, .task-drawer__attributes .el-input__wrapper:hover { box-shadow: 0 0 0 1px var(--drawer-control-border-hover) inset; }
+.task-drawer__attributes .el-select__wrapper, .task-drawer__attributes .el-input__wrapper { min-height: 37px; border-radius: var(--radius-control); background: var(--drawer-control); box-shadow: 0 1px 0 var(--drawer-control-border); transition: box-shadow 140ms ease, background-color 140ms ease; }
+.task-drawer__attributes .el-select__wrapper:hover, .task-drawer__attributes .el-input__wrapper:hover { box-shadow: 0 1px 0 var(--drawer-control-border-hover); }
 .task-drawer__attributes .el-select__selected-item, .task-drawer__attributes .el-input__inner { color: var(--text-primary); font-size: 13px; }
 .task-drawer__description { margin: 22px 0 0; }
-.task-drawer__description .el-textarea__inner { min-height: 154px; max-height: 326px; padding: 13px 14px 27px; overflow-y: hidden; border: 1px solid var(--drawer-control-border); border-radius: 8px; background: var(--drawer-control); box-shadow: none; color: var(--text-primary); font-size: 14px; line-height: 1.65; resize: none; transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease; }
+.task-drawer__description .el-textarea__inner { min-height: 154px; max-height: 326px; padding: 13px 14px 27px; overflow-y: hidden; border: 0; border-bottom: 1px solid var(--drawer-control-border); border-radius: var(--radius-control); background: var(--drawer-control); box-shadow: none; color: var(--text-primary); font-size: 14px; line-height: 1.65; resize: none; transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease; }
 .task-drawer__description .el-textarea__inner:hover { border-color: var(--drawer-control-border-hover); }
 .task-drawer__description .el-textarea__inner:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--focus-ring); }
 .task-drawer__description .el-input__count { right: 11px; bottom: 7px; background: var(--drawer-control); color: var(--text-tertiary); opacity: 0; transition: opacity 140ms ease; }

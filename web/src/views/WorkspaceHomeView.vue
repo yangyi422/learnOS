@@ -1,10 +1,20 @@
 <template>
-  <PageShell class="workspace-home" variant="standard">
-    <PageHeader title="今天继续什么？" :description="dateLabel">
-      <template #actions>
-        <el-button type="primary" @click="captureOpen = true">快速记录</el-button>
-      </template>
-    </PageHeader>
+  <PageShell class="workspace-home" variant="wide">
+    <PageHeader title="今天，专注一件事" :description="dateLabel" />
+    <Teleport to="#home-header-actions">
+      <form class="home-search" role="search" @submit.prevent="openSearchResult(searchResults[0])" @focusout="leaveSearch" @keydown.esc.prevent="searchFocused = false">
+        <WorkspaceIcon name="search" />
+        <input v-model="homeSearch" type="search" aria-label="搜索当前工作区" placeholder="搜索工作区" aria-controls="home-search-results" :aria-expanded="searchFocused && !!homeSearch.trim()" autocomplete="off" @focus="searchFocused = true" @input="searchFocused = true">
+        <div v-if="searchFocused && homeSearch.trim()" id="home-search-results" class="home-search__results">
+          <ul v-if="searchResults.length" aria-label="工作区搜索结果">
+            <li v-for="item in searchResults" :key="item.key"><button type="button" @click="openSearchResult(item)"><span>{{ item.title }}</span><small>{{ item.group }}</small></button></li>
+          </ul>
+          <p v-else role="status">当前工作区没有匹配内容</p>
+        </div>
+      </form>
+      <el-button class="home-capture-button" @click="captureOpen = true"><WorkspaceIcon name="inbox" />快速记录</el-button>
+    </Teleport>
+    <Teleport to="#home-inbox-count"><span v-if="home?.inbox && !home.errors.inbox" :aria-label="home.inbox.count + ' 条待整理'">{{ home.inbox.count }}</span></Teleport>
 
     <p v-if="loadError && home" class="workspace-home__refresh-error" role="status">
       工作区更新失败，仍显示上次内容。{{ loadError }}
@@ -12,9 +22,11 @@
     </p>
 
     <div v-if="loading && !home" class="workspace-home__grid workspace-home__grid--loading" aria-label="正在整理工作区" aria-busy="true">
-      <section class="focus-card focus-card--skeleton" aria-label="Current Focus 正在加载">
-        <el-skeleton animated :rows="3" />
-      </section>
+      <div ref="focusFrame" class="focus-card-frame">
+        <section class="focus-card focus-card--skeleton" aria-label="当前旅程正在加载">
+          <el-skeleton animated :rows="3" />
+        </section>
+      </div>
       <section v-for="section in loadingSections" :key="section" class="home-section home-section--skeleton" :class="sectionClass(section)">
         <SectionHeader :title="sectionTitle(section)" />
         <el-skeleton animated :rows="3" />
@@ -26,76 +38,89 @@
     </div>
 
     <div v-else-if="home" class="workspace-home__grid" :aria-busy="loading">
-      <section class="focus-card" aria-labelledby="focus-title">
-        <div class="focus-card__copy">
-          <span class="section-kicker">CURRENT FOCUS</span>
-          <template v-if="home.focus.kind === 'task'">
-            <p class="focus-card__context">
-              <span>{{ home.focus.project_title || '项目任务' }}</span>
-              <span>{{ taskStatusLabel(home.focus.status) }}</span>
-              <span v-if="home.focus.priority === 'high'">高优先级</span>
-              <span v-if="focusDueLabel">{{ focusDueLabel }}</span>
-            </p>
-            <h2 id="focus-title">{{ home.focus.title }}</h2>
-            <p class="focus-card__reason">
-              <span>{{ focusReason }}</span>
-              <span v-if="focusUpdatedAt">最近更新 {{ relativeTime(focusUpdatedAt) }}</span>
-            </p>
-          </template>
-          <template v-else-if="home.focus.kind === 'learning'">
-            <p class="focus-card__context">
-              <span>{{ home.focus.course_name }}</span>
-              <span v-if="home.focus.unit_title">{{ home.focus.unit_title }}</span>
-            </p>
-            <h2 id="focus-title">{{ home.focus.title }}</h2>
-            <p v-if="focusLearning?.core_question" class="focus-card__question">{{ focusLearning.core_question }}</p>
-            <p class="focus-card__reason">
-              <span>最近的学习位置</span>
-              <span v-if="focusLearning?.last_learning_at">最近学习 {{ relativeTime(focusLearning.last_learning_at) }}</span>
-              <span v-else-if="focusLearning?.updated_at">领域更新 {{ relativeTime(focusLearning.updated_at) }}</span>
-              <span v-if="home.focus.current_level">{{ levelLabel(home.focus.current_level) }} · {{ cognitiveStatusLabel(home.focus.cognitive_status) }}</span>
-            </p>
-          </template>
-          <template v-else>
-            <h2 id="focus-title">暂时没有需要继续的事项</h2>
-            <p class="focus-card__reason">开始任务或学习后，这里会根据真实记录显示最近的下一步。</p>
-          </template>
-        </div>
-        <el-button v-if="home.focus.kind !== 'empty'" type="primary" @click="continueFocus">
-          {{ home.focus.kind === 'task' ? '继续处理' : home.focus.lesson_id ? '继续学习' : '查看知识地图' }}
-          <span aria-hidden="true"> →</span>
-        </el-button>
-      </section>
+      <div class="home-focus-lane">
+      <div ref="focusFrame" class="focus-card-frame">
+        <section class="focus-card" aria-labelledby="focus-title">
+          <div class="focus-card__heading">
+            <span class="section-kicker"><WorkspaceIcon name="focus" />今日重点</span>
+            <span v-if="home.focus.kind !== 'empty'" class="focus-card__state">{{ home.focus.kind === 'task' ? taskStatusLabel(home.focus.status) : '学习位置' }}</span>
+          </div>
+          <div class="focus-card__copy">
+            <template v-if="home.focus.kind === 'task'">
+              <h2 id="focus-title">{{ home.focus.title }}</h2>
+              <p v-if="focusTask?.description" class="focus-card__description">{{ focusTask.description }}</p>
+              <p class="focus-card__reason">
+                <span>{{ focusReason }}</span>
+                <span v-if="focusUpdatedAt">最近更新 {{ relativeTime(focusUpdatedAt) }}</span>
+              </p>
+              <p class="focus-card__context">
+                <span>{{ home.focus.project_title || '项目任务' }}</span>
+                <span v-if="home.focus.priority === 'high'">高优先级</span>
+                <span v-if="focusDueLabel">{{ focusDueLabel }}</span>
+              </p>
+            </template>
+            <template v-else-if="home.focus.kind === 'learning'">
+              <p class="focus-card__context">
+                <span>{{ home.focus.course_name }}</span>
+                <span v-if="home.focus.unit_title">{{ home.focus.unit_title }}</span>
+              </p>
+              <h2 id="focus-title">{{ home.focus.title }}</h2>
+              <p v-if="focusLearning?.core_question" class="focus-card__question">{{ focusLearning.core_question }}</p>
+              <p class="focus-card__reason">
+                <span>最近的学习位置</span>
+                <span v-if="focusLearning?.last_learning_at">最近学习 {{ relativeTime(focusLearning.last_learning_at) }}</span>
+                <span v-else-if="focusLearning?.updated_at">领域更新 {{ relativeTime(focusLearning.updated_at) }}</span>
+                <span v-if="home.focus.current_level">{{ levelLabel(home.focus.current_level) }} · {{ cognitiveStatusLabel(home.focus.cognitive_status) }}</span>
+              </p>
+            </template>
+            <template v-else>
+              <h2 id="focus-title">暂时没有需要继续的事项</h2>
+              <p class="focus-card__reason">开始任务或学习后，这里会根据真实记录显示最近的下一步。</p>
+            </template>
+          </div>
+          <RouterLink v-if="focusTarget" :to="focusTarget" class="home-card-entry focus-card-entry" :aria-label="'打开：' + home.focus.title"><span aria-hidden="true">↗</span></RouterLink>
+        </section>
 
-      <section class="home-section today-section" aria-labelledby="today-title">
-        <SectionHeader title="Today" id="today-title">
-          <template #actions>
-            <el-button text @click="router.push({ path: '/projects', query: { view: 'today' } })">查看全部 →</el-button>
-          </template>
-        </SectionHeader>
-        <div v-if="home.errors.today" class="module-error" role="alert">
-          <span>{{ home.errors.today }}</span>
+      </div>
+
+      <section class="home-section learning-section" aria-labelledby="learning-title">
+        <WorkspaceIcon name="courses" class="home-section__icon" />
+        <SectionHeader title="继续学习" id="learning-title" />
+        <div v-if="home.errors.learning" class="module-error" role="alert">
+          <span>{{ home.errors.learning }}</span>
           <button class="inline-action" type="button" @click="load">重试</button>
         </div>
-        <template v-else>
-          <div class="today-summary" aria-label="今日任务数量">
-            <div><strong>{{ home.today?.doing.length ?? 0 }}</strong><span>进行中</span></div>
-            <div><strong>{{ home.today?.due.length ?? 0 }}</strong><span>到期 / 逾期</span></div>
-            <div><strong>{{ home.today?.next.length ?? 0 }}</strong><span>下一步</span></div>
-          </div>
-          <div v-if="todayPreview.length" class="today-task-list">
-            <button v-for="task in todayPreview" :key="task.id" class="home-task" type="button" @click="openTask(task)">
-              <span class="home-task__dot" :class="todayStateClass(task)" aria-hidden="true" />
-              <span class="home-task__title">{{ task.title }}</span>
-              <small :class="todayStateClass(task)">{{ todayStateLabel(task) }}</small>
-            </button>
-          </div>
-          <EmptyState v-else title="今天没有优先事项" description="可以从项目里挑一个下一步，或继续最近的学习。" />
-        </template>
+        <div v-else-if="home.learning[0]" class="learning-row">
+          <span class="learning-row__mark" aria-hidden="true"><WorkspaceIcon name="courses" /></span>
+          <span class="learning-row__text">
+            <small class="learning-row__course">{{ home.learning[0].course_name }}</small>
+            <strong>{{ home.learning[0].lesson_title || '选择下一段学习' }}</strong>
+            <small class="learning-row__summary" :title="home.learning[0].core_question || home.learning[0].unit_title">{{ home.learning[0].core_question || home.learning[0].unit_title || (home.learning[0].has_current_lesson ? '当前学习单元' : '从知识地图选择一个主题') }}</small>
+            <span class="learning-row__meta">
+              <small v-if="home.learning[0].core_question && home.learning[0].unit_title">{{ home.learning[0].unit_title }}</small>
+              <small class="learning-row__level">{{ levelLabel(home.learning[0].current_level) }} · {{ cognitiveStatusLabel(home.learning[0].cognitive_status) }}</small>
+            </span>
+            <svg class="learning-path" viewBox="0 0 220 200" fill="none" aria-hidden="true" focusable="false">
+              <circle cx="110" cy="18" r="10" /><path d="M110 28v12c0 18-62 12-62 38M110 40c0 18 62 12 62 38" />
+              <rect x="18" y="78" width="60" height="38" rx="4" /><rect x="142" y="78" width="60" height="38" rx="4" />
+              <path d="m37 96 7 7 15-16M164 91l16 14m0-14-16 14M48 116c0 34 62 24 62 52M172 116c0 34-62 24-62 52" /><circle cx="110" cy="179" r="10" />
+            </svg>
+          </span>
+        </div>
+        <EmptyState
+          v-else
+          title="知识世界还是空的"
+          description="创建一个学习领域后，这里会保存你最近的学习位置。"
+          action-label="开始一个学习领域"
+          @action="router.push('/domains/new')"
+        />
+        <RouterLink v-if="!home.errors.learning && home.learning[0]" :to="learningTarget(home.learning[0])" class="home-card-entry learning-card-entry" :aria-label="(home.learning[0].has_current_lesson ? '继续学习：' : '打开知识地图：') + (home.learning[0].lesson_title || home.learning[0].course_name)"><span aria-hidden="true">↗</span></RouterLink>
       </section>
-
+      </div>
+      <div class="home-project-lane">
       <section class="home-section projects-section" aria-labelledby="projects-title">
-        <SectionHeader title="Active Projects" id="projects-title">
+        <WorkspaceIcon name="projects" class="home-section__icon" />
+        <SectionHeader title="正在推进" id="projects-title">
           <template #actions>
             <el-button text @click="router.push('/projects?view=list')">项目列表 →</el-button>
           </template>
@@ -104,7 +129,7 @@
           <span>{{ home.errors.projects }}</span>
           <button class="inline-action" type="button" @click="load">重试</button>
         </div>
-        <template v-else-if="home.projects.length">
+        <div v-else-if="home.projects.length" class="home-project-grid">
           <button
             v-for="project in home.projects.slice(0, 5)"
             :key="project.id"
@@ -113,18 +138,17 @@
             :aria-label="project.title + '，打开项目看板'"
             @click="openProject(project.id)"
           >
-            <span class="project-row__accent" :style="{ color: project.accent || undefined, borderColor: project.accent || undefined }">{{ project.icon || '·' }}</span>
+            <span class="project-row__accent" :style="{ color: project.accent || undefined, borderColor: project.accent || undefined }">{{ projectIcon(project) }}</span>
             <span class="project-row__text">
-              <strong>{{ project.title }}</strong>
-              <span class="project-row__counts">
-                <span>{{ project.doing_task_count }} 进行中</span>
-                <span>{{ project.next_task_count }} 下一步</span>
-                <span>{{ project.open_task_count }} 未完成</span>
+              <span class="project-row__heading"><strong>{{ project.title }}</strong><span class="project-row__arrow" aria-hidden="true">→</span></span>
+              <small v-if="project.description">{{ project.description }}</small>
+              <span v-if="projectTaskTotal(project)" class="project-row__progress-line">
+                <span class="project-row__progress" aria-hidden="true"><i :style="{ width: Math.min(100, project.done_task_count / projectTaskTotal(project) * 100) + '%' }" /></span>
+                <small class="project-row__counts" :title="'已完成 ' + project.done_task_count + ' 项，共 ' + projectTaskTotal(project) + ' 项任务'">{{ project.done_task_count }} / {{ projectTaskTotal(project) }}</small>
               </span>
             </span>
-            <span class="project-row__arrow" aria-hidden="true">→</span>
           </button>
-        </template>
+        </div>
         <EmptyState
           v-else
           title="还没有进行中的项目"
@@ -134,50 +158,56 @@
         />
       </section>
 
-      <section class="home-section learning-section" aria-labelledby="learning-title">
-        <SectionHeader title="Continue Learning" id="learning-title">
+      <section class="home-section today-section" aria-labelledby="today-title">
+        <WorkspaceIcon name="calendar" class="home-section__icon" />
+        <SectionHeader title="今天的安排" id="today-title">
           <template #actions>
-            <el-button text @click="router.push('/learn')">学习空间 →</el-button>
+            <el-button text @click="router.push({ path: '/projects', query: { view: 'today' } })">查看全部 →</el-button>
           </template>
         </SectionHeader>
-        <div v-if="home.errors.learning" class="module-error" role="alert">
-          <span>{{ home.errors.learning }}</span>
+        <div v-if="home.errors.today" class="module-error" role="alert">
+          <span>{{ home.errors.today }}</span>
           <button class="inline-action" type="button" @click="load">重试</button>
         </div>
-        <button v-else-if="home.learning[0]" class="learning-row" type="button" @click="openLearning(home.learning[0])">
-          <span class="learning-row__mark" aria-hidden="true">{{ home.learning[0].has_current_lesson ? '→' : '＋' }}</span>
-          <span class="learning-row__text">
-            <small class="learning-row__course">{{ home.learning[0].course_name }}</small>
-            <strong>{{ home.learning[0].lesson_title || '选择下一段学习' }}</strong>
-            <small>{{ home.learning[0].core_question || home.learning[0].unit_title || (home.learning[0].has_current_lesson ? '当前学习单元' : '从知识地图选择一个主题') }}</small>
-            <small v-if="home.learning[0].core_question && home.learning[0].unit_title">{{ home.learning[0].unit_title }}</small>
-            <small class="learning-row__level">{{ levelLabel(home.learning[0].current_level) }} · {{ cognitiveStatusLabel(home.learning[0].cognitive_status) }}</small>
-          </span>
-          <span class="learning-row__action">{{ home.learning[0].has_current_lesson ? '继续学习' : '打开地图' }} <span aria-hidden="true">→</span></span>
-        </button>
-        <EmptyState
-          v-else
-          title="知识世界还是空的"
-          description="创建一个学习领域后，这里会保存你最近的学习位置。"
-          action-label="开始一个学习领域"
-          @action="router.push('/domains/new')"
-        />
+        <template v-else>
+
+          <div v-if="todayPreview.length" class="today-task-list">
+            <button v-for="task in todayPreview" :key="task.id" class="home-task" type="button" @click="openTask(task)">
+              <span class="home-task__dot" :class="todayStateClass(task)" aria-hidden="true" />
+              <span class="home-task__title">{{ task.title }}</span>
+              <small :class="todayStateClass(task)">{{ todayStateLabel(task) }}</small>
+            </button>
+          </div>
+          <EmptyState v-else title="今天没有优先事项" description="可以从项目里挑一个下一步，或继续最近的学习。" />
+          <dl class="today-summary" aria-label="今日任务数量">
+            <div><dt>进行中</dt><dd>{{ home.today?.doing.length ?? 0 }}</dd></div>
+            <div :class="{ 'has-overdue': todayHasOverdue }"><dt>到期 / 逾期</dt><dd>{{ home.today?.due.length ?? 0 }}</dd></div>
+            <div><dt>下一步</dt><dd>{{ home.today?.next.length ?? 0 }}</dd></div>
+          </dl>
+        </template>
       </section>
 
+      </div>
       <section v-if="recentItems.length || recentLoading || recentError || recentProblems.length" class="home-section recent-section" aria-labelledby="recent-title">
-        <SectionHeader title="最近留下的内容" id="recent-title" />
+        <WorkspaceIcon name="inbox" class="home-section__icon" />
+        <SectionHeader title="最近留下的" id="recent-title" />
         <p v-if="recentLoading && !recent" class="home-muted" role="status">正在读取最近记录…</p>
-        <RouterLink v-for="item in recentItems" :key="item.key" :to="item.to" class="home-recent-row">
+        <div v-if="recentItems.length" class="home-recent-grid">
+        <RouterLink v-for="item in recentItems" :key="item.key" :to="item.to" class="home-recent-row" :title="item.title">
           <span v-if="item.cover" class="home-recent-cover"><img :src="item.cover" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" @error="hideFailedImage" /></span>
-          <span class="home-recent-copy"><strong>{{ item.title }}</strong><small>{{ item.source }} · {{ item.dateLabel }}</small></span>
+          <span v-else class="home-recent-icon" aria-hidden="true"><WorkspaceIcon :name="item.key.startsWith('library-') ? 'courses' : 'life'" /></span>
+          <span class="home-recent-copy"><strong>{{ item.title }}</strong><small><span>{{ item.source }}</span><span class="home-recent-date">{{ item.dateLabel }}</span></small></span>
           <span class="home-muted" aria-hidden="true">→</span>
         </RouterLink>
+        </div>
         <p v-if="recentError || recentProblems.length" class="module-error" role="status">
           <span>{{ recentError || recentProblems.join(' ') }}</span>
           <button class="inline-action" type="button" @click="loadRecent">重试最近内容</button>
         </p>
       </section>
+
       <nav class="home-shortcuts" aria-label="个人档案快捷入口">
+        <span class="home-shortcuts__label">个人档案</span>
         <RouterLink to="/inbox">收集箱 · {{ home.errors.inbox ? '数量暂不可用' : (home.inbox?.count ?? 0) + ' 条待整理' }}</RouterLink>
         <button v-if="home.errors.inbox" class="inline-action" type="button" @click="load">重试收集箱</button>
         <RouterLink to="/explore/library">我的资料库</RouterLink>
@@ -192,11 +222,12 @@
 
 <script setup lang="ts">
 import PageShell from '@/components/PageShell.vue'
-import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
+import WorkspaceIcon from '@/components/WorkspaceIcon.vue'
+import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { APIRequestError } from '@/api/http'
 import { type InboxItem } from '@/api/inbox'
-import type { ProjectTask } from '@/api/projects'
+import type { Project, ProjectTask } from '@/api/projects'
 import { getWorkspaceHome, getWorkspaceRecent, type WorkspaceRecent, type WorkspaceHome, type WorkspaceLearningItem } from '@/api/workspace'
 import EmptyState from '@/components/EmptyState.vue'
 import PageHeader from '@/components/PageHeader.vue'
@@ -213,6 +244,8 @@ const home = ref<WorkspaceHome | null>(null)
 const loading = ref(true)
 const loadError = ref('')
 const captureOpen = ref(false)
+const homeSearch = ref(''), searchFocused = ref(false)
+interface HomeSearchResult { key: string; title: string; group: string; open: () => void }
 const loadingSections: HomeSection[] = ['today', 'projects', 'learning']
 const recent = ref<WorkspaceRecent | null>(null)
 const recentLoading = ref(true), recentError = ref('')
@@ -243,6 +276,11 @@ const recentItems = computed(() => {
 let homeRequest: AbortController | undefined, recentRequest: AbortController | undefined
 let disposed = false
 const dateLabel = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(new Date())
+function projectIcon(project: Pick<Project, 'title'> & { icon?: string | null }) {
+  const icon = project.icon?.trim()
+  return icon && !/^[·•.。∙⋅…]+$/u.test(icon) ? icon : Array.from(project.title.trim())[0] || '项'
+}
+const todayHasOverdue = computed(() => home.value?.today?.due.some(task => dueDays(task) > 0) ?? false)
 const todayPreview = computed(() => {
   const view = home.value?.today
   if (!view) return []
@@ -295,13 +333,34 @@ const focusReason = computed(() => {
   return '当前可继续处理的任务'
 })
 
+function projectTaskTotal(project: Project) { return Math.max(0, project.open_task_count + project.done_task_count) }
+const searchResults = computed<HomeSearchResult[]>(() => {
+  const query = homeSearch.value.trim().toLocaleLowerCase()
+  if (!query || !home.value) return []
+  const entries: HomeSearchResult[] = []
+  const focus = home.value.focus
+  if (focus.kind !== 'empty') entries.push({ key: 'focus', title: focus.title, group: '当前重点', open: continueFocus })
+  const tasks = [...(home.value.today?.doing ?? []), ...(home.value.today?.due ?? []), ...(home.value.today?.next ?? [])]
+  for (const task of new Map(tasks.map(task => [task.id, task])).values()) {
+    if (focus.kind === 'task' && task.id === focus.task_id) continue
+    entries.push({ key: 'task-' + task.id, title: task.title, group: '任务', open: () => openTask(task) })
+  }
+  for (const project of home.value.projects) entries.push({ key: 'project-' + project.id, title: project.title, group: '项目', open: () => openProject(project.id) })
+  for (const item of home.value.learning) entries.push({ key: 'learning-' + item.course_id, title: item.course_name + '：' + (item.lesson_title || item.unit_title), group: '学习', open: () => openLearning(item) })
+  for (const item of recentItems.value) entries.push({ key: item.key, title: item.title, group: '最近记录', open: () => { void router.push(item.to) } })
+  return entries.filter(item => item.title.toLocaleLowerCase().includes(query)).slice(0, 8)
+})
+function openSearchResult(item?: HomeSearchResult) { if (item) { searchFocused.value = false; item.open() } }
+function leaveSearch(event: FocusEvent) {
+  if (!(event.relatedTarget instanceof Node) || !(event.currentTarget as HTMLElement).contains(event.relatedTarget)) searchFocused.value = false
+}
 function localDate() {
   const date = new Date()
   return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0')
 }
 function sectionClass(section: HomeSection) { return section + '-section' }
 function sectionTitle(section: HomeSection) {
-  return ({ today: 'Today', projects: 'Active Projects', learning: 'Continue Learning' })[section]
+  return ({ today: '今天的安排', projects: '正在推进', learning: '继续学习' })[section]
 }
 function taskStatusLabel(status?: string) {
   return ({ doing: '进行中', next: '下一步', inbox: '待整理' } as Record<string, string>)[status ?? ''] ?? '项目任务'
@@ -415,130 +474,228 @@ function openTask(task: ProjectTask) {
 function openProject(projectID: number) {
   router.push({ path: '/projects', query: { project: String(projectID), view: 'board' } })
 }
-function continueFocus() {
+const focusTarget = computed(() => {
   const focus = home.value?.focus
-  if (!focus) return
-  if (focus.kind === 'task' && focus.task_id) {
-    router.push({ path: '/projects', query: { project: String(focus.project_id ?? 'all'), view: 'board', task: String(focus.task_id) } })
-  } else if (focus.kind === 'learning' && focus.course_id) {
-    router.push(focus.lesson_id ? '/courses/' + focus.course_id + '/learn' : '/courses/' + focus.course_id + '/map')
-  }
+  if (focus?.kind === 'task' && focus.task_id) return { path: '/projects', query: { project: String(focus.project_id ?? 'all'), view: 'board', task: String(focus.task_id) } }
+  if (focus?.kind === 'learning' && focus.course_id) return focus.lesson_id ? '/courses/' + focus.course_id + '/learn' : '/courses/' + focus.course_id + '/map'
+  return null
+})
+function continueFocus() { if (focusTarget.value) void router.push(focusTarget.value) }
+function learningTarget(item: WorkspaceLearningItem) { return '/courses/' + item.course_id + (item.has_current_lesson ? '/learn' : '/map') }
+function openLearning(item: WorkspaceLearningItem) { void router.push(learningTarget(item)) }
+// Share the actual card axis with the header, including constrained reading widths.
+const focusFrame = ref<HTMLElement | null>(null)
+let axisObserver: ResizeObserver | undefined
+let axisShell: HTMLElement | null = null
+function updateNavigationAxis() {
+  const frame = focusFrame.value
+  if (!frame) return
+  const header = frame.closest('.app-shell--home')?.querySelector('.home-topbar')
+  axisShell = frame.closest('.app-shell--home') as HTMLElement | null
+  if (!header || !axisShell) return
+  const card = frame.getBoundingClientRect()
+  axisShell.style.setProperty('--home-focus-axis', `${card.left + card.width / 2 - header.getBoundingClientRect().left}px`)
 }
-function openLearning(item: WorkspaceLearningItem) {
-  router.push(item.has_current_lesson ? '/courses/' + item.course_id + '/learn' : '/courses/' + item.course_id + '/map')
-}
+watch(focusFrame, frame => {
+  axisObserver?.disconnect()
+  if (!frame) return
+  axisObserver = new ResizeObserver(updateNavigationAxis)
+  axisObserver.observe(frame)
+  const main = frame.closest('.main-content')
+  if (main) axisObserver.observe(main)
+  updateNavigationAxis()
+}, { flush: 'post' })
+onMounted(() => window.addEventListener('resize', updateNavigationAxis))
+onBeforeUnmount(() => {
+  axisObserver?.disconnect()
+  window.removeEventListener('resize', updateNavigationAxis)
+  axisShell?.style.removeProperty('--home-focus-axis')
+})
+
 onMounted(() => { void load(); void loadRecent() })
 onBeforeUnmount(() => { disposed = true; homeRequest?.abort(); recentRequest?.abort() })
 </script>
 
 <style scoped>
-
-.workspace-home__refresh-error { display: flex; align-items: center; gap: 8px; margin: -8px 0 14px; color: var(--color-warning); font-size: 13px; }
-.workspace-home__fatal-error { max-width: 560px; margin: 8vh auto 0; }
-.workspace-home__grid { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 18px 24px; margin-top: 4px; }
-.focus-card { grid-column: span 7; display: flex; align-items: center; justify-content: space-between; gap: 24px; min-width: 0; padding: 23px 26px; border: 1px solid var(--border-default); border-radius: var(--radius-card); background: linear-gradient(115deg, var(--color-primary-soft), var(--bg-surface) 54%); box-shadow: var(--shadow-card); }
-.focus-card__copy { min-width: 0; }
-.section-kicker { color: var(--text-tertiary); font-size: 11px; font-weight: 700; letter-spacing: .11em; }
-.focus-card__context { display: flex; flex-wrap: wrap; gap: 5px 10px; margin: 8px 0 0; color: var(--text-secondary); font-size: 13px; }
-.focus-card__context span + span::before { margin-right: 9px; color: var(--text-tertiary); content: '·'; }
-.focus-card h2 { margin: 8px 0 6px; font-size: clamp(21px, 2vw, 27px); line-height: 1.32; overflow-wrap: anywhere; }
-.focus-card__question { max-width: 56em; margin: 0 0 8px; color: var(--text-secondary); font-size: 14px; line-height: 1.5; }
-.focus-card__reason { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; color: var(--text-secondary); font-size: 13px; }
-.focus-card__reason span + span { color: var(--text-tertiary); }
-.focus-card > :deep(.el-button) { flex: none; }
-.focus-card--skeleton { min-height: 142px; align-items: center; }
-.focus-card--skeleton :deep(.el-skeleton) { width: 72%; }
-.today-section { grid-column: span 3; }
-.projects-section, .learning-section { grid-column: span 5; }
-.recent-section { grid-column: span 10; }
-.home-section { min-width: 0; padding: 2px 0 8px; }
-.home-section :deep(.section-header) { margin-bottom: 10px; }
-.home-section :deep(.section-header h2) { font-size: 16px; }
-.home-section :deep(.empty-state) { padding: 15px 10px 10px; }
-.home-section :deep(.empty-state__mark) { display: none; }
-.home-section :deep(.empty-state h3) { margin: 0 0 5px; font-size: 14px; }
-.home-section :deep(.empty-state p) { max-width: 34em; margin: 0 auto 10px; font-size: 13px; }
-.home-section--skeleton { min-height: 146px; }
-.today-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 8px 0 10px; }
-.today-summary div { display: grid; gap: 2px; }
-.today-summary strong { font-size: 21px; font-weight: 650; font-variant-numeric: tabular-nums; }
-.today-summary span, .home-muted { color: var(--text-tertiary); font-size: 13px; }
-.today-task-list { border-top: 1px solid var(--border-subtle); }
-.home-task, .project-row, .learning-row { display: flex; align-items: center; width: 100%; min-width: 0; text-align: left; border: 0; border-bottom: 1px solid var(--border-subtle); background: transparent; color: var(--text-primary); transition: background-color 140ms ease, color 140ms ease; }
-.home-task { gap: 9px; padding: 10px 2px; cursor: pointer; }
-.home-task:hover, .project-row:hover, .learning-row:hover { background: var(--bg-subtle); }
-.home-task__dot { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--color-primary); }
+.workspace-home {
+  --text-primary: var(--home-ink);
+  --text-secondary: var(--home-secondary);
+  --text-tertiary: var(--home-muted);
+  --color-primary: var(--home-link);
+  --color-focus: var(--home-link);
+  --bg-surface: var(--home-panel);
+  --bg-subtle: var(--home-tint);
+  --border-default: var(--home-edge);
+  --el-color-primary: #713dff;
+  --el-color-primary-dark-2: #6030dc;
+  --button-primary-text: #fff;
+  color: var(--home-ink);
+  max-width: 1680px;
+}
+.workspace-home :deep(.page-header) { margin-bottom: 40px; }
+.workspace-home :deep(.page-header h1) { font-family: var(--font-ui); font-size: 44px; font-weight: 600; line-height: 1.4; color: var(--home-ink); }
+.workspace-home :deep(.page-header__description) { margin-top: 12px; font-size: 15px; color: var(--home-muted); }
+.workspace-home__grid { position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.3fr) minmax(0,1fr); align-items: stretch; gap: 24px; }
+.home-focus-lane, .home-project-lane { display: flex; flex-direction: column; gap: 22px; min-width: 0; grid-row: 1; }
+.home-focus-lane { grid-column: 2; }
+.home-project-lane { grid-column: 1; }
+.focus-card-frame { position: relative; min-width: 0; }
+.focus-card, .home-section { position: relative; min-width: 0; border: 1px solid var(--home-edge); border-radius: 16px; background: linear-gradient(120deg,var(--home-glass-glint),transparent 26%,transparent 76%,var(--home-glass-shade)),linear-gradient(145deg,var(--home-sheen),transparent 42%),var(--home-panel); background-clip: padding-box; box-shadow: var(--home-panel-inset); backdrop-filter: var(--home-glass-filter); -webkit-backdrop-filter: var(--home-glass-filter); transition: background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease; }
+.focus-card { min-height: 360px; padding: 28px; display: flex; flex-direction: column; gap: 24px; }
+.focus-card { background: linear-gradient(120deg,var(--home-glass-glint),transparent 26%,transparent 76%,var(--home-glass-shade)),linear-gradient(180deg,var(--home-focus-top) 0%,var(--home-focus-top) 52%,var(--home-focus-mid) 82%,var(--home-focus-bottom) 100%); }
+.focus-card__heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.section-kicker { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 600; }
+.section-kicker svg { width: 22px; height: 22px; color: var(--home-secondary); }
+.focus-card__state { margin-right: 26px; font-size: 12px; color: var(--home-muted); }
+.focus-card__copy { min-width: 0; flex: 1; }
+.focus-card h2 { margin: 0; font-size: 36px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
+.focus-card__description, .focus-card__question { margin: 12px 0 0; font-size: 15px; line-height: 1.8; color: var(--home-secondary); overflow-wrap: anywhere; }
+.focus-card__reason { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 12px 0 0; color: var(--home-muted); font-size: 13px; line-height: 1.75; }
+.focus-card__context { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 0; color: var(--home-secondary); font-size: 12px; }
+.focus-card__context span { border: 1px solid var(--home-edge); border-radius: 999px; padding: 3px 10px; background: var(--home-tint); }
+.home-section { padding: 26px; }
+.home-section__icon { position: absolute; top: 29px; left: 26px; width: 21px; height: 21px; color: var(--home-secondary); }
+.home-section :deep(.section-header) { padding-left: 32px; margin-bottom: 22px; gap: 10px; flex-direction: row; flex-wrap: wrap; align-items: center; text-align: left; }
+.home-section :deep(.section-header__actions) { justify-content: flex-end; }
+.home-section :deep(.section-header h2) { font-size: 18px; font-weight: 600; line-height: 1.5; color: var(--home-ink); }
+.home-section :deep(.section-header__actions .el-button) { padding: 0; height: auto; font-size: 12px; color: var(--home-muted); }
+.home-section :deep(.empty-state) { padding: 18px 0; text-align: left; border: 0; background: transparent; }
+.home-section :deep(.empty-state h3) { margin: 0 0 10px; font-size: 15px; font-weight: 500; color: var(--home-secondary); }
+.home-section :deep(.empty-state p) { margin: 0 0 16px; font-size: 13px; color: var(--home-muted); line-height: 1.8; }
+.home-section :deep(.empty-state .el-button) { background: var(--home-tint); border-color: var(--home-edge); color: var(--home-link); border-radius: 999px; }
+@media (hover: hover) {
+  .focus-card:hover, .home-section:hover { border-color: var(--home-reflection); background-color: var(--home-panel-hover); box-shadow: var(--home-panel-hover-shadow); }
+  .focus-card:hover .section-kicker, .home-section:hover :deep(.section-header h2) { color: var(--home-link); }
+}
+.projects-section, .today-section { flex: none; }
+.home-project-grid { display: grid; }
+.project-row { display: grid; grid-template-columns: 24px minmax(0,1fr); gap: 12px; align-items: start; width: 100%; min-width: 0; padding: 17px 0; border: 0; border-bottom: 1px solid var(--home-edge); border-radius: 0; background: transparent; color: var(--home-ink); text-align: left; cursor: pointer; }
+.project-row:last-child { border-bottom: 0; padding-bottom: 3px; }
+.project-row__accent { display: grid; width: 24px; height: 26px; place-items: center; border: 0; background: transparent; font-size: 14px; }
+.project-row__text { display: grid; min-width: 0; gap: 7px; }
+.project-row__heading { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.project-row__heading strong { min-width: 0; font-size: 16px; line-height: 1.6; font-weight: 500; overflow-wrap: anywhere; }
+.project-row__arrow { flex: none; color: var(--home-muted); font-size: 12px; }
+.project-row__text > small { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 13px; color: var(--home-muted); line-height: 1.7; white-space: pre-line; }
+.project-row__progress-line { display: flex; align-items: center; gap: 14px; margin-top: 3px; }
+.project-row__progress { height: 5px; border-radius: 99px; background: var(--home-tint); flex: 1; overflow: hidden; }
+.project-row__progress i { display: block; height: 100%; border-radius: inherit; background: var(--home-link); opacity: .8; }
+.project-row__counts { flex: none; font-size: 13px; color: var(--home-secondary); font-variant-numeric: tabular-nums; }
+.project-row:hover strong { color: var(--home-link); }
+.today-task-list { position: relative; display: grid; gap: 4px; }
+.today-task-list::before { position: absolute; left: 4px; top: 17px; bottom: 17px; width: 1px; content: ''; background: var(--home-edge); }
+.today-section :deep(.section-header) { margin-bottom: 14px; }
+.home-task { position: relative; display: grid; grid-template-columns: 9px minmax(0,1fr); align-items: center; gap: 1px 14px; min-width: 0; width: 100%; padding: 8px 0; border: 0; background: transparent; text-align: left; color: var(--home-ink); cursor: pointer; }
+.home-task__dot { width: 9px; height: 9px; border-radius: 50%; background: var(--home-link); z-index: 1; }
+.home-task__dot.is-next { background: var(--home-muted); }
 .home-task__dot.is-overdue { background: var(--color-danger); }
 .home-task__dot.is-due-today { background: var(--color-warning); }
-.home-task__dot.is-doing { background: var(--color-primary); }
-.home-task__dot.is-next { background: var(--text-tertiary); }
-.home-task__title { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
-.home-task small { flex: none; color: var(--text-tertiary); font-size: 12px; }
+.home-task__title { min-width: 0; overflow-wrap: anywhere; font-size: 14px; line-height: 1.7; }
+.home-task small { grid-column: 2; color: var(--home-muted); font-size: 12px; line-height: 1.6; }
 .home-task small.is-overdue { color: var(--color-danger); }
 .home-task small.is-due-today { color: var(--color-warning); }
-.home-task small.is-doing { color: var(--text-secondary); }
-.module-error { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; padding: 12px 2px; color: var(--text-secondary); font-size: 13px; }
-.inline-action { padding: 0; border: 0; background: transparent; color: var(--color-primary); font: inherit; cursor: pointer; }
-.project-row { gap: 11px; padding: 11px 3px; cursor: pointer; }
-.project-row__accent { display: grid; width: 32px; height: 32px; flex: none; place-items: center; border: 1px solid var(--border-subtle); border-radius: 9px; background: var(--bg-subtle); font-size: 15px; }
-.project-row__text, .learning-row__text { display: grid; min-width: 0; flex: 1; gap: 4px; }
-.project-row__text strong, .learning-row__text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; }
-.project-row__counts { display: flex; flex-wrap: wrap; gap: 5px 12px; color: var(--text-tertiary); font-size: 12px; }
-.project-row__arrow { color: var(--text-tertiary); transition: transform 140ms ease, color 140ms ease; }
-.project-row:hover .project-row__arrow { transform: translateX(2px); color: var(--color-primary); }
-.learning-row { gap: 12px; padding: 13px 3px; cursor: pointer; }
-.learning-row__mark { display: grid; width: 34px; height: 34px; flex: none; place-items: center; border: 1px solid var(--border-subtle); border-radius: 50%; color: var(--color-primary); }
-.learning-row__text { gap: 4px; }
-.learning-row__text .learning-row__course { color: var(--text-secondary); font-size: 13px; }
-.learning-row__text > small { color: var(--text-tertiary); font-size: 12px; }
-.learning-row__text .learning-row__level { color: var(--text-secondary); }
-.learning-row__action { display: inline-flex; flex: none; align-items: center; gap: 4px; color: var(--color-primary); font-size: 13px; }
-.workspace-home__grid--loading { grid-template-rows: auto auto auto; }
-.workspace-home__grid--loading .focus-card { grid-row: span 1; }
-.workspace-home__grid--loading .today-section { grid-column: span 3; }
-.workspace-home__grid--loading .projects-section, .workspace-home__grid--loading .learning-section { grid-column: span 5; }
-.workspace-home__grid--loading .recent-section { grid-column: span 10; }
-@media (max-width: 1020px) {
-  .workspace-home__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 20px; }
-  .focus-card, .today-section { grid-column: span 2; }
-  .projects-section, .learning-section { grid-column: span 1; }
-  .recent-section { grid-column: span 2; }
-  .workspace-home__grid--loading .focus-card, .workspace-home__grid--loading .today-section { grid-column: span 2; }
-  .workspace-home__grid--loading .projects-section, .workspace-home__grid--loading .learning-section { grid-column: span 1; }
-  .workspace-home__grid--loading .recent-section { grid-column: span 2; }
+.home-task:hover .home-task__title { color: var(--home-link); }
+.today-summary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; margin: 18px 0 0; padding-top: 16px; border-top: 1px solid var(--home-edge); }
+.today-summary > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.today-summary dt { order: 1; color: var(--home-muted); font-size: 12px; overflow-wrap: anywhere; }
+.today-summary dd { margin: 0; color: var(--home-secondary); font-size: 19px; line-height: 1.3; font-variant-numeric: tabular-nums; }
+.today-summary .has-overdue dd { color: var(--color-danger); }
+.recent-section { grid-column: 3; grid-row: 1; align-self: stretch; }
+.learning-row { display: block; width: 100%; min-width: 0; padding: 5px 0 0; color: var(--home-ink); }
+.learning-row__mark { display: none; }
+.home-card-entry { position: absolute; inset: -1px; z-index: 1; border-radius: inherit; color: var(--home-link); text-decoration: none; }
+.home-card-entry > span { position: absolute; top: 26px; right: 26px; font-size: 20px; line-height: 24px; }
+.home-card-entry:focus-visible { outline: 2px solid var(--home-link); outline-offset: 4px; }
+.focus-card:focus-within, .home-section:focus-within { border-color: var(--home-reflection); background-color: var(--home-panel-hover); box-shadow: var(--home-panel-hover-shadow); }
+
+
+.learning-row__text { display: flex; flex-direction: column; align-items: stretch; gap: 14px; min-width: 0; }
+.learning-row__course { color: var(--home-secondary); font-size: 14px; line-height: 1.8; }
+.learning-row__text strong { font-size: 28px; font-weight: 600; line-height: 1.6; overflow-wrap: anywhere; }
+.learning-row__summary { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--home-secondary); font-size: 14px; line-height: 1.8; }
+.learning-row__meta { display: flex; flex-wrap: wrap; gap: 5px 12px; color: var(--home-muted); font-size: 13px; line-height: 1.7; }
+.learning-row__meta small { font-size: inherit; }
+.learning-path { display: block; width: min(200px,100%); height: 200px; margin: 18px auto; stroke: var(--home-link); stroke-width: 1.2; opacity: .65; }
+.home-recent-grid { display: grid; }
+.home-recent-row { display: grid; grid-template-columns: 26px minmax(0,1fr) 12px; align-items: start; gap: 12px; min-width: 0; padding: 14px 0; border-bottom: 1px solid var(--home-edge); text-decoration: none; color: var(--home-ink); }
+.home-recent-row:last-child { border-bottom: 0; padding-bottom: 4px; }
+.home-recent-cover, .home-recent-icon { display: grid; place-items: center; width: 26px; height: 32px; border-radius: 5px; overflow: hidden; color: var(--home-secondary); }
+.home-recent-cover img { width: 100%; height: 100%; object-fit: cover; }
+.home-recent-icon svg { width: 20px; height: 20px; }
+.home-recent-copy { display: grid; gap: 7px; min-width: 0; }
+.home-recent-copy strong { font-size: 15px; line-height: 1.7; font-weight: 500; overflow-wrap: anywhere; }
+.home-recent-copy small { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; line-height: 1.65; color: var(--home-muted); }
+.home-recent-date { font-variant-numeric: tabular-nums; }
+.home-muted { color: var(--home-muted); font-size: 13px; }
+.home-recent-row:hover strong { color: var(--home-link); }
+.module-error { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; font-size: 14px; line-height: 1.8; color: var(--home-secondary); padding: 12px 0; }
+.inline-action { padding: 0; border: 0; background: transparent; color: var(--home-link); font: inherit; cursor: pointer; }
+.workspace-home__refresh-error { display: flex; flex-wrap: wrap; gap: 8px; color: var(--color-warning); font-size: 14px; margin: -16px 0 24px; }
+.workspace-home__fatal-error { max-width: 560px; margin: 8vh auto; }
+.workspace-home__grid--loading .focus-card-frame { grid-column: 2; grid-row: 1; }
+.workspace-home__grid--loading .projects-section { grid-column: 1; grid-row: 1; }
+.workspace-home__grid--loading .today-section { grid-column: 1; grid-row: 2; }
+.workspace-home__grid--loading .learning-section { grid-column: 2; grid-row: 2; }
+.home-section--skeleton { min-height: 230px; }
+.home-shortcuts { grid-column: 1 / -1; grid-row: 2; display: flex; align-items: center; flex-wrap: wrap; gap: 12px 24px; padding: 10px 0; font-size: 12px; }
+.home-shortcuts__label { color: var(--home-muted); }
+.home-shortcuts a { color: var(--home-secondary); text-decoration: none; line-height: 1.8; }
+.home-shortcuts small { color: var(--home-muted); font-size: 12px; }
+.home-shortcuts a:hover { color: var(--home-link); text-decoration: underline; text-underline-offset: 4px; }
+.home-search { position: relative; display: flex; align-items: center; gap: 8px; width: 158px; height: 38px; padding: 0 12px; border: 1px solid var(--home-edge); border-radius: 999px; background: var(--home-bar); color: var(--home-muted); }
+.home-search > svg { flex: none; width: 16px; height: 16px; }
+.home-search input { min-width: 0; width: 100%; padding: 0; border: 0; outline: none; background: transparent; font: inherit; font-size: 13px; color: var(--home-ink); }
+.home-search input::placeholder { color: var(--home-muted); }
+.home-search:focus-within { outline: 2px solid var(--home-link); outline-offset: 2px; }
+.home-search__results { position: absolute; top: 46px; right: 0; width: 360px; max-width: calc(100vw - 32px); max-height: 420px; overflow-y: auto; padding: 8px; background: var(--home-canvas); border: 1px solid var(--home-edge); border-radius: 12px; box-shadow: 0 12px 30px rgba(0,0,0,.18); color: var(--home-ink); }
+.home-search__results ul { list-style: none; padding: 0; margin: 0; }
+.home-search__results button { display: flex; gap: 12px; justify-content: space-between; align-items: start; width: 100%; min-height: 44px; padding: 10px; border: 0; border-radius: 6px; background: transparent; text-align: left; color: var(--home-ink); font: inherit; font-size: 14px; cursor: pointer; }
+.home-search__results button:hover, .home-search__results button:focus-visible { background: var(--home-tint); }
+.home-search__results button > span { min-width: 0; overflow-wrap: anywhere; }
+.home-search__results small { flex: none; font-size: 11px; color: var(--home-muted); }
+.home-search__results p { margin: 8px; font-size: 13px; }
+.home-capture-button.el-button { height: 38px; padding-inline: 16px; border: 1px solid var(--home-edge); border-radius: 999px; background: var(--home-tint); color: var(--home-ink); font-size: 13px; }
+.home-capture-button :deep(svg) { width: 16px; height: 16px; margin-right: 7px; }
+@media (min-width: 701px) {
+  .learning-row__text { display: grid; grid-template-columns: minmax(0,1fr) 130px; gap: 12px; }
+  .learning-row__text > * { grid-column: 1 / -1; }
+  .learning-row__text > .learning-row__summary, .learning-row__text > .learning-row__meta { grid-column: 1; }
+  .learning-row__text > .learning-path { grid-column: 2; grid-row: 3 / span 2; width: 130px; height: 110px; margin: 0; align-self: center; }
 }
-@media (max-width: 760px) {
-  .workspace-home :deep(.page-header) { align-items: flex-start; }
-  .workspace-home__grid { grid-template-columns: 1fr; gap: 12px; margin-top: 2px; }
-  .focus-card { align-items: flex-start; flex-direction: column; padding: 20px; }
-  .focus-card > :deep(.el-button) { align-self: flex-start; }
-  .focus-card, .today-section, .projects-section, .learning-section, .recent-section,
-  .workspace-home__grid--loading .focus-card, .workspace-home__grid--loading .today-section,
-  .workspace-home__grid--loading .projects-section, .workspace-home__grid--loading .learning-section,
-  .workspace-home__grid--loading .recent-section { grid-column: span 1; }
+@media (max-width: 1099px) and (min-width: 701px) {
+  .workspace-home__grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .home-focus-lane { grid-column: 1; }
+  .home-project-lane { grid-column: 2; }
+  .recent-section { grid-column: 1 / -1; grid-row: 2; }
+  .home-shortcuts { grid-row: 3; }
+  .workspace-home__grid--loading .focus-card-frame { grid-column: 1; }
+  .workspace-home__grid--loading .projects-section, .workspace-home__grid--loading .today-section { grid-column: 2; }
+  .workspace-home__grid--loading .learning-section { grid-column: 1; grid-row: 2; }
+}
+@media (max-width: 700px) {
+  .workspace-home :deep(.page-header) { margin-bottom: 30px; }
+  .workspace-home :deep(.page-header h1) { font-size: 28px; line-height: 1.5; }
+  .workspace-home :deep(.page-header__description) { font-size: 13px; margin-top: 10px; }
+  .workspace-home__grid { display: flex; flex-direction: column; gap: 22px; }
+  .home-focus-lane, .home-project-lane { display: contents; }
+  .focus-card-frame { order: 1; }
   .today-section { order: 2; }
   .learning-section { order: 3; }
   .projects-section { order: 4; }
   .recent-section { order: 5; }
-  .home-task { align-items: flex-start; }
-  .home-task small { max-width: 84px; text-align: right; }
-  .project-row__counts { gap: 4px 8px; }
-  .learning-row { align-items: flex-start; }
-  .learning-row__action { margin-left: auto; padding-top: 7px; }
+  .home-shortcuts { order: 6; gap: 10px 18px; }
+  .focus-card { min-height: 0; padding: 24px; gap: 24px; }
+  .focus-card h2 { font-size: 26px; }
+  .home-section { padding: 24px; }
+  .home-section__icon { left: 24px; top: 27px; }
+  .home-section :deep(.section-header) { margin-bottom: 22px; }
+  .home-section :deep(.section-header h2) { font-size: 17px; }
+  .learning-row__text strong { font-size: 21px; }
+  .learning-path { width: 160px; height: 150px; margin-block: 10px; }
+  .home-shortcuts__label { width: 100%; }
+  .home-search { display: none; }
+  .home-capture-button.el-button { min-height: 44px; padding-inline: 12px; font-size: 12px; }
+  .home-capture-button :deep(svg) { width: 14px; height: 14px; margin-right: 5px; }
 }
-@media (prefers-reduced-motion: reduce) {
-  .home-task, .project-row, .learning-row, .project-row__arrow { transition: none; }
-}
-.home-shortcuts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 12px 24px; padding: 12px 0; border-top: 1px solid var(--border-subtle); order: 6; }
-.home-shortcuts a { color: var(--text-secondary); text-decoration: none; font-size: 13px; line-height: 1.7; }
-.home-shortcuts a:hover { color: var(--color-primary); }
-.home-shortcuts small { font-size: 12px; color: var(--text-tertiary); }
-.home-recent-row { display: flex; align-items: center; gap: 12px; padding: 12px 2px; min-width: 0; text-decoration: none; border-bottom: 1px solid var(--border-subtle); color: var(--text-primary); }
-.home-recent-row:hover { background: var(--bg-subtle); }
-.home-recent-cover { width: 48px; height: 48px; flex: none; overflow: hidden; border-radius: var(--radius-control); background: var(--bg-subtle); }
-.home-recent-cover img { width: 100%; height: 100%; object-fit: cover; }
-.home-recent-copy { display: grid; flex: 1; min-width: 0; gap: 4px; }
-.home-recent-copy strong { font-size: 14px; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.home-recent-copy small { font-size: 12px; color: var(--text-tertiary); line-height: 1.6; overflow-wrap: anywhere; }
-.home-shortcuts a:focus-visible, .home-recent-row:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .focus-card, .home-section { transition: none; } }
 </style>

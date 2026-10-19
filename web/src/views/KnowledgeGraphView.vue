@@ -78,7 +78,7 @@
           @expand="expandUnit"
           @generate="({ id, scope }) => generateUnitDraft(id, scope)"
         />
-        <el-drawer v-model="mobileDetailOpen" class="knowledge-node-drawer" direction="rtl" size="min(92vw, 380px)" :with-header="false">
+        <el-drawer append-to-body v-model="mobileDetailOpen" class="knowledge-node-drawer" direction="rtl" size="min(92vw, 380px)" :with-header="false">
           <NodeDetailPanel
             :node="selectedGraphNode"
             :current-lesson-id="currentLessonID"

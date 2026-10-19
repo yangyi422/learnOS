@@ -1,7 +1,7 @@
 .life-toolbar { display:flex; flex-wrap:wrap; gap:14px; align-items:center; padding-bottom:18px; border-bottom:1px solid var(--border-subtle); }
-.life-tabs { display:flex; flex-wrap:wrap; gap:6px; margin-right:auto; max-width:100%; }
-.life-tabs button { border:0; border-radius:var(--radius-control); background:transparent; color:var(--text-secondary); padding:var(--space-2) var(--space-4); min-height:var(--control-height); cursor:pointer; font:inherit; }
-.life-tabs button[aria-selected=true] { background:var(--color-primary-soft); color:var(--color-primary); }
+.life-tabs { display:flex; flex-wrap:wrap; gap:16px; margin-right:auto; max-width:100%; }
+.life-tabs button { border:0; border-radius:0; border-bottom:2px solid transparent; background:transparent; color:var(--text-secondary); padding:var(--space-2) 4px; min-height:var(--control-height); cursor:pointer; font:inherit; }
+.life-tabs button[aria-selected=true] { border-bottom-color:var(--color-primary); color:var(--color-primary); font-weight:600; }
 .life-muted, .life-metadata, .life-source { color:var(--text-secondary); font-size:13px; }
 .life-metadata { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
 .life-reading h2 { font-size:24px; line-height:1.5; margin:16px 0; overflow-wrap:anywhere; }
@@ -21,7 +21,7 @@
 .life-month { margin:24px 0 16px; font-size:14px; color:var(--text-secondary); font-weight:500; }
 .life-event-row { display:grid; grid-template-columns:86px 1fr; gap:20px; padding:0 0 16px; }
 .life-event-date { color:var(--text-secondary); font-size:13px; padding-top:19px; text-align:right; }
-.life-event-card { position:relative; text-align:left; font:inherit; color:var(--text-primary); border:1px solid var(--border-subtle); border-radius:10px; background:var(--bg-surface); padding:18px 22px; cursor:pointer; width:100%; min-width:0; }
+.life-event-card { position:relative; text-align:left; font:inherit; color:var(--text-primary); border:1px solid var(--border-subtle); border-radius:var(--radius-card); background:var(--bg-surface); padding:16px 20px; cursor:pointer; width:100%; min-width:0; }
 .life-event-card:hover { border-color:var(--card-border-hover); box-shadow:var(--shadow-card); }
 .life-event-card.is-milestone { border-left:3px solid var(--color-primary); }
 .life-event-card h3 { margin:0 0 7px; font-size:var(--font-card-title); font-weight:600; overflow-wrap:anywhere; }

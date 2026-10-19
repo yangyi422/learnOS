@@ -1,5 +1,5 @@
 <template>
-  <el-dialog :model-value="modelValue" :title="record ? '记录详情' : inboxItem ? '保存为记录' : '新增记录'" width="min(620px, calc(100vw - 28px))" class="record-dialog" :before-close="close" @update:model-value="$emit('update:modelValue', $event)">
+  <el-dialog append-to-body :model-value="modelValue" :title="record ? '记录详情' : inboxItem ? '保存为记录' : '新增记录'" width="min(620px, calc(100vw - 28px))" class="record-dialog" :before-close="close" @update:model-value="$emit('update:modelValue', $event)">
     <div class="record-dialog__body">
       <template v-if="record && !editing">
         <p class="record-meta">{{ projectName }} · {{ formatTime(record.created_at) }}{{ record.archived_at ? ' · 已归档' : '' }}</p>

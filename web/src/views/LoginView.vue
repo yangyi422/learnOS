@@ -1,5 +1,6 @@
 <template>
   <main class="login-page">
+    <div class="login-ambient" aria-hidden="true"><HomeLightField /></div>
     <el-card class="login-card" shadow="never">
       <p class="eyebrow">LearnOS</p>
       <h1>登录你的学习空间</h1>
@@ -16,6 +17,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import HomeLightField from '@/components/HomeLightField.vue'
 import { useRouter } from 'vue-router'
 import { login } from '@/api/auth'
 
@@ -36,9 +38,10 @@ async function submit() {
 </script>
 
 <style scoped>
-.login-page { min-height: 100vh; display: grid; place-items: center; padding: 32px 20px; background: var(--bg-app); color: var(--text-primary); }
-.login-card { width: min(100%, 420px); padding: 12px; border-color: var(--border-default); background: var(--bg-surface); }
-.login-card h1 { margin: 0 0 10px; }
+.login-page { min-height: 100vh; display: grid; place-items: center; padding: 32px 20px; isolation: isolate; background: var(--home-environment); color: var(--text-primary); }
+.login-ambient { position: fixed; inset: 0; z-index: -1; pointer-events: none; }
+.login-card { position: relative; width: min(100%, 420px); padding: 12px; border-color: var(--border-default); background: var(--bg-surface); }
+.login-card h1 { font-size: var(--font-page-title); font-family: var(--font-display); font-weight: 700; line-height: 1.35; margin: 0 0 10px; }
 .login-card .muted { margin: 0 0 24px; color: var(--text-secondary); }
 .login-card .el-alert { margin-bottom: 18px; }
 </style>

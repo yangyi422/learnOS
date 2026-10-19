@@ -422,7 +422,7 @@ test('移动端导航可以打开、关闭和切换页面', async ({ page }) => 
   await page.getByLabel('打开导航').click()
   const drawer = page.locator('.mobile-nav-drawer')
   await expect(drawer).toBeVisible()
-  await expect(drawer.getByRole('link', { name: '工作区' })).toBeFocused()
+  await expect(drawer.getByRole('link', { name: '工作台' })).toBeFocused()
   expect(await page.evaluate(() => document.body.classList.contains('el-popup-parent--hidden'))).toBe(false)
   await page.keyboard.press('Shift+Tab')
   expect(await page.evaluate(() => Boolean(document.activeElement?.closest('.mobile-nav-drawer')))).toBe(true)
@@ -637,7 +637,7 @@ test('深色主题下首页和课程档案保持基础可读性', async ({ page 
   await page.getByRole('button', { name: '深色主题' }).click()
   await page.goto('/')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
-  await expect(page.getByRole('heading', { name: '今天继续什么？' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '今天，专注一件事' })).toBeVisible()
   await expect(page.locator('#focus-title')).toHaveText(currentLesson.lesson.title)
   if (process.env.CAPTURE_VISUALS) await page.screenshot({ path: testInfo.outputPath('dashboard-dark.png'), fullPage: true })
   await page.goto('/courses')
@@ -649,7 +649,7 @@ test('深色主题下首页和课程档案保持基础可读性', async ({ page 
   if (process.env.CAPTURE_VISUALS) await page.screenshot({ path: testInfo.outputPath('learning-dark.png'), fullPage: true })
   await page.goto('/login')
   await expect(page.getByRole('heading', { name: '登录你的学习空间' })).toBeVisible()
-  expect(await page.getByRole('button', { name: '登录' }).evaluate(button => getComputedStyle(button).color)).toBe('rgb(11, 27, 42)')
+  expect(await page.getByRole('button', { name: '登录' }).evaluate(button => getComputedStyle(button).color)).toBe('rgb(255, 255, 255)')
   if (process.env.CAPTURE_VISUALS) await page.screenshot({ path: testInfo.outputPath('login-dark.png'), fullPage: true })
 })
 
@@ -802,13 +802,24 @@ test('导航使用语义链接并标记当前页面，键盘可完成切换', as
   await page.goto('/')
 
   const navigation = page.getByRole('navigation', { name: '主要导航' })
-  const homeLink = navigation.getByRole('link', { name: '工作区' })
+  const homeLink = navigation.getByRole('link', { name: '工作台' })
   await expect(homeLink).toHaveAttribute('aria-current', 'page')
-  const settingsLink = navigation.getByRole('link', { name: '系统设置' })
+  await page.getByRole('button', { name: '个人空间菜单' }).click()
+  const settingsLink = page.getByRole('menuitem', { name: '系统设置' })
   await settingsLink.focus()
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL(/\/settings$/)
-  await expect(settingsLink).toHaveAttribute('aria-current', 'page')
+  await expect(page.locator('.home-topbar')).toBeVisible()
+  await expect(page.locator('.sidebar')).toHaveCount(0)
+  for (const [label, path] of [['学习', '/learn'], ['项目', '/projects'], ['生活', '/life'], ['收集箱', '/inbox'], ['资料库', '/explore/library']]) {
+    await navigation.getByRole('link', { name: label, exact: true }).click()
+    await expect(page).toHaveURL(new RegExp(path + '$'))
+    await expect(navigation.getByRole('link', { name: label, exact: true })).toHaveAttribute('aria-current', 'page')
+    await expect(navigation.locator('[aria-current=page]')).toHaveCount(1)
+    await expect(page.locator('.sidebar')).toHaveCount(0)
+  }
+  await page.goto('/courses/1/learn')
+  await expect(navigation.getByRole('link', { name: '学习', exact: true })).toHaveAttribute('aria-current', 'page')
 })
 
 test('系统设置展示生效模型、连接测试、高级超时与安全恢复确认', async ({ page }) => {
@@ -861,5 +872,32 @@ for (const width of [375, 768, 1024, 1440]) {
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
       expect(overflow, `${route} has ${overflow}px horizontal overflow at ${width}px`).toBeLessThanOrEqual(1)
     }
+  })
+}
+
+for (const theme of ['light', 'dark'] as const) for (const width of [1440, 390]) {
+  test(`共享玻璃与全局色系 ${theme} ${width}px`, async ({ page }, info) => {
+    test.setTimeout(120_000)
+    await page.setViewportSize({ width, height: 1080 })
+    await page.addInitScript(theme => {
+      localStorage.setItem('learnos-theme', theme)
+      localStorage.setItem('learnos-home-accent', '#147e75')
+    }, theme)
+    await installAPIMocks(page)
+    const errors: string[] = []
+    page.on('pageerror', error => errors.push(page.url() + ': ' + error.message))
+    const pages = ['/learn', '/courses', '/courses/1/archive', '/courses/1/learn', '/courses/1/map', '/courses/1/misconceptions', '/explore', '/domains/new', '/settings', '/users', '/login']
+    for (const [index, url] of pages.entries()) {
+      await page.goto(url)
+      await expect(page.locator('h1').first(), url).toBeVisible()
+      await expect(page.locator('html')).toHaveAttribute('data-home-accent', 'custom')
+      await expect(page.locator('html')).toHaveCSS('--color-accent', '#147e75')
+      await expect(page.locator('.home-light-field')).toHaveCount(1)
+      expect(await page.locator('.home-light-field').evaluate(el => getComputedStyle(el).pointerEvents)).toBe('none')
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), url).toBe(true)
+      await page.mouse.move(0, 0)
+      await page.screenshot({ path: info.outputPath(`glass-${theme}-${width}-${index}.png`), fullPage: false, animations: 'disabled' })
+    }
+    expect(errors).toEqual([])
   })
 }

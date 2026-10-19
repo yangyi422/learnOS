@@ -1,5 +1,5 @@
 <template>
-  <el-dialog
+  <el-dialog append-to-body
     :model-value="open"
     :title="collection ? '编辑专题' : '新建专题'"
     width="560px"

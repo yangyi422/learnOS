@@ -2,7 +2,7 @@
   <PageShell class="dashboard-page" variant="wide">
     <PageHeader v-if="loading || error || courses.length > 0" :title="pageTitle" />
 
-    <el-alert v-if="error" :title="error" type="error" show-icon :closable="false" />
+    <el-alert v-if="error" :title="error" type="error" show-icon :closable="false"><el-button text @click="loadCourses">重新读取学习空间</el-button></el-alert>
     <div v-if="loading" v-loading="loading" class="dashboard-loading" aria-label="正在读取学习空间" />
     <template v-else-if="!error && courses.length === 0">
       <section class="dashboard-onboarding" aria-labelledby="dashboard-onboarding-title">
@@ -143,13 +143,11 @@ onMounted(loadCourses)
 
 <style scoped>
 
-.dashboard-page :deep(.page-header) { margin-bottom: 20px; }
-.dashboard-page :deep(.page-header h1) { font-size: clamp(29px, 2.5vw, 36px); line-height: 1.15; }
 .dashboard-loading { min-height: 160px; }
-.dashboard-onboarding { width: min(100%, 680px); margin: clamp(58px, 11vh, 108px) auto 0; padding: 38px 42px; border: 1px solid var(--border-default); border-radius: 10px; background: linear-gradient(128deg, var(--color-primary-soft), var(--bg-surface) 58%); box-shadow: var(--shadow-card); }
+.dashboard-onboarding { width: min(100%, 680px); margin: clamp(58px, 11vh, 108px) auto 0; padding: 38px 42px; border: 1px solid var(--border-default); border-radius: 10px; background: var(--color-surface-subtle); box-shadow: var(--shadow-card); }
 .dashboard-onboarding__mark { display: grid; width: 43px; height: 43px; place-items: center; margin-bottom: 20px; border: 1px solid var(--border-default); border-radius: 9px; background: var(--bg-surface); color: var(--color-primary); }
 .dashboard-onboarding__mark svg { width: 22px; height: 22px; }
-.dashboard-onboarding h1 { margin: 0; font-size: clamp(26px, 2.6vw, 32px); font-weight: 680; letter-spacing: -.035em; line-height: 1.3; }
+.dashboard-onboarding h1 { margin: 0; font-size: var(--font-page-title); font-weight: 680; letter-spacing: normal; line-height: 1.3; }
 .dashboard-onboarding p { margin: 13px 0 24px; color: var(--text-secondary); font-size: 15px; line-height: 1.7; }
 .dashboard-onboarding .el-button { min-height: 40px; padding: 0 18px; }
 .dashboard-onboarding__hint { margin: 17px auto 0; color: var(--text-tertiary); font-size: 13px; text-align: center; }

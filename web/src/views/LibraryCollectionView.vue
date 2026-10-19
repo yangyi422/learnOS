@@ -66,6 +66,7 @@
           >删除专题</el-button
         >
       </div>
+      <el-button v-if="viewMode === 'wiki' && current && !editing" class="library-directory-toggle" :aria-expanded="!directoryCollapsed" @click="directoryCollapsed = !directoryCollapsed">{{ directoryCollapsed ? '展开专题目录' : '收起专题目录' }}</el-button>
       <div
         class="library-topic-layout"
         :class="{
@@ -74,7 +75,7 @@
           'has-reader': current || editing,
         }"
       >
-        <aside v-if="!cardsReading" class="library-directory" aria-label="专题目录">
+        <aside v-if="!cardsReading" class="library-directory" :class="{ 'is-collapsed': directoryCollapsed && current && !editing && viewMode === 'wiki' }" aria-label="专题目录">
           <form class="library-search" @submit.prevent="search">
             <el-input
               v-model="searchInput"
@@ -295,6 +296,7 @@
             :body="current.body"
             :collection="collection.id"
             :revision="current.version"
+            :article-title="current.title"
           />
           <section v-if="current.sources.length" class="library-sources">
             <h3>外部资料来源</h3>
@@ -370,6 +372,7 @@ import LibraryCover from "@/components/library/LibraryCover.vue";
 import MarkdownReader from "@/components/library/MarkdownReader.vue";
 import ExternalLink from "@/components/ExternalLink.vue";
 import "@/library.css";
+const directoryCollapsed = ref(true);
 const route = useRoute(),
   router = useRouter(),
   collection = ref<Collection>(),
@@ -464,7 +467,7 @@ function summary(text: string) {
     .slice(0, 160);
 }
 function date(value: string) {
-  return new Date(value).toLocaleDateString();
+  return new Date(value).toLocaleDateString("zh-CN");
 }
 async function load() {
   const seq = ++sequence,

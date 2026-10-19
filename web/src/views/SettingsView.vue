@@ -7,12 +7,14 @@
     <p class="sr-only" aria-live="polite">{{ liveMessage }}</p>
     <el-alert v-if="error" :title="error" type="error" show-icon :closable="false" />
 
+    <HomeAppearanceDialog v-model="appearanceOpen" />
     <el-card shadow="never" class="appearance-settings" aria-labelledby="appearance-settings-title">
       <div class="appearance-settings__copy">
         <div>
           <span class="appearance-settings__eyebrow">WORKSPACE APPEARANCE</span>
           <h2 id="appearance-settings-title">外观主题</h2>
           <p>主题偏好只保存在当前浏览器，不会写入学习数据。</p>
+          <el-button @click="appearanceOpen = true">调整界面色系</el-button>
         </div>
         <fieldset class="appearance-settings__options">
           <legend class="sr-only">选择外观主题</legend>
@@ -173,6 +175,7 @@ import WorkspaceIcon from '@/components/WorkspaceIcon.vue'
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { setThemePreference, useTheme, type ThemePreference } from '@/theme'
+import HomeAppearanceDialog from '@/components/HomeAppearanceDialog.vue'
 import {
   createBackup, exportLearningData, getAIConfiguration, getConsistency, getDiagnostics, listBackups,
   requestBackupRestore, testAIConnection, updateAIConfiguration,
@@ -197,10 +200,11 @@ const error = ref('')
 const liveMessage = ref('')
 const knownModels = ['deepseek-chat', 'deepseek-reasoner']
 const { preference } = useTheme()
+const appearanceOpen = ref(false)
 const themeOptions: { value: ThemePreference; label: string; description: string; icon: 'system' | 'sun' | 'moon' }[] = [
   { value: 'system', label: '跟随系统', description: '随操作系统明暗设置变化', icon: 'system' },
-  { value: 'light', label: '浅色主题', description: '使用冷白工作区', icon: 'sun' },
-  { value: 'dark', label: '深色主题', description: '使用深空蓝黑工作区', icon: 'moon' },
+  { value: 'light', label: '浅色主题', description: '透明玻璃与柔和环境色', icon: 'sun' },
+  { value: 'dark', label: '深色主题', description: '使用深紫画布与玻璃表面', icon: 'moon' },
 ]
 const descriptionColumns = computed(() => window.matchMedia('(max-width: 700px)').matches ? 1 : 2)
 const providerChanged = computed(() => Boolean(aiConfig.value && aiForm.value.provider !== aiConfig.value.provider))
@@ -327,7 +331,7 @@ onMounted(load)
 
 .appearance-settings { margin-bottom: 18px; }
 .appearance-settings__copy { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
-.appearance-settings__eyebrow { color: var(--text-tertiary); font-size: 10px; font-weight: 700; letter-spacing: .14em; }
+.appearance-settings__eyebrow { color: var(--text-tertiary); font-size: var(--font-meta); font-weight: 500; letter-spacing: normal; }
 .appearance-settings h2 { margin: 5px 0 4px; color: var(--text-primary); font-size: 18px; }
 .appearance-settings p { margin: 0; color: var(--text-secondary); font-size: 13px; }
 .appearance-settings__options { display: grid; grid-template-columns: repeat(3, minmax(145px, 1fr)); gap: 8px; min-width: min(100%, 510px); margin: 0; padding: 0; border: 0; }
@@ -337,7 +341,7 @@ onMounted(load)
 .appearance-settings__options svg { width: 18px; height: 18px; flex: none; }
 .appearance-settings__options strong, .appearance-settings__options small { display: block; }
 .appearance-settings__options strong { font-size: 13px; font-weight: 650; }
-.appearance-settings__options small { margin-top: 3px; color: var(--text-tertiary); font-size: 11px; line-height: 1.3; }
+.appearance-settings__options small { margin-top: 3px; color: var(--text-tertiary); font-size: var(--font-meta); line-height: 1.5; }
 .settings-help, .field-help { color: var(--text-secondary); line-height: 1.65; }
 .settings-inline-alert { margin: 16px 0; }
 .ai-form { max-width: 820px; }

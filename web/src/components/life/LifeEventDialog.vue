@@ -1,5 +1,5 @@
 <template>
-  <el-dialog :model-value="modelValue" :title="event && !editing ? '生活事件' : event ? '编辑事件' : '记录生活事件'" width="min(640px, calc(100vw - 28px))" class="life-dialog" align-center :before-close="close" :close-on-click-modal="false" @opened="focusTitle" @closed="restoreFocus">
+  <el-dialog append-to-body :model-value="modelValue" :title="event && !editing ? '生活事件' : event ? '编辑事件' : '记录生活事件'" width="min(640px, calc(100vw - 28px))" class="life-dialog" align-center :before-close="close" :close-on-click-modal="false" @opened="focusTitle" @closed="restoreFocus">
     <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
     <div v-if="event && !editing" class="life-reading">
       <div class="life-metadata"><span>{{ event.occurred_on }}</span><el-tag v-if="event.milestone" size="small" effect="plain">里程碑</el-tag><span v-if="event.primary_domain">{{ domainLabel(event.primary_domain) }}</span><span v-if="event.secondary_domain">{{ domainLabel(event.secondary_domain) }}</span></div>

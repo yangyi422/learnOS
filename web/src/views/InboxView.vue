@@ -33,12 +33,12 @@
     <QuickCaptureDialog v-model="captureOpen" @created="captureCompleted" />
     <LifeEventDialog v-model="lifeOpen" :inbox-item="selectedItem" @saved="recordSaved" />
     <RecordDialog v-model="recordOpen" :inbox-item="selectedItem" @saved="recordSaved" />
-    <el-dialog v-model="detailOpen" title="收集内容" width="min(620px, calc(100vw - 28px))">
+    <el-dialog append-to-body v-model="detailOpen" title="收集内容" width="min(620px, calc(100vw - 28px))">
       <div class="inbox-detail"><LinkedText v-if="selectedItem" :content="selectedItem.content" /></div>
       <template #footer><div class="inbox-detail-actions"><el-button v-if="selectedItem?.status === 'inbox'" @click="detailOpen = false; openConvert(selectedItem)">转为任务</el-button><el-button v-if="selectedItem?.status === 'inbox'" @click="detailOpen = false; openSaveRecord(selectedItem)">保存为记录</el-button><el-button v-if="selectedItem?.status === 'inbox'" @click="detailOpen = false; lifeOpen = true">保存为生活事件</el-button><el-button v-if="selectedItem?.status === 'inbox'" @click="detailOpen = false; openEdit(selectedItem)">编辑</el-button><el-button v-if="selectedItem && selectedItem.status !== 'archived'" @click="archive(selectedItem)">归档</el-button><el-button v-if="selectedItem" text type="danger" @click="remove(selectedItem)">删除</el-button></div></template>
     </el-dialog>
     <ConvertInboxDialog v-model="convertOpen" :item="selectedItem" @converted="handleConverted" />
-    <el-dialog v-model="editOpen" title="编辑收集内容" width="min(520px, calc(100vw - 28px))">
+    <el-dialog append-to-body v-model="editOpen" title="编辑收集内容" width="min(520px, calc(100vw - 28px))">
       <el-input v-model="editContent" type="textarea" :rows="5" maxlength="10000" show-word-limit />
       <template #footer><el-button @click="editOpen = false">取消</el-button><el-button type="primary" :loading="saving" :disabled="!editContent.trim()" @click="saveEdit">保存</el-button></template>
     </el-dialog>

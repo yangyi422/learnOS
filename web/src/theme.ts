@@ -4,15 +4,15 @@ export type ThemePreference = 'system' | 'light' | 'dark'
 type ResolvedTheme = 'light' | 'dark'
 
 const storageKey = 'learnos-theme'
-const preference = ref<ThemePreference>('system')
+const preference = ref<ThemePreference>('dark')
 let media: MediaQueryList | null = null
 
 function savedPreference(): ThemePreference {
   try {
     const value = window.localStorage.getItem(storageKey)
-    return value === 'light' || value === 'dark' || value === 'system' ? value : 'system'
+    return value === 'light' || value === 'dark' || value === 'system' ? value : 'dark'
   } catch {
-    return 'system'
+    return 'dark'
   }
 }
 
@@ -24,7 +24,7 @@ function applyTheme() {
   const theme = resolvedTheme()
   document.documentElement.dataset.theme = theme
   document.documentElement.style.colorScheme = theme
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#0b121f' : '#f4f7fa')
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#0a0118' : '#e1eaf5')
 }
 
 export function initializeTheme() {

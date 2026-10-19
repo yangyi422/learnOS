@@ -40,22 +40,20 @@ for (const state of ['empty', 'domain', 'continue'] as const) {
   for (const theme of ['light', 'dark'] as const) {
     test(`dashboard ${state} ${theme}`, async ({ page }, testInfo) => {
       await page.setViewportSize({ width: 1280, height: 720 })
+      await page.addInitScript(theme => localStorage.setItem('learnos-theme', theme), theme)
       await page.emulateMedia({ colorScheme: theme })
       const mock = await mockDashboard(page, state)
       await page.goto('/learn')
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
       const frame = await page.evaluate(() => {
-        const rail = document.querySelector('.sidebar')!.getBoundingClientRect()
         const workspace = document.querySelector('.app-content')!.getBoundingClientRect()
-        const topbar = document.querySelector('.workspace-topbar')!.getBoundingClientRect()
-        return { outer: rail.left, gap: workspace.left - rail.right, right: innerWidth - workspace.right, topbarLeft: topbar.left, workspaceLeft: workspace.left }
+        const topbar = document.querySelector('.home-topbar')!.getBoundingClientRect()
+        return { outer: workspace.left, right: innerWidth - workspace.right, topbarLeft: topbar.left, workspaceLeft: workspace.left }
       })
-      expect(frame.outer).toBeGreaterThanOrEqual(12)
-      expect(frame.outer).toBeLessThanOrEqual(16)
-      expect(frame.gap).toBeGreaterThanOrEqual(10)
-      expect(frame.gap).toBeLessThanOrEqual(12)
-      expect(frame.right).toBeGreaterThanOrEqual(12)
-      expect(frame.topbarLeft).toBeGreaterThanOrEqual(frame.workspaceLeft)
+      expect(frame.outer).toBe(0)
+      await expect(page.locator('.sidebar')).toHaveCount(0)
+      expect(frame.right).toBeLessThanOrEqual(16)
+      expect(frame.topbarLeft).toBe(frame.workspaceLeft)
 
       if (state === 'empty') {
         await expect(page.getByRole('heading', { name: '从一个好奇的问题开始' })).toBeVisible()

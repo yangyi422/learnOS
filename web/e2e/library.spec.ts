@@ -632,6 +632,7 @@ for (const width of [1920, 1440, 390]) {
     await page.goBack();
     await expect(page.locator('.library-markdown table')).toBeVisible();
     await page.getByRole('button', { name: 'Wiki 目录', exact: true }).click();
+    if (width < 800) await page.getByRole('button', { name: '展开专题目录' }).click();
     await expect(page.locator('.library-directory')).toBeVisible();
     await expect(page.locator('.library-markdown table')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);

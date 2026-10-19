@@ -68,7 +68,7 @@
         <section v-if="ledgerID" class="finance-section"><h2>导入批次</h2><p class="finance-muted">按批次倒序撤销，恢复被新增、更新或移除的交易。每个来源账本分别保留批次历史。</p><div v-for="b in batches" :key="b.id" class="finance-batch"><div><strong>{{ b.filename }}</strong><p class="finance-muted">{{ localTime(b.imported_at || b.created_at) }} · {{ batchLabel(b.status) }} · 新增 {{ b.added }} / 更新 {{ b.updated }} / 未变 {{ b.unchanged }} / 缺失 {{ b.complete_scope ? b.missing : '未核验' }} / 移除 {{ b.removed }}</p><small v-if="b.complete_scope">完整范围声明：{{ b.scope_from }} 至 {{ b.scope_to }}</small></div><el-button v-if="b.status === 'imported'" text :disabled="busy || b.id !== latestImported" @click="undo(b)">撤销批次</el-button></div></section>
       </template>
     </div>
-    <el-dialog v-model="detailOpen" title="原始账目" width="650px" align-center class="finance-dialog">
+    <el-dialog append-to-body v-model="detailOpen" title="原始账目" width="650px" align-center class="finance-dialog">
       <template v-if="detail"><h2>{{ kindLabel(detail.kind) }} {{ financeMoney(detail.amount_minor) }} {{ detail.currency }}</h2><p class="finance-muted">{{ detail.occurred_at }} · 来源：钱迹 / {{ detail.source }} · 最近写入批次 #{{ detail.batch_id }}</p><p class="finance-muted">只读档案。需要修改时，请到钱迹编辑并重新导入。</p><dl class="finance-raw"><template v-for="key in financeHeaders" :key="key"><template v-if="detail.raw?.[key]"><dt>{{ key }}</dt><dd>{{ detail.raw[key] }}</dd></template></template></dl><p class="finance-muted">首次入库 {{ localTime(detail.created_at) }} · 最近更新 {{ localTime(detail.updated_at) }}</p></template>
       <template #footer><el-button @click="detailOpen = false">关闭</el-button></template>
     </el-dialog>

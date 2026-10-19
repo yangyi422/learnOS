@@ -1,5 +1,5 @@
 <template>
-  <el-dialog v-model="open" title="快速记录" width="min(520px, calc(100vw - 28px))" class="quick-capture-dialog" :before-close="close" @opened="capture?.focus()">
+  <el-dialog append-to-body v-model="open" title="快速记录" width="min(520px, calc(100vw - 28px))" class="quick-capture-dialog" :before-close="close" @opened="capture?.focus()">
     <p class="capture-hint">Enter 保存，Shift+Enter 换行。</p>
     <InboxCaptureForm ref="capture" success-message="已保存到收集箱" @created="created" />
     <template #footer><el-button @click="close(() => open = false)">取消</el-button></template>

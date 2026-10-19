@@ -1,5 +1,5 @@
 <template>
-  <el-dialog v-model="open" title="整理为项目任务" width="min(560px, calc(100vw - 28px))" class="convert-inbox-dialog" :before-close="close">
+  <el-dialog append-to-body v-model="open" title="整理为项目任务" width="min(560px, calc(100vw - 28px))" class="convert-inbox-dialog" :before-close="close">
     <el-form :disabled="saving" label-position="top" @submit.prevent="submit">
       <el-form-item label="任务标题"><el-input v-model="form.title" maxlength="200" /></el-form-item>
       <el-form-item label="所属项目"><el-select v-model="form.project_id" placeholder="选择一个进行中的项目" style="width:100%"><el-option v-for="project in projects" :key="project.id" :label="project.title" :value="project.id" /></el-select></el-form-item>

@@ -27,11 +27,11 @@ defineProps<{
 .page-header__breadcrumbs { margin-bottom: var(--space-4); }
 .page-header__row { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-6); }
 .page-header__copy { min-width: 0; }
-.page-header h1 { margin: 0; font-size: var(--font-page-title); font-weight: 650; line-height: 1.25; letter-spacing: -.03em; overflow-wrap: anywhere; }
+.page-header h1 { margin: 0; font-size: var(--font-page-title); font-family: var(--font-display); font-weight: 700; line-height: 1.35; letter-spacing: normal; overflow-wrap: anywhere; }
 .page-header .eyebrow { margin: 0 0 var(--space-2); }
-.page-header__description { max-width: 64ch; margin: var(--space-2) 0 0; font-size: var(--font-body); line-height: 1.7; }
-.page-header__actions { min-width: 0; flex-shrink: 0; max-width: 55%; }
+.page-header__description { max-width: 64ch; margin: var(--space-2) 0 0; font-size: var(--font-body); line-height: 1.6; }
 .page-header__actions :deep(.el-button + .el-button) { margin-left: 0; }
+.page-header__actions { min-width: 0; flex-shrink: 0; max-width: 55%; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-2); }
 @media (max-width: 820px) {
   .page-header__row { flex-wrap: wrap; gap: var(--space-4); }
   .page-header__actions { width: 100%; max-width: 100%; justify-content: flex-start; flex-shrink: 1; }

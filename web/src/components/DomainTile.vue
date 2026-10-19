@@ -1,14 +1,14 @@
 <template>
   <article
     class="domain-tile"
-    :class="`domain-tile--${identity.tone}`"
-    role="button"
+        role="button"
     tabindex="0"
     @click="$emit('open')"
-    @keydown.enter="$emit('open')"
+    @keydown.enter.self="$emit('open')"
+    @keydown.space.self.prevent="$emit('open')"
   >
     <div class="domain-tile__topline">
-      <span class="domain-tile__icon" aria-hidden="true">{{ identity.icon }}</span>
+      <span class="domain-tile__icon" aria-hidden="true"><WorkspaceIcon name="courses" /></span>
       <el-dropdown :disabled="deleting" @command="handleCommand" @click.stop>
         <button class="domain-tile__menu" type="button" :aria-label="`${course.name}课程操作`" :aria-busy="deleting" :disabled="deleting">•••</button>
         <template #dropdown>
@@ -33,28 +33,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { deleteCourse } from '@/api/courses'
 import StatusTag from '@/components/StatusTag.vue'
+import WorkspaceIcon from '@/components/WorkspaceIcon.vue'
 import type { Course } from '@/types/course'
 
 const props = defineProps<{ course: Course }>()
 const emit = defineEmits<{ open: []; map: []; delete: [] }>()
 const deleting = ref(false)
-
-const identities = [
-  { tone: 'violet', icon: '◌' },
-  { tone: 'green', icon: '⌁' },
-  { tone: 'indigo', icon: '✦' },
-  { tone: 'orange', icon: '◒' },
-  { tone: 'cyan', icon: '⌘' },
-]
-const identity = computed(() => {
-  const key = `${props.course.id}-${props.course.name}`
-  const index = [...key].reduce((total, char) => total + char.charCodeAt(0), 0) % identities.length
-  return identities[index]
-})
 
 async function handleCommand(command: string) {
   if (command === 'open') emit('open')

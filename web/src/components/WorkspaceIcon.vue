@@ -14,9 +14,13 @@
     <template v-else-if="name === 'moon'"><path d="M20 15.5A8.5 8.5 0 0 1 8.5 4 8.5 8.5 0 1 0 20 15.5z"/></template>
     <template v-else-if="name === 'system'"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></template>
     <template v-else-if="name === 'drag'"><circle cx="8" cy="5" r="1"/><circle cx="16" cy="5" r="1"/><circle cx="8" cy="12" r="1"/><circle cx="16" cy="12" r="1"/><circle cx="8" cy="19" r="1"/><circle cx="16" cy="19" r="1"/></template>
+    <template v-else-if="name === 'focus'"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></template>
+    <template v-else-if="name === 'calendar'"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18"/></template>
+    <template v-else-if="name === 'search'"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></template>
+    <template v-else-if="name === 'play'"><path d="m8 5 11 7-11 7z"/></template>
   </svg>
 </template>
 
 <script setup lang="ts">
-defineProps<{ name: 'life' | 'home' | 'inbox' | 'courses' | 'projects' | 'explore' | 'settings' | 'users' | 'logout' | 'menu' | 'sun' | 'moon' | 'system' | 'drag' }>()
+defineProps<{ name: 'life' | 'home' | 'inbox' | 'courses' | 'projects' | 'explore' | 'settings' | 'users' | 'logout' | 'menu' | 'sun' | 'moon' | 'system' | 'drag' | 'focus' | 'calendar' | 'search' | 'play' }>()
 </script>

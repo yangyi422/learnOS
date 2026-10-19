@@ -12,7 +12,7 @@
       <el-table-column label="操作" width="260"><template #default="scope"><el-button link type="primary" @click="showCourses(scope.row)">查看课程</el-button><el-button link @click="toggleStatus(scope.row)">{{ scope.row.status === 'active' ? '停用' : '启用' }}</el-button></template></el-table-column>
     </el-table>
 
-    <el-dialog v-model="dialogOpen" title="添加用户" width="460px">
+    <el-dialog append-to-body v-model="dialogOpen" title="添加用户" width="460px">
       <el-form label-position="top">
         <el-form-item label="用户名"><el-input v-model="form.username" /></el-form-item>
         <el-form-item label="显示名称"><el-input v-model="form.display_name" /></el-form-item>
@@ -21,7 +21,7 @@
       <template #footer><el-button @click="dialogOpen = false">取消</el-button><el-button type="primary" :loading="saving" @click="save">创建用户</el-button></template>
     </el-dialog>
 
-    <el-dialog v-model="coursesOpen" :title="`${selected?.display_name ?? ''} 的课程`" width="680px">
+    <el-dialog append-to-body v-model="coursesOpen" :title="`${selected?.display_name ?? ''} 的课程`" width="680px">
       <el-table v-loading="coursesLoading" :data="courses"><el-table-column prop="name" label="课程" /><el-table-column prop="status" label="状态" /><el-table-column prop="learning_status" label="学习状态" /><el-table-column prop="mastery_progress" label="掌握度"><template #default="scope">{{ scope.row.mastery_progress }}%</template></el-table-column></el-table>
       <el-empty v-if="!coursesLoading && !courses.length" description="该用户还没有课程" />
     </el-dialog>

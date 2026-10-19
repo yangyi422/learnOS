@@ -9,7 +9,7 @@
         <p>{{ source.authors || source.organization || '未填写作者 / 组织' }}</p><p class="muted">{{ source.publication_year || '年份未知' }} · {{ source.verification_status }} · {{ source.access_status }}</p>
       </el-card>
     </div>
-    <el-dialog v-model="showCreate" title="新增知识来源" width="520px">
+    <el-dialog append-to-body v-model="showCreate" title="新增知识来源" width="520px">
       <el-form label-position="top"><el-form-item label="标题"><el-input v-model="form.title" /></el-form-item><el-form-item label="来源类型"><el-select v-model="form.source_type" style="width:100%"><el-option label="教材" value="textbook"/><el-option label="课程材料" value="course_material"/><el-option label="指南" value="guideline"/><el-option label="研究论文" value="research_paper"/><el-option label="其他" value="other"/></el-select></el-form-item><el-form-item label="作者 / 组织"><el-input v-model="form.organization" /></el-form-item><el-form-item label="摘要说明"><el-input v-model="form.description" type="textarea" /></el-form-item></el-form>
       <template #footer><el-button @click="showCreate = false">取消</el-button><el-button type="primary" @click="save">保存知识来源</el-button></template>
     </el-dialog>

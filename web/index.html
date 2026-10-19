@@ -3,15 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#111827" />
+    <meta name="theme-color" content="#0a0118" />
     <title>LearnOS</title>
     <script>
       try {
         const saved = localStorage.getItem('learnos-theme')
-        const theme = saved === 'light' || saved === 'dark' ? saved : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        const theme = saved === 'light' || (saved === 'system' && !matchMedia('(prefers-color-scheme: dark)').matches) ? 'light' : 'dark'
         document.documentElement.dataset.theme = theme
         document.documentElement.style.colorScheme = theme
-      } catch { /* the application initializes the theme when storage is unavailable */ }
+      } catch { document.documentElement.dataset.theme = 'dark'; document.documentElement.style.colorScheme = 'dark' }
     </script>
   </head>
   <body>

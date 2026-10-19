@@ -1,5 +1,5 @@
 <template>
-  <el-dialog :model-value="modelValue" :title="detail && !editing ? '长期目标' : detail ? '编辑长期目标' : '写下长期目标'" width="min(680px, calc(100vw - 28px))" class="life-dialog" align-center :before-close="close" :close-on-click-modal="false" @opened="focusTitle" @closed="restoreFocus">
+  <el-dialog append-to-body :model-value="modelValue" :title="detail && !editing ? '长期目标' : detail ? '编辑长期目标' : '写下长期目标'" width="min(680px, calc(100vw - 28px))" class="life-dialog" align-center :before-close="close" :close-on-click-modal="false" @opened="focusTitle" @closed="restoreFocus">
     <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
     <div v-if="detail && !editing" class="life-reading">
       <div class="life-metadata"><el-tag size="small" effect="plain">{{ goalStatusLabel(detail.goal.status) }}</el-tag><span v-if="detail.goal.domain">{{ domainLabel(detail.goal.domain) }}</span><span>创建于 {{ new Date(detail.goal.created_at).toLocaleDateString('zh-CN') }}</span></div>

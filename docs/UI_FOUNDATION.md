@@ -1,5 +1,7 @@
 # LifeOS UI Foundation V1
 
+> 历史阶段文档。当前视觉以根目录 DESIGN.md 为准，宽度、主题与外壳已按 [DESIGN_IMPLEMENTATION.md](DESIGN_IMPLEMENTATION.md) 更新；下文保留此前实施记录。
+
 ## 审计与范围
 
 已有 workspace-theme.css 统一颜色、状态、焦点、表面、圆角和 Element Plus 基础样式；PageHeader/SectionHeader 已存在。差异来自各页面的 1080/1100/1240/1320/1400/1440/1540px 宽度、独立标题字号与间距，以及资料专题自己的标题实现。
