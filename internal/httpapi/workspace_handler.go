@@ -58,12 +58,16 @@ func (h *Handler) GetWorkspaceHome(c *gin.Context) {
 	if date == "" {
 		date = time.Now().Format("2006-01-02")
 	}
-	view, err := h.workspace.Home(c.Request.Context(), userID, date)
+	view, err := h.workspace.Home(c.Request.Context(), userID, date, c.Query("context"))
+	if errors.Is(err, service.ErrInvalidProjectInput) {
+		projectError(c, err)
+		return
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "WORKSPACE_UNAVAILABLE", "message": "工作区暂时无法加载。", "retryable": true}})
 		return
 	}
-	if len(view.Errors) == 4 {
+	if len(view.Errors) == 5 {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"data": view, "error": gin.H{"code": "WORKSPACE_SECTIONS_UNAVAILABLE", "message": "工作区内容暂时无法加载，请重试。", "retryable": true}})
 		return
 	}

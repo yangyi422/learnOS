@@ -27,6 +27,7 @@
             <div><dt>项目</dt><dd>{{ projects.find(project => project.id === task?.project_id)?.title || '项目' }}</dd></div>
             <div><dt>状态</dt><dd>{{ statusLabel(task.status) }}</dd></div>
             <div><dt>优先级</dt><dd>{{ priorityLabel(task.priority) }}</dd></div>
+            <div><dt>计划执行日期</dt><dd>{{ task.plan_date || '未安排' }}</dd></div>
             <div><dt>截止日期</dt><dd>{{ task.due_date || '无截止日期' }}</dd></div>
           </dl>
           <p v-if="task.description" class="task-drawer__read-description">{{ task.description }}</p>
@@ -59,6 +60,11 @@
               <el-option label="普通" value="normal" />
               <el-option label="低" value="low" />
             </el-select>
+          </el-form-item>
+          <el-form-item label="计划执行日期" class="task-drawer__attribute--wide">
+            <el-config-provider :locale="zhCn">
+              <el-date-picker v-model="form.plan_date" type="date" value-format="YYYY-MM-DD" aria-label="计划执行日期" placeholder="可选，不影响截止日期" popper-class="task-date-popper" clearable />
+            </el-config-provider>
           </el-form-item>
           <el-form-item label="到期日" class="task-drawer__attribute--wide">
             <el-config-provider :locale="zhCn">
@@ -125,12 +131,12 @@ const titleInput = ref<{ focus: () => void } | null>(null)
 const workspace = ref<HTMLElement | null>(null)
 let returnFocus: HTMLElement | null = null
 const drawerSize = computed(() => width.value <= 760 ? '100%' : '520px')
-const form = reactive<{ title: string; project_id: number | null; status: TaskStatus; priority: TaskPriority; due_date: string; description: string }>({
-  title: '', project_id: null, status: 'inbox', priority: 'normal', due_date: '', description: '',
+const form = reactive<{ title: string; project_id: number | null; status: TaskStatus; priority: TaskPriority; due_date: string; plan_date: string | null; description: string }>({
+  title: '', project_id: null, status: 'inbox', priority: 'normal', due_date: '', plan_date: null, description: '',
 })
 const availableProjects = computed(() => props.projects.filter(project => project.status !== 'archived' || project.id === props.task?.project_id))
 const initialSnapshot = ref('')
-function snapshot() { return JSON.stringify([form.title, form.project_id, form.status, form.priority, form.due_date, form.description]) }
+function snapshot() { return JSON.stringify([form.title, form.project_id, form.status, form.priority, form.due_date, form.plan_date, form.description]) }
 const dirty = computed(() => props.modelValue && (editing.value || !props.task) && initialSnapshot.value !== snapshot())
 watch(() => props.modelValue, (open, wasOpen) => {
   if (open && !wasOpen && document.activeElement instanceof HTMLElement) returnFocus = document.activeElement
@@ -141,6 +147,7 @@ function resetForm() {
   form.status = props.task?.status ?? props.defaultStatus
   form.priority = props.task?.priority || 'normal'
   form.due_date = props.task?.due_date ?? ''
+  form.plan_date = props.task?.plan_date ?? null
   form.description = props.task?.description ?? ''
   initialSnapshot.value = snapshot()
   resizeDescription()
@@ -204,6 +211,7 @@ function submit() {
     status: form.status,
     priority: form.priority,
     due_date: form.due_date,
+    plan_date: form.plan_date || null,
     description: form.description.trim(),
   })
 }

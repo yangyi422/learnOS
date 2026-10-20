@@ -1,11 +1,12 @@
 import { expect, test, type Page, type Route } from '@playwright/test'
 import type { InboxItem } from '../src/api/inbox'
 import type { Project, ProjectTask } from '../src/api/projects'
-import type { WorkspaceHome, WorkspaceLearningItem, WorkspaceRecent } from '../src/api/workspace'
+import type { WorkspaceHome, WorkspaceLearningItem, WorkspaceRecent, WorkspacePlanning } from '../src/api/workspace'
 
 const timestamp = '2026-09-29T08:00:00Z'
 const project: Project = { id: 7, title: 'LearnOS', description: '', status: 'active', icon: 'L', accent: '#3b82f6', archived_at: null, tasks: [], open_task_count: 1, next_task_count: 1, doing_task_count: 0, done_task_count: 0, created_at: timestamp, updated_at: timestamp }
 const task: ProjectTask = { id: 41, project_id: 7, title: '整理看板交互', description: '', status: 'next', sort_order: 1024, priority: 'high', due_date: null, completed_at: null, created_at: timestamp, updated_at: timestamp }
+const emptyPlanning: WorkspacePlanning = { items: [], due_today: [], overdue: [], previous_plan: [], summary: { planned: 0, due_today: 0, overdue: 0, previous_plan: 0, total: 0 } }
 const emptyToday = { date: '2026-09-29', doing: [], due: [], next: [] }
 
 interface MockOptions {
@@ -51,6 +52,7 @@ async function installWorkspaceMocks(page: Page, homeOverrides: Partial<Workspac
         date: '2026-09-29',
         focus: { kind: 'task', title: task.title, task_id: task.id, project_id: project.id, project_title: project.title, status: 'next', priority: 'high' },
         today: { date: '2026-09-29', doing: [], due: [], next: [task] },
+        planning: structuredClone(emptyPlanning),
         projects: [project],
         learning: [],
         inbox: { count: inbox.filter(item => item.status === 'inbox').length, items: inbox.filter(item => item.status === 'inbox').slice(0, 3) },
@@ -114,9 +116,9 @@ test('Workspace Home 保留核心区域并能从焦点打开任务', async ({ pa
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
   await expect(page.locator('#focus-title')).toHaveText(task.title)
   await expect(page.locator('.focus-card__reason')).toContainText('当前优先级最高的下一步')
-  await expect(page.getByRole('heading', { name: '今天的安排', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '今日计划', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: '正在推进' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: '继续学习' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '继续学习 · 全局' })).toBeVisible()
   await expect(page.getByRole('link', { name: '收集箱 · 1 条待整理' })).toBeVisible()
   await expect(page.locator('.inbox-section')).toHaveCount(0)
   await expect(page.getByRole('textbox', { name: '快速记录到收集箱' })).toHaveCount(0)
@@ -174,19 +176,17 @@ test('Current Focus 使用最近学习位置作为回退', async ({ page }) => {
   await expect(page.locator('.focus-card-entry')).toBeVisible()
 })
 
-test('Today 先展示逾期、今天到期，再展示进行中，并限制三条', async ({ page }) => {
-  const overdue: ProjectTask = { ...task, title: '逾期两天', status: 'next', due_date: '2026-09-27' }
-  const dueToday: ProjectTask = { ...task, id: 62, title: '今天到期', status: 'next', due_date: '2026-09-29' }
-  const doing: ProjectTask = { ...task, id: 63, title: '正在推进', status: 'doing', due_date: null }
-  const next: ProjectTask = { ...task, id: 64, title: '下一步候选', status: 'next', due_date: null }
-  await installWorkspaceMocks(page, {
-    today: { date: '2026-09-29', doing: [doing], due: [dueToday, overdue], next: [next] },
-  })
+test('今日计划只展示主动安排，截止提醒单独呈现', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-09-29T10:00:00') })
+  const planned = { ...task, title: '主动安排', plan_date: '2026-09-29', due_date: '2026-09-29', project_title: project.title, effective_context: 'work' as const }
+  const overdue = { ...planned, id: 62, title: '逾期提醒', plan_date: null, due_date: '2026-09-27' }
+  await installWorkspaceMocks(page, { planning: { ...emptyPlanning, items: [planned], overdue: [overdue], summary: { ...emptyPlanning.summary, planned: 1, overdue: 1, total: 2 } } })
   await page.goto('/')
-  await expect(page.locator('.home-task__title')).toHaveText(['逾期两天', '今天到期', '正在推进'])
-  await expect(page.locator('.home-task').first()).toContainText('逾期 2 天')
-  await expect(page.locator('.home-task').nth(1)).toContainText('今天到期')
-  await page.locator('.home-task').first().click()
+  await expect(page.locator('.daily-plan > .plan-task .plan-task__title')).toHaveText(['主动安排'])
+  await expect(page.locator('.daily-plan > .plan-task')).toContainText('今天截止')
+  await page.locator('.plan-reminders summary').click()
+  await expect(page.locator('.plan-reminders .plan-task__title')).toHaveText(['逾期提醒'])
+  await page.locator('.daily-plan > .plan-task .plan-task__title').click()
   await expect(page.getByRole('dialog', { name: '任务详情' })).toBeVisible()
 })
 
@@ -306,7 +306,7 @@ test('首页分区错误可重试且不会遮盖其它区域', async ({ page }) 
   await page.goto('/')
   await expect(page.locator('.project-row')).toHaveCount(0)
   await expect(page.locator('.module-error')).toContainText('项目数据暂时无法加载')
-  await expect(page.locator('.today-section .today-summary')).toBeVisible()
+  await expect(page.locator('.today-section .plan-summary')).toBeVisible()
   await page.locator('.projects-section .module-error .inline-action').click()
   await expect(page.locator('.project-row')).toHaveCount(1)
 })
@@ -343,8 +343,8 @@ test('空工作区不虚构数据，收集箱与最近内容没有大型空块',
     inbox: { count: 0, items: [] },
   })
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: '暂时没有需要继续的事项' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: '今天没有优先事项' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '当前场景暂无继续处理建议' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '今天还没有安排' })).toBeVisible()
   await expect(page.getByRole('button', { name: '查看项目' })).toBeVisible()
   await expect(page.getByRole('button', { name: '开始一个学习领域' })).toBeVisible()
   await expect(page.getByRole('button', { name: '快速记录', exact: true })).toBeVisible()
@@ -600,8 +600,8 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1920, 1440,
     await expect(projects).toBeVisible()
     await expect(page.locator('.project-row')).toHaveCount(count)
     const box = (await projects.boundingBox())!
-    // No reserved project rows; desktop stretches only to the natural height of its sibling.
-    expect(box.height).toBeLessThan(300)
+    // Keep the compact empty-state floor that stabilizes scene switching.
+    expect(box.height).toBeLessThanOrEqual(320)
     if (count) {
       await expect(projects).toContainText('整理下一篇攻略')
       const title = await page.locator('.project-row__text strong').boundingBox()
@@ -637,13 +637,8 @@ for (const theme of ['light', 'dark'] as const) {
     })
     await page.goto('/')
     await expect(page.locator('.project-row__accent')).toHaveText(['空', '未', '圆', '🎮', '🍳'])
-    const counts = page.locator('.today-summary')
-    await expect(counts.locator('dd')).toHaveText(['1', '1', '2'])
-    await expect(counts.locator('dt')).toHaveText(['进行中', '到期 / 逾期', '下一步'])
-    await expect(counts.locator('.has-overdue')).toHaveCount(1)
-    expect(await counts.getByRole('button').count()).toBe(0)
-    const normal = await counts.locator('dd').first().evaluate(el => getComputedStyle(el).color)
-    expect(await counts.locator('.has-overdue dd').evaluate(el => getComputedStyle(el).color)).not.toBe(normal)
+    await expect(page.locator('.plan-summary')).toHaveText('已安排 0 项')
+    await expect(page.locator('.daily-plan > .plan-task')).toHaveCount(0)
     await page.screenshot({ path: info.outputPath(`details-${theme}.png`), fullPage: true })
   })
 }
@@ -793,4 +788,146 @@ test('普通用户可调色，存储不可用时仍即时生效并提示', async
   await dialog.getByRole('button', { name: '冰川蓝色系', exact: true }).click()
   await expect(page.locator('.focus-card')).toHaveCSS('--home-primary', '#2864d7')
   await expect(dialog.getByRole('status')).toContainText('未允许保存')
+})
+
+test('场景快速切换隔离旧响应并按用户恢复', async ({ page }) => {
+  await installWorkspaceMocks(page)
+  let release!: () => void, started!: () => void
+  const gate = new Promise<void>(resolve => { release = resolve })
+  const begun = new Promise<void>(resolve => { started = resolve })
+  await page.route('**/api/v1/workspace/home?**', async route => {
+    const scene = new URL(route.request().url()).searchParams.get('context') ?? 'all'
+    if (scene === 'work') { started(); await gate }
+    await route.fulfill({ json: { data: { date: '2026-10-20', context: scene, focus: { kind: 'empty', title: '' }, today: emptyToday, projects: [{ ...project, title: scene + '项目' }], learning: [], inbox: { count: 0, items: [] }, errors: {} } } })
+  })
+  await page.goto('/')
+  await expect(page.getByRole('button', { name: 'all项目，打开项目看板' })).toBeVisible()
+  await page.locator('.workspace-context-switch label').filter({ hasText: '工作' }).click()
+  await begun
+  await expect(page.getByRole('button', { name: 'all项目，打开项目看板', includeHidden: true })).toBeHidden()
+  await page.locator('.workspace-context-switch label').filter({ hasText: '生活' }).click()
+  await expect(page.getByRole('button', { name: 'life项目，打开项目看板' })).toBeVisible()
+  release()
+  await expect(page.getByRole('button', { name: 'work项目，打开项目看板' })).toHaveCount(0)
+  await page.reload()
+  await expect(page.getByRole('radio', { name: '生活', exact: true })).toBeChecked()
+  await expect(page.getByRole('button', { name: 'life项目，打开项目看板' })).toBeVisible()
+  expect(await page.evaluate(() => localStorage.getItem('learnos:workspace-context:1'))).toBe('life')
+  await page.route('**/api/v1/auth/me', route => route.fulfill({ json: { data: { id: 2, username: 'second', role: 'user', status: 'active' } } }))
+  await page.reload()
+  await expect(page.getByRole('radio', { name: '全部', exact: true })).toBeChecked()
+})
+
+for (const theme of ['light', 'dark']) {
+  test(`场景 ${theme} 手机键盘、空态与存储失败`, async ({ page }, info) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.addInitScript(theme => {
+      localStorage.setItem('learnos-theme', theme)
+      localStorage.setItem('learnos-home-accent', '#147e75')
+      Storage.prototype.setItem = () => { throw new Error('storage disabled') }
+    }, theme)
+    await installWorkspaceMocks(page, { projects: [], today: emptyToday, focus: { kind: 'empty', title: '' } })
+    await page.goto('/')
+    await expect(page.getByRole('radio', { name: '全部', exact: true })).toBeEnabled()
+    await page.getByRole('radio', { name: '全部', exact: true }).focus()
+    await page.keyboard.press('ArrowRight')
+    await expect(page.getByRole('radio', { name: '工作', exact: true })).toBeChecked()
+    await expect(page.getByText('当前场景可用，但无法保存到浏览器。')).toBeVisible()
+    await page.keyboard.press('ArrowRight')
+    await expect(page.getByRole('radio', { name: '生活', exact: true })).toBeChecked()
+    await expect(page.locator('.focus-card').getByRole('heading', { name: '今天可以留白', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '继续学习 · 全局' })).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    await expect(page.locator('.workspace-context-switch .is-active')).toHaveText('生活')
+    await expect.poll(() => page.locator('.workspace-context-switch .is-active .el-radio-button__inner').evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe('rgb(20, 126, 117)')
+    await page.screenshot({ path: info.outputPath(`context-${theme}-mobile.png`), fullPage: true, animations: 'disabled' })
+  })
+}
+
+for (const theme of ['light', 'dark']) {
+  for (const [width, count] of [[1440, 2], [390, 0]]) {
+    test(`场景控件右对齐及按需整理入口 ${theme} ${width}px`, async ({ page }, info) => {
+      await page.setViewportSize({ width: width!, height: 900 })
+      await page.addInitScript(theme => localStorage.setItem('learnos-theme', theme), theme)
+      await installWorkspaceMocks(page, { unclassified_count: count })
+      await page.goto('/')
+      await expect(page.locator('#focus-title')).toHaveText(task.title)
+      const group = page.locator('.workspace-context-switch')
+      await expect(group).toBeVisible()
+      const header = await page.locator('.workspace-home .page-header').boundingBox()
+      const control = await group.boundingBox()
+      expect(Math.abs(control!.x + control!.width - header!.x - header!.width)).toBeLessThan(2)
+      expect(await group.evaluate(element => getComputedStyle(element).borderRadius)).toBe('999px')
+      expect(await group.locator('.el-radio-button__inner').first().evaluate(element => parseFloat(getComputedStyle(element).fontSize))).toBeGreaterThanOrEqual(14)
+      const organize = page.getByRole('link', { name: /整理未分类项目/ })
+      await expect(organize).toHaveCount(count! > 0 ? 1 : 0)
+      if (count! > 0) await expect(organize).toHaveAttribute('href', '/projects?view=list&classify=unclassified')
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+      await page.screenshot({ path: info.outputPath(`context-header-${theme}-${width}.png`), fullPage: true, animations: 'disabled' })
+      await group.locator('label').filter({ hasText: '工作' }).click()
+      await expect(page.getByRole('radio', { name: '工作', exact: true })).toBeChecked()
+      await expect(organize).toHaveCount(0)
+    })
+  }
+}
+
+for (const width of [1440, 1024, 390]) {
+  test(`场景加载保留布局和节点，空场景不收缩 ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 })
+    await installWorkspaceMocks(page, { unclassified_count: 2, projects: Array.from({ length: 5 }, (_, i) => ({ ...project, id: i + 1, title: `原项目 ${i}` })) })
+    let release!: () => void
+    const gate = new Promise<void>(resolve => { release = resolve })
+    await page.route('**/api/v1/workspace/home?**', async route => {
+      if (new URL(route.request().url()).searchParams.get('context') !== 'life') return route.fallback()
+      await gate
+      await route.fulfill({ json: { data: { date: '2026-10-20', context: 'life', focus: { kind: 'empty', title: '' }, today: emptyToday, projects: [], learning: [], inbox: { count: 0, items: [] }, errors: {} } } })
+    })
+    await page.goto('/')
+    await expect(page.locator('.project-row')).toHaveCount(5)
+    await expect(page.locator('.workspace-context-organize')).toBeVisible()
+    const original = await page.locator('.focus-card').elementHandle()
+    const geometry = () => page.evaluate(() => {
+      const rect = (selector: string) => {
+        const { x, y, width, height } = document.querySelector(selector)!.getBoundingClientRect()
+        return { x, y, width, height }
+      }
+      return { grid: rect('.workspace-home__grid'), control: rect('.workspace-context-switch'), focus: rect('.focus-card'), projects: rect('.projects-section'), today: rect('.today-section'), learning: rect('.learning-section'), footer: rect('.home-shortcuts'), documentHeight: document.documentElement.scrollHeight, viewportWidth: document.documentElement.clientWidth }
+    })
+    const before = await geometry()
+    await page.locator('.workspace-context-switch label').filter({ hasText: '生活' }).click()
+    await expect(page.locator('.workspace-home__grid--switching')).toBeVisible()
+    expect(await original!.evaluate(element => element.isConnected)).toBe(true)
+    await expect(page.locator('.workspace-home__grid--loading')).toHaveCount(0)
+    await expect(page.locator('.project-row').first()).toBeHidden()
+    await expect(page.locator('.learning-section')).toBeVisible()
+    await expect(page.locator('.workspace-context-organize')).toHaveCount(0)
+    expect(await geometry()).toEqual(before)
+    release()
+    await expect(page.locator('.workspace-home__grid--switching')).toHaveCount(0)
+    await expect(page.locator('#focus-title')).toHaveText('今天可以留白')
+    expect(await original!.evaluate(element => element.isConnected)).toBe(true)
+    expect(await geometry()).toEqual(before)
+  })
+}
+
+test('切场景失败保留全局区域和重试，旧任务不可操作', async ({ page }) => {
+  await installWorkspaceMocks(page)
+  let fail = true
+  await page.route('**/api/v1/workspace/home?**', async route => {
+    if (new URL(route.request().url()).searchParams.get('context') !== 'work') return route.fallback()
+    if (fail) return route.fulfill({ status: 503, json: { error: { code: 'UNAVAILABLE', message: '稍后重试', retryable: true } } })
+    return route.fulfill({ json: { data: { date: '2026-10-20', focus: { kind: 'empty', title: '' }, projects: [], today: emptyToday, learning: [], inbox: { count: 0, items: [] }, errors: {} } } })
+  })
+  await page.goto('/')
+  await expect(page.locator('.project-row')).toBeVisible()
+  await page.locator('.workspace-context-switch label').filter({ hasText: '工作' }).click()
+  await expect(page.getByText(/该场景暂时无法加载/)).toBeVisible()
+  await expect(page.locator('.project-row')).toBeHidden()
+  await expect(page.locator('.projects-section')).toHaveAttribute('inert', '')
+  await expect(page.locator('.learning-section')).toBeVisible()
+  fail = false
+  await page.locator('.workspace-home__refresh-error').getByRole('button', { name: '重试', exact: true }).click()
+  await expect(page.locator('.workspace-home__grid--switching')).toHaveCount(0)
+  await expect(page.locator('.project-row')).toHaveCount(0)
+  await expect(page.locator('.projects-section')).not.toHaveAttribute('inert')
 })

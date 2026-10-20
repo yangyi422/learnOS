@@ -18,9 +18,13 @@ var ErrTaskConflict = errors.New("task changed since it was loaded")
 
 func NewProjectRepository(db *gorm.DB) *ProjectRepository { return &ProjectRepository{db: db} }
 
-func (r *ProjectRepository) List(ctx context.Context, userID uint) ([]model.Project, error) {
+func (r *ProjectRepository) List(ctx context.Context, userID uint, contexts ...string) ([]model.Project, error) {
 	var projects []model.Project
-	if err := r.db.WithContext(ctx).Where("user_id = ?", userID).Order("updated_at DESC, id DESC").Find(&projects).Error; err != nil {
+	query := r.db.WithContext(ctx).Where("user_id = ?", userID)
+	if len(contexts) > 0 && contexts[0] != "" && contexts[0] != "all" {
+		query = query.Where("context = ?", contexts[0])
+	}
+	if err := query.Order("updated_at DESC, id DESC").Find(&projects).Error; err != nil {
 		return nil, err
 	}
 	type countRow struct {
@@ -30,11 +34,15 @@ func (r *ProjectRepository) List(ctx context.Context, userID uint) ([]model.Proj
 		Archived  int64
 	}
 	var counts []countRow
-	if err := r.db.WithContext(ctx).Model(&model.ProjectTask{}).
+	countQuery := r.db.WithContext(ctx).Model(&model.ProjectTask{}).
 		Joins("JOIN projects ON projects.id = project_tasks.project_id").
 		Where("projects.user_id = ?", userID).
 		Select("project_tasks.project_id, project_tasks.status, COUNT(*) AS total, SUM(CASE WHEN project_tasks.archived_at IS NOT NULL THEN 1 ELSE 0 END) AS archived").
-		Group("project_tasks.project_id, project_tasks.status").Scan(&counts).Error; err != nil {
+		Group("project_tasks.project_id, project_tasks.status")
+	if len(contexts) > 0 && contexts[0] != "" && contexts[0] != "all" {
+		countQuery = countQuery.Where("projects.context = ?", contexts[0])
+	}
+	if err := countQuery.Scan(&counts).Error; err != nil {
 		return nil, err
 	}
 	byID := map[uint]*model.Project{}
@@ -91,18 +99,47 @@ func (r *ProjectRepository) Update(ctx context.Context, userID, projectID uint, 
 }
 
 func (r *ProjectRepository) ListTasks(ctx context.Context, userID uint, projectID *uint, status, due string, limit, offset int, archived ...bool) ([]model.ProjectTask, error) {
+	return r.ListTasksInContext(ctx, userID, projectID, status, due, limit, offset, len(archived) > 0 && archived[0])
+}
+
+func (r *ProjectRepository) ListTasksInContext(ctx context.Context, userID uint, projectID *uint, status, due string, limit, offset int, archive bool, contexts ...string) ([]model.ProjectTask, error) {
+	filters := TaskFilters{}
+	if len(contexts) > 0 {
+		filters.Context = contexts[0]
+	}
+	return r.ListTasksFiltered(ctx, userID, projectID, status, due, limit, offset, archive, filters)
+}
+
+type TaskFilters struct {
+	Context, PlanDate, Query string
+	Actionable               bool
+}
+
+func (r *ProjectRepository) ListTasksFiltered(ctx context.Context, userID uint, projectID *uint, status, due string, limit, offset int, archive bool, filters TaskFilters) ([]model.ProjectTask, error) {
 	var tasks []model.ProjectTask
 	query := r.db.WithContext(ctx).Model(&model.ProjectTask{}).
 		Joins("JOIN projects ON projects.id = project_tasks.project_id").
 		Where("projects.user_id = ?", userID)
-	if len(archived) > 0 && archived[0] {
+	if filters.Context != "" && filters.Context != "all" {
+		query = query.Where("projects.context = ?", filters.Context)
+	}
+	if filters.PlanDate != "" {
+		query = query.Where("project_tasks.plan_date = ?", filters.PlanDate)
+	}
+	if filters.Actionable {
+		query = query.Where("projects.status = ? AND project_tasks.status <> ?", "active", "done")
+	}
+	if filters.Query != "" {
+		query = query.Where("instr(lower(project_tasks.title), lower(?)) > 0", filters.Query)
+	}
+	if archive {
 		query = query.Where("project_tasks.archived_at IS NOT NULL")
 	} else {
 		query = query.Where("project_tasks.archived_at IS NULL")
 	}
 	if projectID != nil {
 		query = query.Where("project_tasks.project_id = ?", *projectID)
-	} else if !(len(archived) > 0 && archived[0]) {
+	} else if !archive {
 		query = query.Where("projects.status <> ?", "archived")
 	}
 	if status != "" {
@@ -170,11 +207,20 @@ func (r *ProjectRepository) CreateTaskInTx(tx *gorm.DB, userID, projectID uint, 
 	return touchProject(tx, projectID)
 }
 
-func (r *ProjectRepository) UpdateTask(ctx context.Context, userID, taskID uint, changes map[string]interface{}) (*model.ProjectTask, error) {
+func (r *ProjectRepository) UpdateTask(ctx context.Context, userID, taskID uint, changes map[string]interface{}, expected ...*time.Time) (*model.ProjectTask, error) {
 	var task model.ProjectTask
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := ownedTask(tx, userID, taskID, &task); err != nil {
 			return err
+		}
+		if len(expected) > 0 && expected[0] != nil && !task.UpdatedAt.Equal(*expected[0]) {
+			return ErrTaskConflict
+		}
+		oldProjectID := task.ProjectID
+		if target, ok := changes["project_id"].(uint); ok {
+			if err := ownedProject(tx, userID, target); err != nil {
+				return err
+			}
 		}
 		if task.ArchivedAt != nil {
 			return ErrTaskArchive
@@ -195,13 +241,21 @@ func (r *ProjectRepository) UpdateTask(ctx context.Context, userID, taskID uint,
 				changes["actual_completed_at"] = nil
 			}
 		}
-		if err := tx.Model(&task).Updates(changes).Error; err != nil {
+		query := tx.Model(&task)
+		if len(expected) > 0 && expected[0] != nil {
+			query = query.Where("updated_at = ?", *expected[0])
+		}
+		result := query.Updates(changes)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return ErrTaskConflict
+		}
+		if err := touchProject(tx, oldProjectID); err != nil {
 			return err
 		}
-		if err := touchProject(tx, task.ProjectID); err != nil {
-			return err
-		}
-		if newProjectID, ok := changes["project_id"].(uint); ok && newProjectID != task.ProjectID {
+		if newProjectID, ok := changes["project_id"].(uint); ok && newProjectID != oldProjectID {
 			if err := touchProject(tx, newProjectID); err != nil {
 				return err
 			}

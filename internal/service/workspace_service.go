@@ -52,36 +52,57 @@ type WorkspaceFocus struct {
 }
 
 type WorkspaceHome struct {
-	Date     string                  `json:"date"`
-	Focus    WorkspaceFocus          `json:"focus"`
-	Today    *TodayView              `json:"today,omitempty"`
-	Projects []model.Project         `json:"projects"`
-	Learning []WorkspaceLearningItem `json:"learning"`
-	Inbox    *InboxSummary           `json:"inbox,omitempty"`
-	Errors   map[string]string       `json:"errors"`
+	Planning          *WorkspacePlanning      `json:"planning,omitempty"`
+	Context           string                  `json:"context"`
+	UnclassifiedCount int64                   `json:"unclassified_count"`
+	Date              string                  `json:"date"`
+	Focus             WorkspaceFocus          `json:"focus"`
+	Today             *TodayView              `json:"today,omitempty"`
+	Projects          []model.Project         `json:"projects"`
+	Learning          []WorkspaceLearningItem `json:"learning"`
+	Inbox             *InboxSummary           `json:"inbox,omitempty"`
+	Errors            map[string]string       `json:"errors"`
 }
 
-func (s *WorkspaceService) Home(ctx context.Context, userID uint, date string) (*WorkspaceHome, error) {
+func (s *WorkspaceService) Home(ctx context.Context, userID uint, date string, contexts ...string) (*WorkspaceHome, error) {
+	scene := "all"
+	if len(contexts) > 0 && contexts[0] != "" {
+		scene = contexts[0]
+	}
+	if date == "" || !validDueDate(&date) || !oneOf(scene, "all", "work", "life") {
+		return nil, ErrInvalidProjectInput
+	}
 	view := &WorkspaceHome{
-		Date: date, Projects: []model.Project{}, Learning: []WorkspaceLearningItem{},
+		Context: scene,
+		Date:    date, Projects: []model.Project{}, Learning: []WorkspaceLearningItem{},
 		Errors: map[string]string{}, Focus: WorkspaceFocus{Kind: "empty"},
 	}
-	projects, projectsErr := s.projects.List(ctx, userID)
+	projects, projectsErr := s.projects.List(ctx, userID, scene)
 	if projectsErr != nil {
 		view.Errors["projects"] = "项目数据暂时无法加载。"
 	} else {
 		for _, project := range projects {
+			if project.Context == "unclassified" {
+				view.UnclassifiedCount++
+			}
 			if project.Status == "active" && len(view.Projects) < 5 {
 				view.Projects = append(view.Projects, project)
 			}
 		}
 	}
 
-	today, todayErr := s.projects.Today(ctx, userID, date, nil)
+	today, todayErr := s.projects.Today(ctx, userID, date, nil, scene)
 	if todayErr != nil {
 		view.Errors["today"] = "今日任务暂时无法加载。"
 	} else {
 		view.Today = today
+	}
+
+	planning, planningTasks, planningErr := s.projects.DailyPlanning(ctx, userID, date, scene)
+	if planningErr != nil {
+		view.Errors["planning"] = "今日计划暂时无法加载。"
+	} else {
+		view.Planning = planning
 	}
 
 	learning, learningErr := s.learning(ctx, userID)
@@ -98,7 +119,11 @@ func (s *WorkspaceService) Home(ctx context.Context, userID uint, date string) (
 		view.Inbox = inbox
 	}
 
-	view.Focus = focusFromToday(today, projects, learning)
+	focusLearning := learning
+	if scene != "all" {
+		focusLearning = nil
+	}
+	view.Focus = focusFromPlanning(date, planningTasks, focusLearning)
 	return view, nil
 }
 

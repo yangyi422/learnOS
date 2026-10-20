@@ -77,3 +77,27 @@ Inbox 的「记录」入口展示所有记录（包括未关联项目、已归�
 已完成任务阅读抽屉提供归档，已完成列提供按需展开的多选和数量确认。批量操作最多 500 项，校验所有 ID 的归属及完成状态后在同一事务写入；重复请求保持已有归档时间。归档任务详情只读，先取消归档才能编辑或重新打开。默认任务查询、看板、今天与首页不包含归档任务；项目列表中的“已归档任务”按项目筛选、每页 50 项并可恢复，URL `view=list&tasks=archived&project=ID` 保存上下文。归档列表也可访问已归档项目中的任务。
 
 新增认证接口 `POST /api/v1/tasks/archive`，请求 `{ "task_ids": [1, 2], "archived": true }`；`false` 取消归档。`GET /api/v1/tasks?archived=true` 返回归档任务，省略或 false 返回未归档任务。归档仍是正常任务记录，单个 ID 详情和原始来源引用继续有效。项目 `done_task_count` 保留所有已完成任务的历史总数，`archived_task_count` 是其中归档项；看板已完成数量为两者之差。月度回顾继续按 `actual_completed_at` 查询，包含归档任务。整库备份涵盖新字段。
+
+## Phase 11.1a 项目场景
+
+Project.context 为 work、life、unclassified。创建省略时默认 unclassified，更新省略时保留原值，其他值拒绝；项目创建/编辑复用原弹窗。场景只过滤信息，不改变用户所有权、状态、排序、截止日期或归档语义。
+
+任务 effective_context = 所属项目 context，不新增任务场景列，不改变 ProjectID 非空约束。修改项目场景后，后续首页查询立即反映所属任务的新归属。全部视图保留未分类项目，并提供 `/projects?view=list&classify=unclassified` 整理入口。
+
+`GET /api/v1/workspace/home?date=YYYY-MM-DD&context=all|work|life` 缺省等价 all，非法场景返回 400。响应新增 context、unclassified_count；projects 仍最多五个 active 项目，今日任务仍排除非 active 项目。context 条件在数据库读取及任务分页/限量之前应用。原项目/任务接口默认范围不变；POST/PATCH projects 接受 context。
+
+自动 focus 是继续处理建议，不是每日焦点；work/life 只使用当前场景任务，all 保留原学习回退。learning、recent、资料与收集箱维持全局内容，不按名称推测分类。
+
+## Phase 11.1b：计划日期与首页计划视图
+
+`plan_date` 是可空 YYYY-MM-DD，表示用户选择的执行日期；`due_date` 仍是截止日期，二者互不推导。POST /api/v1/tasks 可传 plan_date；PATCH /api/v1/tasks/:id 省略 plan_date 保留旧值、传 null 清除、传日期设置，空字符串/时间戳/非法日期拒绝。TaskDrawer 使用 value-format 日历字符串，可编辑或清空计划日期；清空不删除任务、不改变状态或截止日期。
+
+任务 PATCH 可携带 expected_updated_at（RFC3339），仓储在事务中核对且在 UPDATE 条件中校验，冲突返回既有 409。省略该字段兼容旧客户端。重复标记 done 保留 completed_at 与 actual_completed_at，重新打开才清除完成事实。跨项目移动在同一事务校验目标所有权，并触碰旧、新项目更新时间。
+
+GET /api/v1/tasks 新增可选 context=all|work|life、plan_date、actionable=true|false、q；actionable 表示 active 项目、未完成、未归档任务。过滤均先于 limit/offset；默认行为不变，actionable 与 archived=true 互斥。首页选择器按 20 项分页（请求 21 项判断下一页），搜索已有任务，不创建副本。
+
+GET /api/v1/workspace/home 保留旧 today，新增 planning：items、due_today、overdue、previous_plan 和 summary。只读当前用户 active 项目下的未完成、未归档任务，场景继承项目。互斥归位顺序：plan_date=查询日 → due_date<查询日 → due_date=查询日 → plan_date<查询日。主列表只显示 items；其余为提醒。summary 的 planned/due_today/overdue/previous_plan 对应这些互斥桶，total 为去重总数；同时计划且到期的任务只计 planned，在行内保留截止标记。过去计划不滚入今天，未来计划不改截止日期。
+
+继续处理建议与 DailyFocus 无关：七天内的进行中 → 今日主动计划 → 今天到期 → 未逾期且无未来/过去计划的高优先 next。长期逾期只保留提醒，除非用户安排到今天；全部场景仍可回退全局学习，分类场景不会把全局学习当任务。
+
+任务变更通知只传失效令牌，不传任务内容；同标签、storage 跨标签与窗口恢复触发重新读取。首页按浏览器本地午夜刷新日历日期，场景偏好不随时间改变；网络失败不乐观改变任务，409 要求刷新后重新操作。长列表先折叠展开，聚合计数保持完整。

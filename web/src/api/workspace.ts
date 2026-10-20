@@ -1,6 +1,7 @@
+import type { WorkspaceContext } from '../workspace-context'
 import { request } from './http'
 import type { InboxSummary } from './inbox'
-import type { Project, TodayView, TaskPriority } from './projects'
+import type { Project, ProjectTask, TodayView, TaskPriority } from './projects'
 
 export interface WorkspaceLearningItem {
   course_id: number; course_name: string; unit_title: string; lesson_id: number; lesson_title: string; core_question: string
@@ -11,12 +12,19 @@ export interface WorkspaceFocus {
   status?: string; priority?: TaskPriority; due_date?: string | null; course_id?: number; course_name?: string
   unit_title?: string; lesson_id?: number; current_level?: string; cognitive_status?: string
 }
+export interface PlanningTask extends ProjectTask { project_title: string; effective_context: 'work' | 'life' | 'unclassified' }
+export interface WorkspacePlanning {
+ items: PlanningTask[]; due_today: PlanningTask[]; overdue: PlanningTask[]; previous_plan: PlanningTask[]
+ summary: { planned: number; due_today: number; overdue: number; previous_plan: number; total: number }
+}
 export interface WorkspaceHome {
+ planning?: WorkspacePlanning
+ context?: WorkspaceContext; unclassified_count?: number
   date: string; focus: WorkspaceFocus; today: TodayView | null; projects: Project[]; learning: WorkspaceLearningItem[]
   inbox: InboxSummary | null; errors: Record<string, string>
 }
-export async function getWorkspaceHome(date: string, signal?: AbortSignal): Promise<WorkspaceHome> {
-  return (await request<{ data: WorkspaceHome }>(`/api/v1/workspace/home?date=${encodeURIComponent(date)}`, { signal })).data
+export async function getWorkspaceHome(date: string, signal?: AbortSignal, context: WorkspaceContext = 'all'): Promise<WorkspaceHome> {
+  return (await request<{ data: WorkspaceHome }>(`/api/v1/workspace/home?date=${encodeURIComponent(date)}&context=${context}`, { signal })).data
 }
 
 

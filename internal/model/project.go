@@ -7,9 +7,10 @@ import (
 )
 
 type Project struct {
+	Context           string        `json:"context" gorm:"size:20;not null;default:unclassified;index:idx_projects_user_context,priority:2"`
 	CompletedAt       *time.Time    `json:"completed_at"`
 	ID                uint          `json:"id" gorm:"primaryKey"`
-	UserID            uint          `json:"user_id" gorm:"not null;index"`
+	UserID            uint          `json:"user_id" gorm:"not null;index;index:idx_projects_user_context,priority:1"`
 	Title             string        `json:"title" gorm:"size:160;not null"`
 	Description       string        `json:"description" gorm:"type:text"`
 	Status            string        `json:"status" gorm:"size:20;not null;index"`
@@ -36,6 +37,7 @@ type ProjectTask struct {
 	Status            string     `json:"status" gorm:"size:20;not null"`
 	SortOrder         int64      `json:"sort_order" gorm:"not null;default:0"`
 	Priority          string     `json:"priority" gorm:"size:10;not null;default:normal"`
+	PlanDate          *string    `json:"plan_date" gorm:"type:date;index"`
 	DueDate           *string    `json:"due_date" gorm:"type:date"`
 	CompletedAt       *time.Time `json:"completed_at"`
 	IsNextAction      bool       `json:"is_next_action" gorm:"not null;default:false"`
@@ -44,14 +46,16 @@ type ProjectTask struct {
 }
 
 // SQLite's date scanner may return an RFC3339 timestamp for a DATE column.
-// Keep the API's due_date as a calendar date after every database read.
+// Keep due_date and plan_date as calendar dates after every database read.
 func (task *ProjectTask) AfterFind(_ *gorm.DB) error {
-	if task.DueDate == nil {
-		return nil
-	}
-	if parsed, err := time.Parse(time.RFC3339Nano, *task.DueDate); err == nil {
-		date := parsed.Format("2006-01-02")
-		task.DueDate = &date
+	for _, value := range []**string{&task.DueDate, &task.PlanDate} {
+		if *value == nil {
+			continue
+		}
+		if parsed, err := time.Parse(time.RFC3339Nano, **value); err == nil {
+			date := parsed.Format("2006-01-02")
+			*value = &date
+		}
 	}
 	return nil
 }

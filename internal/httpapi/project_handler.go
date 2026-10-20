@@ -208,7 +208,12 @@ func (h *Handler) ListTasks(c *gin.Context) {
 		projectError(c, service.ErrInvalidProjectInput)
 		return
 	}
-	tasks, err := h.projects.ListTasks(c.Request.Context(), userID, projectID, c.Query("status"), c.Query("due"), limit, offset, archived == "true")
+	actionable := c.Query("actionable")
+	if actionable != "" && actionable != "true" && actionable != "false" {
+		projectError(c, service.ErrInvalidProjectInput)
+		return
+	}
+	tasks, err := h.projects.QueryTasks(c.Request.Context(), userID, projectID, c.Query("status"), c.Query("due"), limit, offset, repository.TaskFilters{Context: c.Query("context"), PlanDate: c.Query("plan_date"), Query: c.Query("q"), Actionable: actionable == "true"}, archived == "true")
 	if err != nil {
 		projectError(c, err)
 		return

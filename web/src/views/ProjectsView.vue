@@ -47,6 +47,7 @@
 
       <div v-else class="project-list-view">
         <div class="project-list-view__heading"><h2>项目列表</h2><el-button @click="openProjectForm()">+ 新建项目</el-button></div>
+        <p v-if="route.query.classify === 'unclassified'" class="projects-muted">正在整理未分类项目，可通过编辑选择工作或生活。<RouterLink to="/projects?view=list">查看全部项目</RouterLink></p>
         <div class="archive-controls">
           <el-button :type="!archivedView ? 'primary' : 'default'" text @click="setQuery({ tasks: '' })">项目</el-button>
           <el-button :type="archivedView ? 'primary' : 'default'" text @click="setQuery({ tasks: 'archived' })">已归档任务</el-button>
@@ -62,9 +63,9 @@
         </template>
         <template v-else>
         <p v-if="!projects.length" class="projects-muted">还没有项目。创建一个项目后，就可以记录任务。</p>
-        <article v-for="project in projects" :key="project.id" class="project-list-card" :style="{ '--project-accent': project.accent || '#94a3b8' }">
+        <article v-for="project in projects.filter(item => route.query.classify !== 'unclassified' || !item.context || item.context === 'unclassified')" :key="project.id" class="project-list-card" :style="{ '--project-accent': project.accent || '#94a3b8' }">
           <div class="project-list-card__main">
-            <div class="project-list-card__title"><span>{{ project.icon || '◻' }}</span><h3>{{ project.title }}</h3><el-tag size="small" effect="plain">{{ projectStatusLabel(project.status) }}</el-tag></div>
+            <div class="project-list-card__title"><span>{{ project.icon || '◻' }}</span><h3>{{ project.title }}</h3><el-tag size="small" effect="plain">{{ projectStatusLabel(project.status) }}</el-tag><el-tag size="small" effect="plain">{{ project.context === 'work' ? '工作' : project.context === 'life' ? '生活' : '未分类' }}</el-tag></div>
             <p v-if="project.description">{{ project.description }}</p>
             <small>{{ openCount(project) }} 项未完成 · {{ project.doing_task_count }} 项进行中 · {{ project.done_task_count }} 项历史已完成<span v-if="project.archived_task_count"> · {{ project.archived_task_count }} 项已归档</span></small>
           </div>
@@ -87,6 +88,7 @@
     <el-dialog append-to-body v-model="projectDialogOpen" :title="editingProject ? '编辑项目' : '新建项目'" width="min(460px, 92vw)">
       <el-form label-position="top" @submit.prevent="saveProject">
         <el-form-item label="项目名称"><el-input v-model="projectForm.title" maxlength="160" show-word-limit /></el-form-item>
+        <el-form-item label="场景"><el-select v-model="projectForm.context" aria-label="项目场景"><el-option label="工作" value="work" /><el-option label="生活" value="life" /><el-option label="未分类" value="unclassified" /></el-select></el-form-item>
         <el-form-item label="项目目标 / 说明"><el-input v-model="projectForm.description" type="textarea" :rows="3" maxlength="4000" show-word-limit /></el-form-item>
         <div class="project-form-row">
           <el-form-item label="图标"><el-input v-model="projectForm.icon" maxlength="8" placeholder="可选" /></el-form-item>
@@ -116,8 +118,9 @@ import PageHeader from '@/components/PageHeader.vue'
 import KanbanBoard from '@/components/projects/KanbanBoard.vue'
 import TaskDrawer from '@/components/projects/TaskDrawer.vue'
 import RecordsPanel from '@/components/RecordsPanel.vue'
+import { subscribeTaskChanges } from '@/task-changes'
 import { rememberProject } from '@/utils/recentProject'
-import { archiveTasks, createProject, createTask, deleteTask, getTask, getTodayView, listProjects, listTasks, moveTask, updateProject, updateTask, type Project, type ProjectStatus, type ProjectTask, type TaskInput, type TaskStatus, type TodayView } from '@/api/projects'
+import { archiveTasks, createProject, createTask, deleteTask, getTask, getTodayView, listProjects, listTasks, moveTask, updateProject, updateTask, type ProjectContext, type Project, type ProjectStatus, type ProjectTask, type TaskInput, type TaskStatus, type TodayView } from '@/api/projects'
 
 import { groupTodayTasks, localCalendarDate } from '@/utils/projectTasks'
 
@@ -139,7 +142,7 @@ const editingTask = ref<ProjectTask | null>(null)
 const newTaskStatus = ref<TaskStatus>('inbox')
 const projectDialogOpen = ref(false)
 const editingProject = ref<Project | null>(null)
-const projectForm = reactive({ title: '', description: '', icon: '', accent: '' })
+const projectForm = reactive({ title: '', description: '', icon: '', accent: '', context: 'unclassified' as ProjectContext })
 let loadSequence = 0
 let loadScope = ''
 let taskOpenSequence = 0
@@ -252,11 +255,11 @@ async function persistTask(action: () => Promise<ProjectTask>, creating = false)
 }
 async function saveTask(input: TaskInput) {
   const task = editingTask.value
-  await persistTask(() => task ? updateTask(task.id, input) : createTask(input), !task)
+  await persistTask(() => task ? updateTask(task.id, { ...input, expected_updated_at: task.updated_at }) : createTask(input), !task)
 }
 async function changeTaskStatus(task: ProjectTask, status: TaskStatus) {
   if (task.status === status) return
-  await persistTask(() => updateTask(task.id, { status }))
+  await persistTask(() => updateTask(task.id, { status, expected_updated_at: task.updated_at }))
 }
 async function archiveTask(task: ProjectTask) {
   if (task.archived_at) {
@@ -316,6 +319,7 @@ async function loadMoreDone() {
 }
 function openProjectForm(project?: Project) {
   editingProject.value = project ?? null
+  projectForm.context = project?.context ?? 'unclassified'
   projectForm.title = project?.title ?? ''
   projectForm.description = project?.description ?? ''
   projectForm.icon = project?.icon ?? ''
@@ -325,7 +329,7 @@ function openProjectForm(project?: Project) {
 async function saveProject() {
   if (!projectForm.title.trim()) return
   await run(async () => {
-    const input = { title: projectForm.title.trim(), description: projectForm.description.trim(), icon: projectForm.icon.trim(), accent: projectForm.accent }
+    const input = { context: projectForm.context, title: projectForm.title.trim(), description: projectForm.description.trim(), icon: projectForm.icon.trim(), accent: projectForm.accent }
     if (editingProject.value) await updateProject(editingProject.value.id, input)
     else await createProject(input)
     projectDialogOpen.value = false
@@ -345,8 +349,9 @@ function refreshDate() {
   today.value = date
   if (view.value === 'today') void load()
 }
-onMounted(() => { void load(); dateTimer = window.setInterval(refreshDate, 60_000); document.addEventListener('visibilitychange', refreshDate) })
-onBeforeUnmount(() => { ++loadSequence; window.clearInterval(dateTimer); document.removeEventListener('visibilitychange', refreshDate) })
+let stopTaskChanges: (() => void) | undefined
+onMounted(() => { stopTaskChanges = subscribeTaskChanges(() => { if (!busy.value && !loading.value) void load() }); void load(); dateTimer = window.setInterval(refreshDate, 60_000); document.addEventListener('visibilitychange', refreshDate) })
+onBeforeUnmount(() => { stopTaskChanges?.(); ++loadSequence; window.clearInterval(dateTimer); document.removeEventListener('visibilitychange', refreshDate) })
 onBeforeRouteLeave(async () => !taskDrawerOpen.value || !taskDrawer.value || await taskDrawer.value.canReplace())
 watch(() => [selectedProjectID.value, view.value], () => { if (view.value === 'board' && selectedProject.value?.status === 'active') rememberProject(selectedProject.value.id) })
 watch(() => [projectKey.value, view.value, archivedView.value], () => { void load() })

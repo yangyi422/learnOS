@@ -1,6 +1,18 @@
 <template>
   <PageShell class="workspace-home" variant="wide">
-    <PageHeader title="今天，专注一件事" :description="dateLabel" />
+    <PageHeader title="今天，专注一件事" :description="dateLabel">
+      <template #actions>
+        <div class="workspace-context-bar">
+          <el-radio-group v-model="scene" :disabled="!contextReady" aria-label="工作台场景" class="workspace-context-switch">
+            <el-radio-button value="all">全部</el-radio-button>
+            <el-radio-button value="work">工作</el-radio-button>
+            <el-radio-button value="life">生活</el-radio-button>
+          </el-radio-group>
+          <RouterLink v-if="scene === 'all' && !home?.errors.projects && (home?.unclassified_count ?? 0) > 0" class="workspace-context-organize" to="/projects?view=list&classify=unclassified">整理未分类项目（{{ home?.unclassified_count }}）</RouterLink>
+          <span v-if="!contextCanPersist" class="home-muted workspace-context-notice" role="status">当前场景可用，但无法保存到浏览器。</span>
+        </div>
+      </template>
+    </PageHeader>
     <Teleport to="#home-header-actions">
       <form class="home-search" role="search" @submit.prevent="openSearchResult(searchResults[0])" @focusout="leaveSearch" @keydown.esc.prevent="searchFocused = false">
         <WorkspaceIcon name="search" />
@@ -17,7 +29,7 @@
     <Teleport to="#home-inbox-count"><span v-if="home?.inbox && !home.errors.inbox" :aria-label="home.inbox.count + ' 条待整理'">{{ home.inbox.count }}</span></Teleport>
 
     <p v-if="loadError && home" class="workspace-home__refresh-error" role="status">
-      工作区更新失败，仍显示上次内容。{{ loadError }}
+      {{ isSwitching ? '该场景暂时无法加载。' : '工作区更新失败，仍显示上次内容。' }}{{ loadError }}
       <button class="inline-action" type="button" @click="load">重试</button>
     </p>
 
@@ -37,12 +49,13 @@
       <EmptyState title="工作区暂时无法加载" :description="loadError" action-label="重试" @action="load" />
     </div>
 
-    <div v-else-if="home" class="workspace-home__grid" :aria-busy="loading">
+    <div v-else-if="home" class="workspace-home__grid" :class="{ 'workspace-home__grid--switching': isSwitching }" :aria-busy="loading">
+      <span v-if="isSwitching" class="sr-only" role="status">{{ loadError || '正在切换场景…' }}</span>
       <div class="home-focus-lane">
       <div ref="focusFrame" class="focus-card-frame">
-        <section class="focus-card" aria-labelledby="focus-title">
+        <section ref="focusCard" class="focus-card" :inert="isSwitching" :style="{ minHeight: sceneGeometry.focus ? sceneGeometry.focus + 'px' : undefined }" aria-labelledby="focus-title">
           <div class="focus-card__heading">
-            <span class="section-kicker"><WorkspaceIcon name="focus" />今日重点</span>
+            <span class="section-kicker"><WorkspaceIcon name="focus" />继续处理建议</span>
             <span v-if="home.focus.kind !== 'empty'" class="focus-card__state">{{ home.focus.kind === 'task' ? taskStatusLabel(home.focus.status) : '学习位置' }}</span>
           </div>
           <div class="focus-card__copy">
@@ -74,8 +87,8 @@
               </p>
             </template>
             <template v-else>
-              <h2 id="focus-title">暂时没有需要继续的事项</h2>
-              <p class="focus-card__reason">开始任务或学习后，这里会根据真实记录显示最近的下一步。</p>
+              <h2 id="focus-title">{{ scene === 'life' ? '今天可以留白' : '当前场景暂无继续处理建议' }}</h2>
+              <p class="focus-card__reason">建议来自当前场景的已有任务，可以按自己的节奏继续。</p>
             </template>
           </div>
           <RouterLink v-if="focusTarget" :to="focusTarget" class="home-card-entry focus-card-entry" :aria-label="'打开：' + home.focus.title"><span aria-hidden="true">↗</span></RouterLink>
@@ -85,7 +98,7 @@
 
       <section class="home-section learning-section" aria-labelledby="learning-title">
         <WorkspaceIcon name="courses" class="home-section__icon" />
-        <SectionHeader title="继续学习" id="learning-title" />
+        <SectionHeader title="继续学习 · 全局" id="learning-title" />
         <div v-if="home.errors.learning" class="module-error" role="alert">
           <span>{{ home.errors.learning }}</span>
           <button class="inline-action" type="button" @click="load">重试</button>
@@ -118,7 +131,7 @@
       </section>
       </div>
       <div class="home-project-lane">
-      <section class="home-section projects-section" aria-labelledby="projects-title">
+      <section ref="projectsCard" class="home-section projects-section" :inert="isSwitching" :style="{ minHeight: sceneGeometry.projects ? sceneGeometry.projects + 'px' : undefined }" aria-labelledby="projects-title">
         <WorkspaceIcon name="projects" class="home-section__icon" />
         <SectionHeader title="正在推进" id="projects-title">
           <template #actions>
@@ -151,46 +164,22 @@
         </div>
         <EmptyState
           v-else
-          title="还没有进行中的项目"
+          title="当前场景还没有进行中的项目"
           description="创建项目后，正在推进的任务会集中显示在这里。"
           action-label="查看项目"
           @action="router.push('/projects?view=list')"
         />
       </section>
 
-      <section class="home-section today-section" aria-labelledby="today-title">
+      <section ref="todayCard" class="home-section today-section" :inert="isSwitching" :style="{ minHeight: sceneGeometry.today ? sceneGeometry.today + 'px' : undefined }" aria-labelledby="today-title">
         <WorkspaceIcon name="calendar" class="home-section__icon" />
-        <SectionHeader title="今天的安排" id="today-title">
-          <template #actions>
-            <el-button text @click="router.push({ path: '/projects', query: { view: 'today' } })">查看全部 →</el-button>
-          </template>
-        </SectionHeader>
-        <div v-if="home.errors.today" class="module-error" role="alert">
-          <span>{{ home.errors.today }}</span>
-          <button class="inline-action" type="button" @click="load">重试</button>
-        </div>
-        <template v-else>
-
-          <div v-if="todayPreview.length" class="today-task-list">
-            <button v-for="task in todayPreview" :key="task.id" class="home-task" type="button" @click="openTask(task)">
-              <span class="home-task__dot" :class="todayStateClass(task)" aria-hidden="true" />
-              <span class="home-task__title">{{ task.title }}</span>
-              <small :class="todayStateClass(task)">{{ todayStateLabel(task) }}</small>
-            </button>
-          </div>
-          <EmptyState v-else title="今天没有优先事项" description="可以从项目里挑一个下一步，或继续最近的学习。" />
-          <dl class="today-summary" aria-label="今日任务数量">
-            <div><dt>进行中</dt><dd>{{ home.today?.doing.length ?? 0 }}</dd></div>
-            <div :class="{ 'has-overdue': todayHasOverdue }"><dt>到期 / 逾期</dt><dd>{{ home.today?.due.length ?? 0 }}</dd></div>
-            <div><dt>下一步</dt><dd>{{ home.today?.next.length ?? 0 }}</dd></div>
-          </dl>
-        </template>
+        <DailyPlanPanel :planning="home.planning" :date="currentDate" :context="scene" :loading="loading || isSwitching" :error="home.errors.planning" @open="openTask" @refresh="load" />
       </section>
 
       </div>
       <section v-if="recentItems.length || recentLoading || recentError || recentProblems.length" class="home-section recent-section" aria-labelledby="recent-title">
         <WorkspaceIcon name="inbox" class="home-section__icon" />
-        <SectionHeader title="最近留下的" id="recent-title" />
+        <SectionHeader title="最近留下的 · 全局" id="recent-title" />
         <p v-if="recentLoading && !recent" class="home-muted" role="status">正在读取最近记录…</p>
         <div v-if="recentItems.length" class="home-recent-grid">
         <RouterLink v-for="item in recentItems" :key="item.key" :to="item.to" class="home-recent-row" :title="item.title">
@@ -221,6 +210,10 @@
 </template>
 
 <script setup lang="ts">
+import DailyPlanPanel from '@/components/workspace/DailyPlanPanel.vue'
+import { subscribeTaskChanges } from '@/task-changes'
+import { currentUser } from '@/api/auth'
+import { readWorkspaceContext, saveWorkspaceContext, type WorkspaceContext } from '@/workspace-context'
 import PageShell from '@/components/PageShell.vue'
 import WorkspaceIcon from '@/components/WorkspaceIcon.vue'
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
@@ -240,7 +233,38 @@ import { domainLabel } from '@/api/life'
 type HomeSection = 'today' | 'projects' | 'learning'
 
 const router = useRouter()
+const scene = ref<WorkspaceContext>('all')
+const currentDate = ref(localDate())
+const loadedRequestDate = ref('')
+const contextCanPersist = ref(true)
+const contextReady = ref(false)
+let contextUserID: number | undefined
+const loadedScene = ref<WorkspaceContext>()
+const focusCard = ref<HTMLElement | null>(null)
+const projectsCard = ref<HTMLElement | null>(null)
+const todayCard = ref<HTMLElement | null>(null)
+const sceneGeometry = ref({ focus: 0, projects: 0, today: 0 })
+function preserveSceneGeometry() {
+  // Keep the space already used in this viewport; longer content can still grow.
+  sceneGeometry.value = {
+    focus: Math.max(sceneGeometry.value.focus, focusCard.value?.getBoundingClientRect().height ?? 0),
+    projects: Math.max(sceneGeometry.value.projects, projectsCard.value?.getBoundingClientRect().height ?? 0),
+    today: Math.max(sceneGeometry.value.today, todayCard.value?.getBoundingClientRect().height ?? 0),
+  }
+}
+let sceneViewportWidth = 0
+function resetSceneGeometry() {
+  if (sceneViewportWidth === window.innerWidth) return
+  sceneViewportWidth = window.innerWidth
+  sceneGeometry.value = { focus: 0, projects: 0, today: 0 }
+}
+watch([scene, currentDate], () => {
+ if (contextUserID !== undefined) contextCanPersist.value = saveWorkspaceContext(contextUserID, scene.value)
+ preserveSceneGeometry()
+ void load()
+}, { flush: 'sync' })
 const home = ref<WorkspaceHome | null>(null)
+const isSwitching = computed(() => home.value !== null && (loadedScene.value !== scene.value || loadedRequestDate.value !== currentDate.value))
 const loading = ref(true)
 const loadError = ref('')
 const captureOpen = ref(false)
@@ -275,35 +299,16 @@ const recentItems = computed(() => {
 })
 let homeRequest: AbortController | undefined, recentRequest: AbortController | undefined
 let disposed = false
-const dateLabel = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(new Date())
+const dateLabel = computed(() => new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(new Date(currentDate.value + 'T12:00:00')))
 function projectIcon(project: Pick<Project, 'title'> & { icon?: string | null }) {
   const icon = project.icon?.trim()
   return icon && !/^[·•.。∙⋅…]+$/u.test(icon) ? icon : Array.from(project.title.trim())[0] || '项'
 }
-const todayHasOverdue = computed(() => home.value?.today?.due.some(task => dueDays(task) > 0) ?? false)
-const todayPreview = computed(() => {
-  const view = home.value?.today
-  if (!view) return []
-  return [...view.doing, ...view.due, ...view.next]
-    .sort((left, right) => {
-      const leftUrgency = todayUrgency(left)
-      const rightUrgency = todayUrgency(right)
-      if (leftUrgency !== rightUrgency) return leftUrgency - rightUrgency
-      if (leftUrgency === 0) return dueDays(right) - dueDays(left)
-      const priorityDifference = priorityRank(left.priority) - priorityRank(right.priority)
-      if (priorityDifference !== 0) return priorityDifference
-      const leftDue = left.due_date ?? '9999-12-31'
-      const rightDue = right.due_date ?? '9999-12-31'
-      if (leftDue !== rightDue) return leftDue.localeCompare(rightDue)
-      return right.updated_at.localeCompare(left.updated_at)
-    })
-    .slice(0, 3)
-})
 const focusTask = computed(() => {
   const focus = home.value?.focus
   if (focus?.kind !== 'task' || !focus.task_id) return undefined
   const today = home.value?.today
-  return [...(today?.doing ?? []), ...(today?.due ?? []), ...(today?.next ?? [])].find(task => task.id === focus.task_id)
+  return [...(home.value?.planning?.items ?? []), ...(home.value?.planning?.due_today ?? []), ...(home.value?.planning?.overdue ?? []), ...(home.value?.planning?.previous_plan ?? []), ...(today?.doing ?? []), ...(today?.due ?? []), ...(today?.next ?? [])].find(task => task.id === focus.task_id)
 })
 const focusLearning = computed(() => {
   const focus = home.value?.focus
@@ -324,6 +329,7 @@ const focusReason = computed(() => {
   if (focus.kind === 'learning') return '最近的学习位置'
   if (focus.kind !== 'task') return ''
   if (focus.status === 'doing') return '当前正在推进'
+  if (home.value?.planning?.items.some(task => task.id === focus.task_id)) return '今天主动安排的任务'
   if (focus.due_date) {
     const days = dateDifference(focus.due_date, home.value?.date ?? '')
     if (days > 0) return '已到期，需要处理'
@@ -336,11 +342,11 @@ const focusReason = computed(() => {
 function projectTaskTotal(project: Project) { return Math.max(0, project.open_task_count + project.done_task_count) }
 const searchResults = computed<HomeSearchResult[]>(() => {
   const query = homeSearch.value.trim().toLocaleLowerCase()
-  if (!query || !home.value) return []
+  if (!query || !home.value || isSwitching.value) return []
   const entries: HomeSearchResult[] = []
   const focus = home.value.focus
   if (focus.kind !== 'empty') entries.push({ key: 'focus', title: focus.title, group: '当前重点', open: continueFocus })
-  const tasks = [...(home.value.today?.doing ?? []), ...(home.value.today?.due ?? []), ...(home.value.today?.next ?? [])]
+  const tasks = [...(home.value.planning?.items ?? []), ...(home.value.planning?.due_today ?? []), ...(home.value.planning?.overdue ?? []), ...(home.value.planning?.previous_plan ?? []), ...(home.value.today?.doing ?? []), ...(home.value.today?.due ?? []), ...(home.value.today?.next ?? [])]
   for (const task of new Map(tasks.map(task => [task.id, task])).values()) {
     if (focus.kind === 'task' && task.id === focus.task_id) continue
     entries.push({ key: 'task-' + task.id, title: task.title, group: '任务', open: () => openTask(task) })
@@ -360,7 +366,7 @@ function localDate() {
 }
 function sectionClass(section: HomeSection) { return section + '-section' }
 function sectionTitle(section: HomeSection) {
-  return ({ today: '今天的安排', projects: '正在推进', learning: '继续学习' })[section]
+  return ({ today: '今日计划', projects: '正在推进', learning: '继续学习' })[section]
 }
 function taskStatusLabel(status?: string) {
   return ({ doing: '进行中', next: '下一步', inbox: '待整理' } as Record<string, string>)[status ?? ''] ?? '项目任务'
@@ -380,33 +386,6 @@ function dateDifference(from: string, to: string) {
   const fromOrdinal = dateOrdinal(from)
   const toOrdinal = dateOrdinal(to)
   return Number.isFinite(fromOrdinal) && Number.isFinite(toOrdinal) ? Math.round((toOrdinal - fromOrdinal) / 86_400_000) : 0
-}
-function dueDays(task: ProjectTask) {
-  return task.due_date ? Math.max(0, dateDifference(task.due_date, home.value?.date ?? '')) : 0
-}
-function todayUrgency(task: ProjectTask) {
-  const days = dueDays(task)
-  if (days > 0) return 0
-  if (task.due_date && days === 0 && task.due_date <= (home.value?.date ?? '')) return 1
-  if (task.status === 'doing') return 2
-  return 3
-}
-function priorityRank(priority?: string) {
-  return ({ high: 0, normal: 1, low: 2 } as Record<string, number>)[priority ?? ''] ?? 3
-}
-function todayStateLabel(task: ProjectTask) {
-  const days = dueDays(task)
-  if (days > 0) return '逾期 ' + days + ' 天'
-  if (task.due_date && task.due_date === home.value?.date) return '今天到期'
-  if (task.status === 'doing') return '进行中'
-  return taskStatusLabel(task.status)
-}
-function todayStateClass(task: ProjectTask) {
-  const days = dueDays(task)
-  if (days > 0) return 'is-overdue'
-  if (task.due_date && task.due_date === home.value?.date) return 'is-due-today'
-  if (task.status === 'doing') return 'is-doing'
-  return 'is-next'
 }
 function relativeTime(value: string) {
   const timestamp = new Date(value).getTime()
@@ -433,8 +412,10 @@ async function load() {
   loading.value = true
   loadError.value = ''
   try {
-    const result = await getWorkspaceHome(localDate(), controller.signal)
-    if (!disposed && controller === homeRequest) home.value = result
+    const requestedScene = scene.value
+    const requestedDate = currentDate.value
+    const result = await getWorkspaceHome(requestedDate, controller.signal, requestedScene)
+    if (!disposed && controller === homeRequest && requestedScene === scene.value && requestedDate === currentDate.value) { home.value = result; loadedScene.value = requestedScene; loadedRequestDate.value = requestedDate }
   } catch (reason) {
     if (!disposed && !controller.signal.aborted) loadError.value = safeMessage(reason, '工作区暂时无法加载，请检查连接后重试。')
   } finally {
@@ -505,18 +486,86 @@ watch(focusFrame, frame => {
   if (main) axisObserver.observe(main)
   updateNavigationAxis()
 }, { flush: 'post' })
-onMounted(() => window.addEventListener('resize', updateNavigationAxis))
+onMounted(() => {
+  sceneViewportWidth = window.innerWidth
+  window.addEventListener('resize', updateNavigationAxis)
+  window.addEventListener('resize', resetSceneGeometry)
+})
 onBeforeUnmount(() => {
   axisObserver?.disconnect()
   window.removeEventListener('resize', updateNavigationAxis)
+  window.removeEventListener('resize', resetSceneGeometry)
   axisShell?.style.removeProperty('--home-focus-axis')
 })
 
-onMounted(() => { void load(); void loadRecent() })
-onBeforeUnmount(() => { disposed = true; homeRequest?.abort(); recentRequest?.abort() })
+let stopTaskChanges: (() => void) | undefined
+let calendarTimer: ReturnType<typeof setTimeout> | undefined
+function refreshCalendarDate() {
+  const nextDate = localDate()
+  if (nextDate !== currentDate.value) currentDate.value = nextDate
+}
+function scheduleCalendarRefresh() {
+  clearTimeout(calendarTimer)
+  refreshCalendarDate()
+  const now = new Date()
+  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+  calendarTimer = setTimeout(scheduleCalendarRefresh, Math.min(60_000, midnight.getTime() - now.getTime() + 25))
+}
+function resumeWorkspace() {
+  if (document.visibilityState === 'hidden') return
+  const previous = currentDate.value
+  refreshCalendarDate()
+  if (previous === currentDate.value && contextReady.value) void load()
+  scheduleCalendarRefresh()
+}
+onMounted(() => {
+  stopTaskChanges = subscribeTaskChanges(() => { if (contextReady.value) void load() })
+  document.addEventListener('visibilitychange', resumeWorkspace)
+  window.addEventListener('focus', resumeWorkspace)
+  scheduleCalendarRefresh()
+  void loadRecent()
+  void initializeContext()
+})
+async function initializeContext() {
+  try {
+    const user = await currentUser()
+    if (disposed) return
+    contextUserID = user.id
+    contextReady.value = true
+    const saved = readWorkspaceContext(user.id)
+    if (saved !== scene.value) { scene.value = saved; return }
+  } catch {
+    if (disposed) return
+    contextCanPersist.value = false
+    contextReady.value = true
+  }
+  if (!disposed) void load()
+}
+onBeforeUnmount(() => {
+  disposed = true; homeRequest?.abort(); recentRequest?.abort(); stopTaskChanges?.(); clearTimeout(calendarTimer)
+  document.removeEventListener('visibilitychange', resumeWorkspace)
+  window.removeEventListener('focus', resumeWorkspace)
+})
 </script>
 
 <style scoped>
+:global(html:has(.workspace-home)) { scrollbar-gutter:stable; }
+.workspace-home__grid--switching :is(.focus-card,.projects-section,.today-section) > * { visibility:hidden; }
+.workspace-home__grid--switching :is(.focus-card,.projects-section,.today-section)::after { content:'正在加载…'; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--home-muted); font-size:14px; pointer-events:none; }
+
+.workspace-context-bar { position:relative; display:flex; flex-direction:column; align-items:flex-end; gap:8px; min-width:0; }
+.workspace-context-switch { display:inline-flex; flex-wrap:nowrap; gap:4px; padding:4px; border:1px solid var(--home-edge); border-radius:999px; background:var(--home-panel); box-shadow:var(--home-panel-inset); backdrop-filter:var(--home-glass-filter); -webkit-backdrop-filter:var(--home-glass-filter); }
+.workspace-context-switch :deep(.el-radio-button__inner) { min-height:36px; display:flex; align-items:center; padding:0 18px; border:0; outline:0; border-radius:999px; background:transparent; color:var(--home-secondary); font-family:var(--font-ui); font-size:14px; font-weight:500; line-height:1.4; box-shadow:none; transition:background-color 180ms ease,color 180ms ease; }
+.workspace-context-switch :deep(.el-radio-button.is-active .el-radio-button__original-radio:not(:disabled) + .el-radio-button__inner) { background:var(--home-tint); color:var(--home-link); box-shadow:none; }
+.workspace-context-switch :deep(.el-radio-button__inner:hover) { color:var(--home-link); }
+.workspace-context-switch :deep(.el-radio-button__original-radio:focus-visible + .el-radio-button__inner) { outline:2px solid var(--home-link); outline-offset:3px; }
+.workspace-context-organize { position:absolute; top:calc(100% + 8px); right:0; white-space:nowrap; color:var(--home-muted); font-size:13px; line-height:1.6; text-underline-offset:3px; }
+.workspace-context-organize:hover { color:var(--home-link); }
+.workspace-context-notice { max-width:280px; text-align:right; }
+.workspace-home :deep(.page-header__row) { align-items:center; }
+.workspace-home :deep(.page-header__actions) { justify-content:flex-end; margin-left:auto; }
+@media (max-width:700px) { .workspace-context-switch :deep(.el-radio-button__inner) { min-height:44px; } }
+@media (prefers-reduced-motion:reduce) { .workspace-context-switch :deep(.el-radio-button__inner) { transition:none; } }
 .workspace-home {
   --text-primary: var(--home-ink);
   --text-secondary: var(--home-secondary);
@@ -554,6 +603,7 @@ onBeforeUnmount(() => { disposed = true; homeRequest?.abort(); recentRequest?.ab
 .focus-card__context { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 0; color: var(--home-secondary); font-size: 12px; }
 .focus-card__context span { border: 1px solid var(--home-edge); border-radius: 999px; padding: 3px 10px; background: var(--home-tint); }
 .home-section { padding: 26px; }
+.projects-section, .today-section { min-height:300px; }
 .home-section__icon { position: absolute; top: 29px; left: 26px; width: 21px; height: 21px; color: var(--home-secondary); }
 .home-section :deep(.section-header) { padding-left: 32px; margin-bottom: 22px; gap: 10px; flex-direction: row; flex-wrap: wrap; align-items: center; text-align: left; }
 .home-section :deep(.section-header__actions) { justify-content: flex-end; }
@@ -582,24 +632,7 @@ onBeforeUnmount(() => { disposed = true; homeRequest?.abort(); recentRequest?.ab
 .project-row__progress i { display: block; height: 100%; border-radius: inherit; background: var(--home-link); opacity: .8; }
 .project-row__counts { flex: none; font-size: 13px; color: var(--home-secondary); font-variant-numeric: tabular-nums; }
 .project-row:hover strong { color: var(--home-link); }
-.today-task-list { position: relative; display: grid; gap: 4px; }
-.today-task-list::before { position: absolute; left: 4px; top: 17px; bottom: 17px; width: 1px; content: ''; background: var(--home-edge); }
 .today-section :deep(.section-header) { margin-bottom: 14px; }
-.home-task { position: relative; display: grid; grid-template-columns: 9px minmax(0,1fr); align-items: center; gap: 1px 14px; min-width: 0; width: 100%; padding: 8px 0; border: 0; background: transparent; text-align: left; color: var(--home-ink); cursor: pointer; }
-.home-task__dot { width: 9px; height: 9px; border-radius: 50%; background: var(--home-link); z-index: 1; }
-.home-task__dot.is-next { background: var(--home-muted); }
-.home-task__dot.is-overdue { background: var(--color-danger); }
-.home-task__dot.is-due-today { background: var(--color-warning); }
-.home-task__title { min-width: 0; overflow-wrap: anywhere; font-size: 14px; line-height: 1.7; }
-.home-task small { grid-column: 2; color: var(--home-muted); font-size: 12px; line-height: 1.6; }
-.home-task small.is-overdue { color: var(--color-danger); }
-.home-task small.is-due-today { color: var(--color-warning); }
-.home-task:hover .home-task__title { color: var(--home-link); }
-.today-summary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; margin: 18px 0 0; padding-top: 16px; border-top: 1px solid var(--home-edge); }
-.today-summary > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.today-summary dt { order: 1; color: var(--home-muted); font-size: 12px; overflow-wrap: anywhere; }
-.today-summary dd { margin: 0; color: var(--home-secondary); font-size: 19px; line-height: 1.3; font-variant-numeric: tabular-nums; }
-.today-summary .has-overdue dd { color: var(--color-danger); }
 .recent-section { grid-column: 3; grid-row: 1; align-self: stretch; }
 .learning-row { display: block; width: 100%; min-width: 0; padding: 5px 0 0; color: var(--home-ink); }
 .learning-row__mark { display: none; }

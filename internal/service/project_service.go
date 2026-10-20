@@ -23,6 +23,7 @@ func NewProjectService(projects *repository.ProjectRepository) *ProjectService {
 }
 
 type ProjectPatch struct {
+	Context     *string `json:"context"`
 	Title       *string `json:"title"`
 	Description *string `json:"description"`
 	Status      *string `json:"status"`
@@ -31,6 +32,7 @@ type ProjectPatch struct {
 }
 
 type ProjectTaskInput struct {
+	PlanDate    *string `json:"plan_date"`
 	ProjectID   uint    `json:"project_id"`
 	Title       string  `json:"title"`
 	Description string  `json:"description"`
@@ -40,17 +42,19 @@ type ProjectTaskInput struct {
 }
 
 type ProjectTaskPatch struct {
-	ProjectID    *uint   `json:"project_id"`
-	Title        *string `json:"title"`
-	Description  *string `json:"description"`
-	Status       *string `json:"status"`
-	Priority     *string `json:"priority"`
-	DueDate      *string `json:"due_date"`
-	IsNextAction *bool   `json:"is_next_action"`
+	PlanDate          OptionalDate `json:"plan_date"`
+	ExpectedUpdatedAt *time.Time   `json:"expected_updated_at"`
+	ProjectID         *uint        `json:"project_id"`
+	Title             *string      `json:"title"`
+	Description       *string      `json:"description"`
+	Status            *string      `json:"status"`
+	Priority          *string      `json:"priority"`
+	DueDate           *string      `json:"due_date"`
+	IsNextAction      *bool        `json:"is_next_action"`
 }
 
-func (s *ProjectService) List(ctx context.Context, userID uint) ([]model.Project, error) {
-	projects, err := s.projects.List(ctx, userID)
+func (s *ProjectService) List(ctx context.Context, userID uint, contexts ...string) ([]model.Project, error) {
+	projects, err := s.projects.List(ctx, userID, contexts...)
 	if projects == nil {
 		projects = []model.Project{}
 	}
@@ -74,7 +78,13 @@ func (s *ProjectService) CreateProject(ctx context.Context, userID uint, input P
 	if title == "" || len([]rune(title)) > 160 {
 		return nil, ErrInvalidProjectInput
 	}
-	project := &model.Project{UserID: userID, Title: title, Status: "active", Tasks: []model.ProjectTask{}}
+	project := &model.Project{UserID: userID, Title: title, Status: "active", Context: "unclassified", Tasks: []model.ProjectTask{}}
+	if input.Context != nil {
+		if !oneOf(*input.Context, "work", "life", "unclassified") {
+			return nil, ErrInvalidProjectInput
+		}
+		project.Context = *input.Context
+	}
 	if input.Description != nil {
 		if len([]rune(*input.Description)) > 4000 {
 			return nil, ErrInvalidProjectInput
@@ -101,6 +111,12 @@ func (s *ProjectService) CreateProject(ctx context.Context, userID uint, input P
 
 func (s *ProjectService) Update(ctx context.Context, userID, projectID uint, patch ProjectPatch) error {
 	changes := map[string]interface{}{}
+	if patch.Context != nil {
+		if !oneOf(*patch.Context, "work", "life", "unclassified") {
+			return ErrInvalidProjectInput
+		}
+		changes["context"] = *patch.Context
+	}
 	if patch.Title != nil {
 		title := strings.TrimSpace(*patch.Title)
 		if title == "" || len([]rune(title)) > 160 {
@@ -144,6 +160,13 @@ func (s *ProjectService) Update(ctx context.Context, userID, projectID uint, pat
 }
 
 func (s *ProjectService) ListTasks(ctx context.Context, userID uint, projectID *uint, status, due string, limit, offset int, archived ...bool) ([]model.ProjectTask, error) {
+	return s.QueryTasks(ctx, userID, projectID, status, due, limit, offset, repository.TaskFilters{}, archived...)
+}
+
+func (s *ProjectService) QueryTasks(ctx context.Context, userID uint, projectID *uint, status, due string, limit, offset int, filters repository.TaskFilters, archived ...bool) ([]model.ProjectTask, error) {
+	if !oneOf(filters.Context, "", "all", "work", "life") || (filters.PlanDate != "" && !validDueDate(&filters.PlanDate)) || len([]rune(filters.Query)) > 200 || (filters.Actionable && len(archived) > 0 && archived[0]) {
+		return nil, ErrInvalidProjectInput
+	}
 	if status != "" && !taskStatus(status) {
 		return nil, ErrInvalidProjectInput
 	}
@@ -161,7 +184,7 @@ func (s *ProjectService) ListTasks(ctx context.Context, userID uint, projectID *
 			return nil, err
 		}
 	}
-	tasks, err := s.projects.ListTasks(ctx, userID, projectID, status, due, limit, offset, archived...)
+	tasks, err := s.projects.ListTasksFiltered(ctx, userID, projectID, status, due, limit, offset, len(archived) > 0 && archived[0], filters)
 	if tasks == nil {
 		tasks = []model.ProjectTask{}
 	}
@@ -181,7 +204,7 @@ func (s *ProjectService) CreateTaskWithInput(ctx context.Context, userID uint, i
 	if err != nil {
 		return nil, err
 	}
-	task := &model.ProjectTask{Title: input.Title, Description: input.Description, Status: input.Status, Priority: input.Priority, DueDate: input.DueDate}
+	task := &model.ProjectTask{Title: input.Title, Description: input.Description, Status: input.Status, Priority: input.Priority, DueDate: input.DueDate, PlanDate: input.PlanDate}
 	if err := s.projects.CreateTask(ctx, userID, input.ProjectID, task); err != nil {
 		return nil, err
 	}
@@ -201,7 +224,7 @@ func normalizeProjectTaskInput(input ProjectTaskInput) (ProjectTaskInput, error)
 	if input.Priority == "" {
 		input.Priority = "normal"
 	}
-	if !taskStatus(input.Status) || !priority(input.Priority) || !validDueDate(input.DueDate) {
+	if !taskStatus(input.Status) || !priority(input.Priority) || !validDueDate(input.DueDate) || !validPlanDate(input.PlanDate) {
 		return input, ErrInvalidProjectInput
 	}
 	return input, nil
@@ -214,11 +237,11 @@ type TodayView struct {
 	Next  []model.ProjectTask `json:"next"`
 }
 
-func (s *ProjectService) Today(ctx context.Context, userID uint, date string, projectID *uint) (*TodayView, error) {
+func (s *ProjectService) Today(ctx context.Context, userID uint, date string, projectID *uint, contexts ...string) (*TodayView, error) {
 	if !validDueDate(&date) || date == "" {
 		return nil, ErrInvalidProjectInput
 	}
-	projects, err := s.projects.List(ctx, userID)
+	projects, err := s.projects.List(ctx, userID, contexts...)
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +254,7 @@ func (s *ProjectService) Today(ctx context.Context, userID uint, date string, pr
 			return nil, err
 		}
 	}
-	tasks, err := s.ListTasks(ctx, userID, projectID, "", "", 0, 0)
+	tasks, err := s.projects.ListTasksInContext(ctx, userID, projectID, "", "", 0, 0, false, contexts...)
 	if err != nil {
 		return nil, err
 	}
@@ -254,6 +277,16 @@ func (s *ProjectService) Today(ctx context.Context, userID uint, date string, pr
 
 func (s *ProjectService) EditTask(ctx context.Context, userID, taskID uint, patch ProjectTaskPatch) (*model.ProjectTask, error) {
 	changes := map[string]interface{}{}
+	if patch.PlanDate.Set {
+		if !validPlanDate(patch.PlanDate.Value) {
+			return nil, ErrInvalidProjectInput
+		}
+		if patch.PlanDate.Value == nil {
+			changes["plan_date"] = nil
+		} else {
+			changes["plan_date"] = *patch.PlanDate.Value
+		}
+	}
 	if patch.ProjectID != nil {
 		if *patch.ProjectID == 0 {
 			return nil, ErrInvalidProjectInput
@@ -316,7 +349,7 @@ func (s *ProjectService) EditTask(ctx context.Context, userID, taskID uint, patc
 	if len(changes) == 0 {
 		return nil, ErrInvalidProjectInput
 	}
-	return s.projects.UpdateTask(ctx, userID, taskID, changes)
+	return s.projects.UpdateTask(ctx, userID, taskID, changes, patch.ExpectedUpdatedAt)
 }
 
 func (s *ProjectService) UpdateTask(ctx context.Context, userID, projectID, taskID uint, patch ProjectTaskPatch) error {
