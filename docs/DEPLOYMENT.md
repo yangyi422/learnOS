@@ -91,6 +91,7 @@ bash deploy/deploy.sh --no-verify && curl -fsS http://127.0.0.1:8888/health
 | 端口占用 / 容器起不来 | 检查 `.env` 的 `APP_BIND_HOST`、`APP_PORT`；`docker compose ps` 与 `docker compose logs app` |
 | 首次构建慢 | 容器内 `npm ci` 与 Go 模块下载；后续有构建缓存 |
 | 数据库迁移 | 启动时自动执行；迁移前会生成 `backups/learnos-<时间戳>.zip`，请勿删除 |
+| 构建在 `apt-get update` 处失败（Broken pipe / 255） | 运行镜像已不再执行 apt（CA 证书从 Go 构建阶段复制，健康检查为 Go 二进制），该失败类型已消除；若仍遇到 Go 模块/npm 下载失败，CI 会自动重试一次构建 |
 | 部署目录有未提交改动，`--pull` 被拒绝 | 部署目录是可丢弃的部署副本：先 `git checkout -- . && git clean -fd`（`.env`/`data/`/`backups` 是 ignore 或已被排除，不受影响），再执行 `--pull` |
 | 云上 HTTPS/Caddy 没有更新 | 加 `--with-caddy`，或单独执行 `docker compose --profile production up -d --build` |
 | 在 DeepSeek Harness 沙箱内跑 Go/npm | 需要 `pwsh` + `danger-full-access`（普通沙箱禁止工具链子进程管道与 node_modules 写入） |

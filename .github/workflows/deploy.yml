@@ -110,6 +110,21 @@ jobs:
           test "$deployed_commit" = "$target_commit"
           echo "deploy_path=$deploy_path"
           echo "deployed_commit=$deployed_commit"
-          docker compose --profile production up -d --build --force-recreate
+          echo "== build =="
+          if ! docker compose --profile production build; then
+            echo "first build failed; retrying once in 20s" >&2
+            sleep 20
+            docker compose --profile production build
+          fi
+          echo "== restart =="
+          docker compose --profile production up -d --force-recreate
+          echo "== wait for healthy =="
+          app_id=$(docker compose --profile production ps -q app)
+          for _ in $(seq 1 60); do
+            status=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$app_id" 2>/dev/null || echo unknown)
+            [ "$status" = "healthy" ] && break
+            sleep 2
+          done
+          echo "app_status=$status"
           docker compose --profile production ps
           REMOTE
