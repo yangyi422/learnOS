@@ -62,6 +62,11 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Configure SSH
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
@@ -79,7 +84,7 @@ jobs:
           echo "key_file=$key_file" >> "$GITHUB_ENV"
           echo "deploy_port=$DEPLOY_PORT" >> "$GITHUB_ENV"
 
-      - name: Update and restart LearnOS
+      - name: Prepare deploy bundle
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
@@ -88,28 +93,69 @@ jobs:
           set -euo pipefail
           test -n "$DEPLOY_USER"
           test -n "$DEPLOY_PATH"
-          ssh -i "$key_file" \
-            -p "$deploy_port" \
-            -o BatchMode=yes \
-            -o StrictHostKeyChecking=yes \
-            "$DEPLOY_USER@$DEPLOY_HOST" \
-            bash -s -- "$DEPLOY_PATH" "$GITHUB_SHA" <<'REMOTE'
+          ssh_opts=(-i "$key_file" -p "$deploy_port" -o BatchMode=yes -o StrictHostKeyChecking=yes)
+          # Ask the server which commit it already has, then keep the bundle tiny
+          # by uploading only the missing commits.
+          server_head=$(ssh "${ssh_opts[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "cd '$DEPLOY_PATH' && git rev-parse HEAD" 2>/dev/null || true)
+          echo "server_head=${server_head:-unknown}"
+          git update-ref refs/heads/deploy "$GITHUB_SHA"
+          if [ -n "$server_head" ] && [ "$server_head" != "$GITHUB_SHA" ] && git cat-file -e "$server_head^{commit}" 2>/dev/null; then
+            git bundle create "$RUNNER_TEMP/learnos.bundle" refs/heads/deploy --not "$server_head" | tail -2
+          else
+            git bundle create "$RUNNER_TEMP/learnos.bundle" refs/heads/deploy | tail -2
+          fi
+          ls -lh "$RUNNER_TEMP/learnos.bundle"
+          scp -i "$key_file" -P "$deploy_port" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$RUNNER_TEMP/learnos.bundle" "$DEPLOY_USER@$DEPLOY_HOST:/tmp/learnos-$GITHUB_SHA.bundle"
+
+      - name: Update and restart LearnOS
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/remote-deploy.sh" <<'REMOTE'
           set -euo pipefail
           deploy_path="$1"
           target_commit="$2"
+          bundle="$3"
           cd "$deploy_path"
           test "$(git symbolic-ref --short HEAD)" = "main"
           test -z "$(git status --porcelain --untracked-files=no)"
-          git fetch origin refs/heads/main:refs/remotes/origin/main
-          git cat-file -e "$target_commit^{commit}"
-          git merge-base --is-ancestor "$target_commit" refs/remotes/origin/main
           echo "target_commit=$target_commit"
-          echo "fetched_main=$(git rev-parse refs/remotes/origin/main)"
-          git merge --ff-only "$target_commit"
+          if [ "$(git rev-parse HEAD)" != "$target_commit" ]; then
+            fetched=0
+            for attempt in 1 2 3 4 5; do
+              if git fetch "$bundle" "refs/heads/deploy:refs/remotes/deploy/main"; then
+                fetched=1
+                break
+              fi
+              echo "bundle fetch failed (attempt $attempt); retrying" >&2
+              sleep 5
+            done
+            if [ "$fetched" = 1 ]; then
+              git merge-base --is-ancestor "$target_commit" refs/remotes/deploy/main
+              git merge --ff-only "$target_commit"
+            else
+              echo "bundle unavailable; falling back to origin fetch" >&2
+              for attempt in 1 2 3; do
+                if git fetch origin refs/heads/main:refs/remotes/origin/main; then
+                  break
+                fi
+                echo "origin fetch failed (attempt $attempt)" >&2
+                sleep 10
+                if [ "$attempt" = 3 ]; then exit 1; fi
+              done
+              git merge-base --is-ancestor "$target_commit" refs/remotes/origin/main
+              git merge --ff-only "$target_commit"
+            fi
+          fi
           deployed_commit="$(git rev-parse HEAD)"
           test "$deployed_commit" = "$target_commit"
           echo "deploy_path=$deploy_path"
           echo "deployed_commit=$deployed_commit"
+          rm -f "$bundle"
           echo "== build =="
           if ! docker compose --profile production build; then
             echo "first build failed; retrying once in 20s" >&2
@@ -126,5 +172,18 @@ jobs:
             sleep 2
           done
           echo "app_status=$status"
+          if [ "$status" != "healthy" ]; then
+            docker compose --profile production logs app --tail 100 >&2
+            exit 1
+          fi
           docker compose --profile production ps
           REMOTE
+          ssh_opts=(-i "$key_file" -p "$deploy_port" -o BatchMode=yes -o StrictHostKeyChecking=yes)
+          for attempt in 1 2 3; do
+            if ssh "${ssh_opts[@]}" "$DEPLOY_USER@$DEPLOY_HOST" bash -s -- "$DEPLOY_PATH" "$GITHUB_SHA" "/tmp/learnos-$GITHUB_SHA.bundle" < "$RUNNER_TEMP/remote-deploy.sh"; then
+              exit 0
+            fi
+            echo "deploy attempt $attempt failed; retrying in 20s" >&2
+            sleep 20
+          done
+          exit 1

@@ -63,6 +63,20 @@ bash deploy/deploy.sh --no-verify && curl -fsS http://127.0.0.1:8888/health
 
 部署成功时退出码为 0，任何一步失败返回非 0，可直接接 CI。
 
+## 4.1 GitHub Actions 生产部署（push main 自动触发）
+
+`.github/workflows/deploy.yml`：
+
+1. `verify`：在 GitHub runner 上跑 Go 测试/vet、前端 typecheck/单测/构建；
+2. `deploy`：
+   - runner 以 `fetch-depth: 0` 检出完整历史，向服务器询问当前 HEAD；
+   - 用 `git bundle` 打包**服务器缺失的提交**，通过 SSH 上传到服务器 `/tmp`；
+   - 服务器从 bundle 做 `--ff-only` 更新，不再依赖服务器主动访问 GitHub（此前出现过服务器到 GitHub 的 SSH 被断开导致 `Could not read from remote repository` 的失败）；
+   - bundle 拉取失败时才回退到 `git fetch origin`；
+   - 构建失败自动重试一次；重启后等待容器 `healthy` 才判定成功。
+
+因此生产部署只需要 runner → 服务器的 SSH 连通；服务器只需要能拉取 Docker 基础镜像（首次）与 Go/npm 依赖（构建缓存命中时更快）。
+
 ## 5. 本地验证脚本
 
 ```powershell
