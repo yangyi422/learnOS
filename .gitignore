@@ -5,6 +5,7 @@
 web/node_modules/
 web/playwright-report/
 web/test-results/
+.tmp/
 .impeccable/
 .agents/
 .codex/

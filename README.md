@@ -66,6 +66,14 @@ docker compose up -d --build app
 
 生产服务默认绑定到宿主机回环地址：`http://127.0.0.1:8888`；端口映射为宿主机 `8888` → 容器 `8080`。宿主机访问使用 `8888`，容器内健康检查仍使用 `8080`。
 
+### 本地与云部署脚本
+
+- Windows 本机（Docker 位于 WSL2）：`. .\scripts\dev-env.ps1`，然后 `.\scripts\deploy-local.ps1 -SyncChangedFiles`（未提交改动）或 `-Pull`（已提交推送）；
+- 云服务器 Linux：`bash deploy/deploy.sh --pull`；
+- 本地验证：`.\scripts\verify-local.ps1 [-E2E]`。
+
+脚本行为、回滚步骤与常见问题见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
+
 ### 生成新密码哈希
 
 本地 Go 环境：
