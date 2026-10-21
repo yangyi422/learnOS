@@ -67,7 +67,15 @@ func (h *Handler) GetWorkspaceHome(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "WORKSPACE_UNAVAILABLE", "message": "工作区暂时无法加载。", "retryable": true}})
 		return
 	}
-	if len(view.Errors) == 5 {
+	// Only the five original core sections decide the 503. Daily focus is an
+	// additive section: its failure must never turn a usable home into 503.
+	coreFailed := 0
+	for _, section := range []string{"projects", "today", "planning", "learning", "inbox"} {
+		if view.Errors[section] != "" {
+			coreFailed++
+		}
+	}
+	if coreFailed == 5 {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"data": view, "error": gin.H{"code": "WORKSPACE_SECTIONS_UNAVAILABLE", "message": "工作区内容暂时无法加载，请重试。", "retryable": true}})
 		return
 	}

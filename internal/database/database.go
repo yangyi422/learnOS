@@ -78,6 +78,9 @@ func Open(cfg config.Config) (*gorm.DB, error) {
 		&model.Session{},
 		&model.Project{},
 		&model.ProjectTask{},
+		// Schema 31: DailyFocus only creates the table. Historical focus rows
+		// are never generated and projects/project_tasks are not touched.
+		&model.DailyFocus{},
 		&model.InboxItem{},
 		&model.LightweightRecord{},
 		&model.LifeEvent{},

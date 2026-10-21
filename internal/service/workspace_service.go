@@ -14,10 +14,15 @@ type WorkspaceService struct {
 	courses   *CourseService
 	cognitive *CognitiveStateService
 	inbox     *InboxService
+	focus     *DailyFocusService
 }
 
-func NewWorkspaceService(projects *ProjectService, courses *CourseService, cognitive *CognitiveStateService, inbox *InboxService) *WorkspaceService {
-	return &WorkspaceService{projects: projects, courses: courses, cognitive: cognitive, inbox: inbox}
+func NewWorkspaceService(projects *ProjectService, courses *CourseService, cognitive *CognitiveStateService, inbox *InboxService, focuses ...*DailyFocusService) *WorkspaceService {
+	workspace := &WorkspaceService{projects: projects, courses: courses, cognitive: cognitive, inbox: inbox}
+	if len(focuses) > 0 {
+		workspace.focus = focuses[0]
+	}
+	return workspace
 }
 
 type WorkspaceLearningItem struct {
@@ -61,6 +66,7 @@ type WorkspaceHome struct {
 	Projects          []model.Project         `json:"projects"`
 	Learning          []WorkspaceLearningItem `json:"learning"`
 	Inbox             *InboxSummary           `json:"inbox,omitempty"`
+	DailyFocus        WorkspaceDailyFocus     `json:"daily_focus"`
 	Errors            map[string]string       `json:"errors"`
 }
 
@@ -75,7 +81,7 @@ func (s *WorkspaceService) Home(ctx context.Context, userID uint, date string, c
 	view := &WorkspaceHome{
 		Context: scene,
 		Date:    date, Projects: []model.Project{}, Learning: []WorkspaceLearningItem{},
-		Errors: map[string]string{}, Focus: WorkspaceFocus{Kind: "empty"},
+		Errors: map[string]string{}, Focus: WorkspaceFocus{Kind: "empty"}, DailyFocus: WorkspaceDailyFocus{},
 	}
 	projects, projectsErr := s.projects.List(ctx, userID, scene)
 	if projectsErr != nil {
@@ -117,6 +123,18 @@ func (s *WorkspaceService) Home(ctx context.Context, userID uint, date string, c
 		view.Errors["inbox"] = "收集箱暂时无法加载。"
 	} else {
 		view.Inbox = inbox
+	}
+
+	// Daily focus is additive: a focus failure is reported per section and never
+	// hides projects, tasks, planning, learning or inbox. The recommendation
+	// above stays a suggestion and is never written into the focus table.
+	if s.focus != nil {
+		focuses, focusErr := s.focus.Day(ctx, userID, date, scene)
+		if focusErr != nil {
+			view.Errors["daily_focus"] = "今日焦点暂时无法加载。"
+		} else {
+			view.DailyFocus = focuses
+		}
 	}
 
 	focusLearning := learning

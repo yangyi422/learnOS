@@ -693,3 +693,20 @@ Phase 6 不实现探索雷达、问题池、Agent 导航、知识来源可信度
 ### Phase 11.1b 验证结果
 
 `go test ./internal/... ./cmd/...`、`go vet ./internal/... ./cmd/...` 与服务端构建通过；前端 typecheck、41 项单元测试、生产构建通过。相关首页/项目/计划 Playwright 完整回归 97 项通过，手机触控尺寸补充回归 2 项通过。首次回归中的旧定位器/布局断言、跨日测试时钟缓冲及迁移测试夹具 ID 冲突已修正并重跑通过。未执行其他业务模块的全套 E2E、生产数据库迁移或部署。
+
+## Phase 11.1c：每日焦点（Daily Focus，2026-10-21）
+
+- 新增 `daily_focuses` 表（schema 31）：`(user_id, focus_date, context)` 唯一，引用既有 ProjectTask，`revision` 乐观并发；不建外键、不复制任务、不回填历史焦点。
+- 首页工作 / 生活场景各自最多一个用户主动选择的焦点；全部视图只展示两者摘要、不拥有独立焦点；允许不设置，生活场景尤其不强制安排。
+- 新 API：`GET /api/v1/workspace/daily-focus`、`PUT /api/v1/workspace/daily-focus/:date/:context`；`workspace/home` 增加 `daily_focus` 字段，与 PUT 共用同一数据来源。
+- 设置 / 更换 / 清空只改焦点引用，不修改任务 status、plan_date、due_date、排序或所属项目；完成焦点复用任务完成逻辑，保留当天已完成状态；次日不自动继承。
+- 焦点状态：`ok`、`completed`、`missing`、`context_changed`、`project_inactive`、`archived`；失效引用按当前用户与场景重新校验，不越权、不悬空。
+- 首页中间主卡从「继续处理建议」升级为「今日焦点」，原自动建议降级为次级行且绝不自动写入焦点；选择器默认今日已计划未完成任务，可搜索其他可操作任务，已完成 / 归档 / 未分类不可选。
+- 设计、API 与状态机见 [DAILY_FOCUS.md](DAILY_FOCUS.md)；本轮不部署运行环境。
+
+### Phase 11.1c 验证结果
+
+- 后端：`go vet ./internal/... ./cmd/...` 通过；`go test -count=1 ./internal/... ./cmd/...` 无断言失败、无构建失败（107 个测试仅因 Windows TempDir 清理时 sqlite 文件句柄占用报伪失败，属既有环境限制，与基线同类）。新增 DailyFocus service/handler/迁移测试全部通过：每人每天每场景唯一、work/life 独立、未分类拒绝、设置/更换不改任务字段、完成保留且重复完成不覆盖 completed_at、次日不继承、项目暂停/归档/跨场景、任务归档/删除→missing、同任务幂等、旧 revision 409、清空幂等、跨用户隔离、schema 30→31 重复迁移幂等且既有任务数据不变。
+- 前端：`npm run typecheck` 0 错误；`npm run test` 20 文件 / 50 用例通过（新增 dailyFocus 9 项）；`npm run build` 通过并更新内嵌前端。
+- 浏览器：新增 `daily-focus` 18 项全部通过；`daily-focus`、`workspace`、`planning`、`regression`、`ui-foundation` 合计 139 项中 138 项通过。唯一失败为 `regression.spec.ts` 的移动端导航抽屉 overlay 点击，在改动前 HEAD（v0.1.1-12-g789bf91）独立 worktree 中同样失败，属既有环境问题，不是本轮回归；跨标签同步慢用例已加 60s 超时。
+- 未执行真实数据库迁移与线上部署；E2E 全部为 API 路由拦截，权限与事务由 Go 测试覆盖。

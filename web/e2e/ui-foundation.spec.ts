@@ -16,7 +16,7 @@ for (const width of [1920, 1440, 1280, 1024, 390]) {
       const path = new URL(route.request().url()).pathname
       let data: unknown = []
       if (path.endsWith('/auth/me')) data = { id: 1, username: 'visual-fixture', role: 'admin', status: 'active' }
-      else if (path === '/api/v1/workspace/home') data = { date: '2026-09-20', focus: { kind: 'empty', title: '从一件事开始' }, today: { date: '2026-09-20', doing: [], due: [], next: [] }, projects: [], learning: [], inbox: { count: 0, items: [] }, errors: {} }
+      else if (path === '/api/v1/workspace/home') data = { date: '2026-09-20', focus: { kind: 'empty', title: '从一件事开始' }, daily_focus: { work: null, life: null }, today: { date: '2026-09-20', doing: [], due: [], next: [] }, projects: [], learning: [], inbox: { count: 0, items: [] }, errors: {} }
       else if (path === '/api/v1/courses') data = [course]
       else if (path === '/api/v1/exploration/radar') data = { directions: [] }
       else if (path === '/api/v1/inbox') data = { items: [], counts: { inbox: 0, processed: 0, archived: 0 } }
@@ -64,7 +64,7 @@ for (const width of [1920, 1440, 1280, 1024, 390]) {
 for (const theme of ['light', 'dark'] as const) {
   test(`semantic contrast and native control focus in ${theme}`, async ({ page }) => {
     await page.addInitScript(theme => localStorage.setItem('learnos-theme', theme), theme)
-    await page.route('**/api/v1/**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: new URL(route.request().url()).pathname.endsWith('/auth/me') ? { id: 1, role: 'admin' } : { date: stamp, focus: { kind: 'empty' }, today: { doing: [], due: [], next: [] }, projects: [], learning: [], inbox: { count: 0, items: [] }, errors: {} } }) }))
+    await page.route('**/api/v1/**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: new URL(route.request().url()).pathname.endsWith('/auth/me') ? { id: 1, role: 'admin' } : { date: stamp, focus: { kind: 'empty' }, daily_focus: { work: null, life: null }, today: { doing: [], due: [], next: [] }, projects: [], learning: [], inbox: { count: 0, items: [] }, errors: {} } }) }))
     await page.goto('/')
     await expect(page.locator('.page-header h1')).toBeVisible()
     await expect(page.locator('.page-header h1')).toHaveCSS('font-size', '44px')

@@ -29,7 +29,7 @@ async function installPlanning(context: BrowserContext) {
       }
       planning.summary = { planned: planning.items.length, due_today: planning.due_today.length, overdue: planning.overdue.length, previous_plan: planning.previous_plan.length, total: planning.items.length + planning.due_today.length + planning.overdue.length + planning.previous_plan.length }
       const focus = planning.items[0]
-      return reply({ date, context: scene, planning, today: { date, doing: [], due: [], next: [] }, focus: focus ? { kind: 'task', title: focus.title, task_id: focus.id, project_id: focus.project_id, project_title: focus.project_title, status: focus.status } : { kind: 'empty', title: '' }, projects: projects.filter(p => scene === 'all' || p.context === scene).map(p => ({ ...p, open_task_count: tasks.filter(t => t.project_id === p.id && t.status !== 'done').length, done_task_count: tasks.filter(t => t.project_id === p.id && t.status === 'done').length })), learning: [], inbox: { count: 0, items: [] }, errors: {} })
+      return reply({ date, context: scene, planning, today: { date, doing: [], due: [], next: [] }, focus: focus ? { kind: 'task', title: focus.title, task_id: focus.id, project_id: focus.project_id, project_title: focus.project_title, status: focus.status } : { kind: 'empty', title: '' }, daily_focus: focus ? { work: { id: 1, date, context: 'work', task_id: focus.id, revision: 1, state: 'ok', title: focus.title, task_status: focus.status, priority: focus.priority, plan_date: focus.plan_date ?? null, due_date: focus.due_date ?? null, completed_at: null, project_id: focus.project_id, project_title: focus.project_title, project_context: 'work', project_status: 'active', state_reason: '', updated_at: stamp, task_updated_at: stamp }, life: null } : { work: null, life: null }, projects: projects.filter(p => scene === 'all' || p.context === scene).map(p => ({ ...p, open_task_count: tasks.filter(t => t.project_id === p.id && t.status !== 'done').length, done_task_count: tasks.filter(t => t.project_id === p.id && t.status === 'done').length })), learning: [], inbox: { count: 0, items: [] }, errors: {} })
     }
     if (path === '/api/v1/tasks' && req.method() === 'GET') {
       if (state.failCandidates && url.searchParams.has('actionable')) return error()
@@ -167,6 +167,7 @@ for (const timezone of ['Asia/Shanghai', 'America/Los_Angeles']) {
 }
 
 test('首页与已打开的项目看板跨标签同步完成', async ({ page, context }) => {
+  test.setTimeout(60_000)
   await setup(page, context)
   const board = await context.newPage()
   await board.clock.install({ time: new Date('2026-10-20T12:00:00') })

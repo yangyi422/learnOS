@@ -101,3 +101,13 @@ GET /api/v1/workspace/home 保留旧 today，新增 planning：items、due_today
 继续处理建议与 DailyFocus 无关：七天内的进行中 → 今日主动计划 → 今天到期 → 未逾期且无未来/过去计划的高优先 next。长期逾期只保留提醒，除非用户安排到今天；全部场景仍可回退全局学习，分类场景不会把全局学习当任务。
 
 任务变更通知只传失效令牌，不传任务内容；同标签、storage 跨标签与窗口恢复触发重新读取。首页按浏览器本地午夜刷新日历日期，场景偏好不随时间改变；网络失败不乐观改变任务，409 要求刷新后重新操作。长列表先折叠展开，聚合计数保持完整。
+
+## Phase 11.1c：每日焦点
+
+每日焦点是用户主动选择、不自动生成的任务引用：每位用户每个日历日、每个场景（work / life）最多一条，表为 `daily_focuses`，唯一索引 `(user_id, focus_date, context)`。`task_id` 指向既有 ProjectTask，不复制任务；`all` 视图没有独立焦点，只展示工作与生活两份摘要。只有当前用户、场景一致、active 项目、未归档且未完成的任务可以被选为焦点；未分类项目任务不能被写进工作或生活焦点。
+
+设置 / 更换 / 清空焦点只写 `daily_focuses`，不修改任务的 status、plan_date、due_date、sort_order 或 project_id；清空删除焦点行，重复设置相同任务幂等且不增加 `revision`。`PUT` 接受可选 `expected_revision`，条件更新命中 0 行返回 409，客户端刷新后重新操作。完成焦点复用任务 PATCH（status=done 与 expected_updated_at），任务状态、项目统计、今日计划和焦点展示统一以任务事实为准；重复完成不覆盖 completed_at，焦点行保留到当天结束并显示 completed。
+
+读取时按用户与场景重新解析引用：任务删除为 missing，项目改场景为 context_changed（不自动迁移焦点），项目暂停/完成/归档为 project_inactive，任务归档为 archived；失效状态只保留必要历史信息，不提供完成或跳转，用户可更换或清空。日期使用工作台日历日期 YYYY-MM-DD，不继承前一天焦点，历史数据不自动回填。
+
+API：`GET /api/v1/workspace/daily-focus?date=&context=` 返回 `focuses.work/life`；`PUT /api/v1/workspace/daily-focus/:date/:context` 以 `task_id` 设置、`task_id:null` 清空；`GET /api/v1/workspace/home` 增加 `daily_focus`。候选复用 `GET /api/v1/tasks?context&actionable=true&plan_date&q`，首页选择器默认今天已计划的未完成任务，可搜索该场景全部可操作任务。详见 [DAILY_FOCUS.md](DAILY_FOCUS.md)。

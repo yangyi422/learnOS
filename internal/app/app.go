@@ -45,6 +45,7 @@ func New(cfg config.Config) (*App, error) {
 	userService := service.NewUserService(userRepository)
 	projectRepository := repository.NewProjectRepository(db)
 	projectService := service.NewProjectService(projectRepository)
+	dailyFocusService := service.NewDailyFocusService(repository.NewDailyFocusRepository(db))
 	imageService := service.NewLibraryImageService(repository.NewLibraryImageRepository(db), cfg.DatabasePath, cfg.LibraryUploadQuotaBytes)
 	libraryService := service.NewLibraryService(repository.NewLibraryRepository(db), imageService)
 	reviewService := service.NewMonthlyReviewService(repository.NewMonthlyReviewRepository(db))
@@ -100,7 +101,7 @@ func New(cfg config.Config) (*App, error) {
 	cognitiveStateService := service.NewCognitiveStateService(courseRepository, knowledgeGraphRepository, cognitiveRepository)
 	courseService.SetCognitiveStateService(cognitiveStateService)
 	recentService := service.NewWorkspaceRecentService(repository.NewWorkspaceRecentRepository(db))
-	workspaceService := service.NewWorkspaceService(projectService, courseService, cognitiveStateService, inboxService)
+	workspaceService := service.NewWorkspaceService(projectService, courseService, cognitiveStateService, inboxService, dailyFocusService)
 	misconceptionService := service.NewMisconceptionService(courseRepository, knowledgeGraphRepository, misconceptionRepository, learningRepository)
 	explorationService := service.NewExplorationService(courseRepository, knowledgeGraphRepository, learningRepository, cognitiveRepository, misconceptionRepository, explorationRepository)
 	explorationService.SetExplorationProvider(runtimeProvider)
@@ -133,7 +134,7 @@ func New(cfg config.Config) (*App, error) {
 		return nil, fmt.Errorf("load embedded web assets: %w", err)
 	}
 
-	handler := httpapi.NewHandler(courseService, knowledgeGraphService, cognitiveStateService, challengeService, misconceptionService, explorationService, curriculumService, groundingService, backupService, databaseHealthService, exportService, consistencyService, domainInitializationService, aiConfigurationService, nextLessonService, userService, projectService, inboxService, recordService, workspaceService, recentService, lifeService, financeService, assetService, reviewService, libraryService, imageService)
+	handler := httpapi.NewHandler(courseService, knowledgeGraphService, cognitiveStateService, challengeService, misconceptionService, explorationService, curriculumService, groundingService, backupService, databaseHealthService, exportService, consistencyService, domainInitializationService, aiConfigurationService, nextLessonService, userService, projectService, inboxService, recordService, workspaceService, recentService, lifeService, financeService, assetService, reviewService, libraryService, imageService, dailyFocusService)
 	router := httpapi.NewRouter(cfg, handler, dist, userService)
 
 	return &App{

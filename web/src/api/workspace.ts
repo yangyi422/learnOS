@@ -1,6 +1,7 @@
 import type { WorkspaceContext } from '../workspace-context'
 import { request } from './http'
 import type { InboxSummary } from './inbox'
+import type { WorkspaceDailyFocus } from './dailyFocus'
 import type { Project, ProjectTask, TodayView, TaskPriority } from './projects'
 
 export interface WorkspaceLearningItem {
@@ -22,6 +23,9 @@ export interface WorkspaceHome {
  context?: WorkspaceContext; unclassified_count?: number
   date: string; focus: WorkspaceFocus; today: TodayView | null; projects: Project[]; learning: WorkspaceLearningItem[]
   inbox: InboxSummary | null; errors: Record<string, string>
+  // Older fixtures/mocks may omit this field; the home view treats a missing
+  // map as "no focus set" rather than failing the page.
+  daily_focus?: WorkspaceDailyFocus
 }
 export async function getWorkspaceHome(date: string, signal?: AbortSignal, context: WorkspaceContext = 'all'): Promise<WorkspaceHome> {
   return (await request<{ data: WorkspaceHome }>(`/api/v1/workspace/home?date=${encodeURIComponent(date)}&context=${context}`, { signal })).data

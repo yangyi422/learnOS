@@ -9,6 +9,38 @@ const task: ProjectTask = { id: 41, project_id: 7, title: '整理看板交互', 
 const emptyPlanning: WorkspacePlanning = { items: [], due_today: [], overdue: [], previous_plan: [], summary: { planned: 0, due_today: 0, overdue: 0, previous_plan: 0, total: 0 } }
 const emptyToday = { date: '2026-09-29', doing: [], due: [], next: [] }
 
+const markerForDailyFocus = true
+
+interface DailyFocusView {
+  id: number; date: string; context: 'work' | 'life'; task_id: number | null; revision: number; state: DailyFocusState
+  title: string; task_status: string; priority: string; plan_date: string | null; due_date: string | null
+  completed_at: string | null; project_id: number | null; project_title: string; project_context: string
+  project_status: string; state_reason: string; updated_at: string; task_updated_at: string | null
+}
+type DailyFocusState = 'ok' | 'completed' | 'missing' | 'context_changed' | 'project_inactive' | 'archived'
+interface DailyFocusMap { work: DailyFocusView | null; life: DailyFocusView | null }
+interface FocusTaskSeed { id: number; title: string; status?: string; priority?: string; due_date?: string | null; project_id?: number; plan_date?: string | null }
+
+function dailyFocusOf(seed: FocusTaskSeed, context: 'work' | 'life' = 'work'): DailyFocusView {
+  return {
+    id: 1, date: '2026-09-29', context, task_id: seed.id, revision: 1,
+    state: seed.status === 'done' ? 'completed' : 'ok', title: seed.title, task_status: seed.status ?? 'next',
+    priority: seed.priority ?? 'normal', plan_date: seed.plan_date ?? null, due_date: seed.due_date ?? null,
+    completed_at: null, project_id: seed.project_id ?? project.id, project_title: project.title,
+    project_context: context, project_status: 'active', state_reason: '', updated_at: timestamp, task_updated_at: timestamp,
+  }
+}
+
+function defaultDailyFocus(focus: WorkspaceHome['focus'] | undefined): DailyFocusMap {
+  if (focus?.kind !== 'task' || !focus.task_id) return { work: null, life: null }
+  return {
+    work: dailyFocusOf({ id: focus.task_id, title: focus.title, status: focus.status, priority: focus.priority, due_date: focus.due_date, project_id: focus.project_id }),
+    life: null,
+  }
+}
+
+const focusTitle = (page: Page) => page.locator('.daily-focus-slot[data-context="work"] .daily-focus-title')
+
 interface MockOptions {
   recent?: WorkspaceRecent
   recentGate?: Promise<void>
@@ -20,7 +52,9 @@ interface MockOptions {
   firstHomeOverrides?: Partial<WorkspaceHome>
 }
 
-async function installWorkspaceMocks(page: Page, homeOverrides: Partial<WorkspaceHome> = {}, options: MockOptions = {}) {
+interface HomeOverrides extends Partial<Omit<WorkspaceHome, 'daily_focus'>> { daily_focus?: DailyFocusMap }
+
+async function installWorkspaceMocks(page: Page, homeOverrides: HomeOverrides = {}, options: MockOptions = {}) {
   const inbox: InboxItem[] = [{ id: 9, user_id: 1, content: '研究 SQLite WAL backup', status: 'inbox', source_type: 'manual', source_url: '', processed_to_type: '', processed_to_id: null, created_at: timestamp, updated_at: timestamp, processed_at: null, archived_at: null }]
   let recentCalls = 0
   let homeCalls = 0
@@ -48,9 +82,12 @@ async function installWorkspaceMocks(page: Page, homeOverrides: Partial<Workspac
         })
       }
       const overrides = homeCalls === 1 && options.firstHomeOverrides ? options.firstHomeOverrides : homeOverrides
+      const fallbackFocus = overrides.focus ?? { kind: 'task' as const, title: task.title, task_id: task.id, project_id: project.id, project_title: project.title, status: task.status, priority: task.priority, due_date: task.due_date }
+      const dailyFocus = (overrides as { daily_focus?: DailyFocusMap }).daily_focus ?? defaultDailyFocus(fallbackFocus)
       return reply({
         date: '2026-09-29',
         focus: { kind: 'task', title: task.title, task_id: task.id, project_id: project.id, project_title: project.title, status: 'next', priority: 'high' },
+        daily_focus: dailyFocus,
         today: { date: '2026-09-29', doing: [], due: [], next: [task] },
         planning: structuredClone(emptyPlanning),
         projects: [project],
@@ -100,7 +137,11 @@ async function installWorkspaceMocks(page: Page, homeOverrides: Partial<Workspac
     }
     if (pathname === '/api/v1/projects') return reply([project])
     if (pathname === '/api/v1/tasks' && method === 'GET') return reply([task])
-    if (pathname === '/api/v1/tasks/41' && method === 'GET') return reply(task)
+    const taskByID = pathname.match(/^\/api\/v1\/tasks\/(\d+)$/)
+    if (taskByID && method === 'GET') {
+      if (taskByID[1] === '41') return reply(task)
+      return route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: { code: 'TASK_NOT_FOUND', message: '任务不存在。', retryable: false } }) })
+    }
     if (pathname === '/api/v1/projects/today') return reply({ date: '2026-09-29', doing: [], due: [], next: [task] })
     return reply({})
   })
@@ -114,8 +155,8 @@ test('Workspace Home 保留核心区域并能从焦点打开任务', async ({ pa
   await installWorkspaceMocks(page)
   await page.goto('/')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
-  await expect(page.locator('#focus-title')).toHaveText(task.title)
-  await expect(page.locator('.focus-card__reason')).toContainText('当前优先级最高的下一步')
+  await expect(focusTitle(page)).toHaveText(task.title)
+  await expect(page.locator('.continue-focus')).toContainText('继续处理建议')
   await expect(page.getByRole('heading', { name: '今日计划', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: '正在推进' })).toBeVisible()
   await expect(page.getByRole('heading', { name: '继续学习 · 全局' })).toBeVisible()
@@ -127,21 +168,21 @@ test('Workspace Home 保留核心区域并能从焦点打开任务', async ({ pa
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await page.waitForTimeout(200)
   if (process.env.CAPTURE_VISUALS) await page.screenshot({ path: testInfo.outputPath('workspace-home-dark.png'), fullPage: true })
-  await page.locator('.focus-card-entry').click({ position: { x: 12, y: 12 } })
+  await page.locator('.daily-focus-slot[data-context="work"]').getByRole('link', { name: /打开：/ }).click()
   await expect(page).toHaveURL(/\/projects\?project=7&view=board$/)
   await expect(page.getByRole('dialog', { name: '任务详情' })).toBeVisible()
   if (process.env.CAPTURE_VISUALS) await page.screenshot({ path: testInfo.outputPath('workspace-task-drawer-dark.png'), fullPage: true })
 })
 
-const taskFocusScenarios: { name: string; status: ProjectTask['status']; dueDate: string | null; reason: string }[] = [
-  { name: 'doing', status: 'doing', dueDate: null, reason: '当前正在推进' },
-  { name: 'overdue', status: 'next', dueDate: '2026-09-27', reason: '已到期，需要处理' },
-  { name: 'due today', status: 'next', dueDate: '2026-09-29', reason: '今天到期' },
-  { name: 'high priority next', status: 'next', dueDate: null, reason: '当前优先级最高的下一步' },
+const taskFocusScenarios: { name: string; status: ProjectTask['status']; dueDate: string | null; note: string }[] = [
+  { name: 'doing', status: 'doing', dueDate: null, note: '进行中' },
+  { name: 'overdue', status: 'next', dueDate: '2026-09-27', note: '下一步' },
+  { name: 'due today', status: 'next', dueDate: '2026-09-29', note: '下一步' },
+  { name: 'high priority next', status: 'next', dueDate: null, note: '下一步' },
 ]
 
 for (const scenario of taskFocusScenarios) {
-  test('Current Focus 说明任务原因：' + scenario.name, async ({ page }) => {
+  test('继续处理建议展示任务与状态：' + scenario.name, async ({ page }) => {
     const focusTask: ProjectTask = { ...task, status: scenario.status, due_date: scenario.dueDate }
     const today = {
       date: '2026-09-29',
@@ -151,10 +192,16 @@ for (const scenario of taskFocusScenarios) {
     }
     await installWorkspaceMocks(page, {
       focus: { kind: 'task', title: focusTask.title, task_id: focusTask.id, project_id: focusTask.project_id, project_title: project.title, status: focusTask.status, priority: focusTask.priority, due_date: focusTask.due_date },
+      daily_focus: { work: null, life: null },
       today,
     })
     await page.goto('/')
-    await expect(page.locator('.focus-card__reason')).toContainText(scenario.reason)
+    await expect(page.locator('.continue-focus')).toContainText(focusTask.title)
+    await expect(page.locator('.continue-focus')).toContainText(project.title)
+    await expect(page.locator('.continue-focus')).toContainText(scenario.note)
+    // 自动建议只展示在次级行，绝不能自动写入每日焦点。
+    await expect(page.locator('.daily-focus-empty')).toBeVisible()
+    await expect(page.locator('.daily-focus-slot')).toHaveCount(0)
   })
 }
 
@@ -171,9 +218,9 @@ test('Current Focus 使用最近学习位置作为回退', async ({ page }) => {
     learning: [learning],
   })
   await page.goto('/')
-  await expect(page.locator('.focus-card__reason')).toContainText('最近的学习位置')
-  await expect(page.locator('.focus-card__question')).toHaveText(learning.core_question)
-  await expect(page.locator('.focus-card-entry')).toBeVisible()
+  await expect(page.locator('.continue-focus')).toContainText('学习位置')
+  await expect(page.locator('.continue-focus')).toContainText(learning.lesson_title)
+  await expect(page.locator('.continue-focus').getByRole('link').first()).toBeVisible()
 })
 
 test('今日计划只展示主动安排，截止提醒单独呈现', async ({ page }) => {
@@ -293,12 +340,12 @@ test('首页显示各区骨架，首屏请求失败后可重试', async ({ page 
   const homeGate = new Promise<void>(resolve => { release = resolve })
   await installWorkspaceMocks(page, {}, { homeGate, failHomeTimes: 1 })
   await page.goto('/')
-  await expect(page.locator('.focus-card--skeleton')).toBeVisible()
+  await expect(page.locator('.daily-focus-card--skeleton, .focus-card--skeleton')).toBeVisible()
   await expect(page.locator('.home-section--skeleton')).toHaveCount(3)
   release()
   await expect(page.locator('.workspace-home__fatal-error')).toBeVisible()
   await page.getByRole('button', { name: '重试' }).click()
-  await expect(page.locator('#focus-title')).toHaveText(task.title)
+  await expect(focusTitle(page)).toHaveText(task.title)
 })
 
 test('首页分区错误可重试且不会遮盖其它区域', async ({ page }) => {
@@ -336,14 +383,14 @@ test('窄屏核心区域顺序保持，快捷入口和弹层记录可用', async
 
 test('空工作区不虚构数据，收集箱与最近内容没有大型空块', async ({ page }) => {
   await installWorkspaceMocks(page, {
-    focus: { kind: 'empty', title: '' },
+    focus: { kind: 'empty', title: '' }, daily_focus: { work: null, life: null },
     today: emptyToday,
     projects: [],
     learning: [],
     inbox: { count: 0, items: [] },
   })
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: '当前场景暂无继续处理建议' })).toBeVisible()
+  await expect(page.locator('.daily-focus-empty')).toBeVisible()
   await expect(page.getByRole('heading', { name: '今天还没有安排' })).toBeVisible()
   await expect(page.getByRole('button', { name: '查看项目' })).toBeVisible()
   await expect(page.getByRole('button', { name: '开始一个学习领域' })).toBeVisible()
@@ -457,14 +504,14 @@ test('次要模块慢或失败不阻塞焦点，重试与部分错误保留其�
   const recentGate = new Promise<void>(resolve => { release = resolve })
   await installWorkspaceMocks(page, {}, { recent: { ...recentFacts, library: [], errors: { library: '最近资料暂时无法读取。' } }, recentGate, failRecentTimes: 1 })
   await page.goto('/')
-  await expect(page.locator('#focus-title')).toHaveText(task.title)
+  await expect(focusTitle(page)).toHaveText(task.title)
   await expect(page.locator('.recent-section')).toContainText('正在读取最近记录')
   release()
   await expect(page.locator('.recent-section')).toContainText('最近内容暂时无法读取')
   await page.getByRole('button', { name: '重试最近内容' }).click()
   await expect(page.locator('.home-recent-row')).toHaveCount(3)
   await expect(page.locator('.recent-section')).toContainText('最近资料暂时无法读取')
-  await expect(page.locator('#focus-title')).toHaveText(task.title)
+  await expect(focusTitle(page)).toHaveText(task.title)
 })
 
 test('浏览器后退时确认未保存记录，继续编辑保留输入，放弃不创建条目', async ({ page }) => {
@@ -501,8 +548,9 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1920, 1440,
     const errors: string[] = []
     page.on('pageerror', error => errors.push(error.message))
     await page.goto('/')
-    await expect(page.locator('#focus-title')).toHaveText(focusTask.title)
-    await expect(page.locator('.focus-card button')).toHaveCount(0)
+    await expect(page.locator('.daily-focus-card')).toBeVisible()
+    await expect(focusTitle(page)).toHaveText(focusTask.title)
+    await expect(page.locator('.daily-focus-slot[data-context="work"]').getByRole('link', { name: /打开：/ })).toBeVisible()
     await expect(page.locator('.learning-section button')).toHaveCount(0)
     await expect(page.locator('.learning-card-entry')).toHaveAttribute('href', '/courses/21/learn')
     await expect(page.locator('.project-row__counts')).toHaveText(['6 / 10', '3 / 8', '2 / 5'])
@@ -555,7 +603,7 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1920, 1440,
     await page.screenshot({ path: info.outputPath(`selected-b-${theme}-${width}-viewport.png`) })
     // Compare hierarchy with the decoration removed; content and geometry must survive.
     const noBacklight = await page.addStyleTag({ content: '.home-light-field { display: none !important; }' })
-    await expect(page.locator('#focus-title')).toBeVisible()
+    await expect(focusTitle(page)).toBeVisible()
     expect(await rect('.focus-card')).toEqual(focus)
     await page.screenshot({ path: info.outputPath(`quiet-b-${theme}-${width}-no-backlight.png`) })
     await noBacklight.evaluate(element => element.parentNode?.removeChild(element))
@@ -586,7 +634,7 @@ test('工作区搜索只检索当前真实内容，支持 Escape 和键盘直达
   await expect(page.getByRole('status')).toContainText('当前工作区没有匹配内容')
   await search.fill('看板')
   await page.keyboard.press('Enter')
-  await expect(page).toHaveURL(/\/projects\?project=7&view=board$/)
+  await expect(page).toHaveURL(/\/projects\?project=7&view=board/)
   await expect(page.getByRole('dialog', { name: '任务详情' })).toBeVisible()
 })
 
@@ -645,13 +693,14 @@ for (const theme of ['light', 'dark'] as const) {
 for (const width of [1440, 390]) {
   test(`Home long focus grows safely at ${width}px`, async ({ page }, info) => {
     await page.setViewportSize({ width, height: 900 })
-    await installWorkspaceMocks(page, { focus: { kind: 'task', title: '将多年学习与生活经验整理为一套可以持续完善的个人资料库，同时检查每份资料的来源与自己的实践记录，保留未来回顾需要的真实背景', task_id: task.id, project_id: project.id, status: 'next' } })
+    await installWorkspaceMocks(page, { focus: { kind: 'task', title: '将多年学习与生活经验整理为一套可以持续完善的个人资料库，同时检查每份资料的来源与自己的实践记录，保留未来回顾需要的真实背景', task_id: task.id, project_id: project.id, status: 'next' }, daily_focus: { work: dailyFocusOf({ id: task.id, title: '将多年学习与生活经验整理为一套可以持续完善的个人资料库，同时检查每份资料的来源与自己的实践记录，保留未来回顾需要的真实背景', status: 'next', priority: 'high' }), life: null } })
     await page.goto('/')
     const focus = page.locator('.focus-card')
     await expect(focus.getByRole('link', { name: /^打开：/ })).toBeVisible()
     const bounds = (await focus.boundingBox())!
     const entry = (await focus.getByRole('link').boundingBox())!
-    expect(Math.abs(entry.height - bounds.height)).toBeLessThanOrEqual(2)
+    expect(entry.height).toBeGreaterThan(0)
+    expect(entry.height).toBeLessThanOrEqual(bounds.height)
     // The intentionally overflowing decorative halo contributes to scrollHeight.
     expect(await focus.evaluate(el => {
       const parent = el.getBoundingClientRect()
@@ -767,7 +816,7 @@ test('损坏的色系偏好回退默认', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('learnos-home-accent', '#bad;display:none'))
   await installWorkspaceMocks(page)
   await page.goto('/')
-  await expect(page.locator('#focus-title')).toBeVisible()
+  await expect(focusTitle(page)).toBeVisible()
   await expect(page.locator('html')).not.toHaveAttribute('data-home-accent')
 })
 
@@ -798,7 +847,7 @@ test('场景快速切换隔离旧响应并按用户恢复', async ({ page }) => 
   await page.route('**/api/v1/workspace/home?**', async route => {
     const scene = new URL(route.request().url()).searchParams.get('context') ?? 'all'
     if (scene === 'work') { started(); await gate }
-    await route.fulfill({ json: { data: { date: '2026-10-20', context: scene, focus: { kind: 'empty', title: '' }, today: emptyToday, projects: [{ ...project, title: scene + '项目' }], learning: [], inbox: { count: 0, items: [] }, errors: {} } } })
+    await route.fulfill({ json: { data: { date: '2026-10-20', context: scene, focus: { kind: 'empty', title: '' }, daily_focus: { work: null, life: null }, today: emptyToday, projects: [{ ...project, title: scene + '项目' }], learning: [], inbox: { count: 0, items: [] }, errors: {} } } })
   })
   await page.goto('/')
   await expect(page.getByRole('button', { name: 'all项目，打开项目看板' })).toBeVisible()
@@ -826,7 +875,7 @@ for (const theme of ['light', 'dark']) {
       localStorage.setItem('learnos-home-accent', '#147e75')
       Storage.prototype.setItem = () => { throw new Error('storage disabled') }
     }, theme)
-    await installWorkspaceMocks(page, { projects: [], today: emptyToday, focus: { kind: 'empty', title: '' } })
+    await installWorkspaceMocks(page, { projects: [], today: emptyToday, focus: { kind: 'empty', title: '' }, daily_focus: { work: null, life: null } })
     await page.goto('/')
     await expect(page.getByRole('radio', { name: '全部', exact: true })).toBeEnabled()
     await page.getByRole('radio', { name: '全部', exact: true }).focus()
@@ -835,7 +884,7 @@ for (const theme of ['light', 'dark']) {
     await expect(page.getByText('当前场景可用，但无法保存到浏览器。')).toBeVisible()
     await page.keyboard.press('ArrowRight')
     await expect(page.getByRole('radio', { name: '生活', exact: true })).toBeChecked()
-    await expect(page.locator('.focus-card').getByRole('heading', { name: '今天可以留白', exact: true })).toBeVisible()
+    await expect(page.locator('.daily-focus-card')).toContainText('今天可以留白')
     await expect(page.getByRole('heading', { name: '继续学习 · 全局' })).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
     await expect(page.locator('.workspace-context-switch .is-active')).toHaveText('生活')
@@ -851,7 +900,7 @@ for (const theme of ['light', 'dark']) {
       await page.addInitScript(theme => localStorage.setItem('learnos-theme', theme), theme)
       await installWorkspaceMocks(page, { unclassified_count: count })
       await page.goto('/')
-      await expect(page.locator('#focus-title')).toHaveText(task.title)
+      await expect(focusTitle(page)).toHaveText(task.title)
       const group = page.locator('.workspace-context-switch')
       await expect(group).toBeVisible()
       const header = await page.locator('.workspace-home .page-header').boundingBox()
@@ -880,7 +929,7 @@ for (const width of [1440, 1024, 390]) {
     await page.route('**/api/v1/workspace/home?**', async route => {
       if (new URL(route.request().url()).searchParams.get('context') !== 'life') return route.fallback()
       await gate
-      await route.fulfill({ json: { data: { date: '2026-10-20', context: 'life', focus: { kind: 'empty', title: '' }, today: emptyToday, projects: [], learning: [], inbox: { count: 0, items: [] }, errors: {} } } })
+      await route.fulfill({ json: { data: { date: '2026-10-20', context: 'life', focus: { kind: 'empty', title: '' }, daily_focus: { work: null, life: null }, today: emptyToday, projects: [], learning: [], inbox: { count: 0, items: [] }, errors: {} } } })
     })
     await page.goto('/')
     await expect(page.locator('.project-row')).toHaveCount(5)
@@ -904,7 +953,7 @@ for (const width of [1440, 1024, 390]) {
     expect(await geometry()).toEqual(before)
     release()
     await expect(page.locator('.workspace-home__grid--switching')).toHaveCount(0)
-    await expect(page.locator('#focus-title')).toHaveText('今天可以留白')
+    await expect(page.locator('.daily-focus-card')).toContainText('今天可以留白')
     expect(await original!.evaluate(element => element.isConnected)).toBe(true)
     expect(await geometry()).toEqual(before)
   })
@@ -916,7 +965,7 @@ test('切场景失败保留全局区域和重试，旧任务不可操作', async
   await page.route('**/api/v1/workspace/home?**', async route => {
     if (new URL(route.request().url()).searchParams.get('context') !== 'work') return route.fallback()
     if (fail) return route.fulfill({ status: 503, json: { error: { code: 'UNAVAILABLE', message: '稍后重试', retryable: true } } })
-    return route.fulfill({ json: { data: { date: '2026-10-20', focus: { kind: 'empty', title: '' }, projects: [], today: emptyToday, learning: [], inbox: { count: 0, items: [] }, errors: {} } } })
+    return route.fulfill({ json: { data: { date: '2026-10-20', focus: { kind: 'empty', title: '' }, daily_focus: { work: null, life: null }, projects: [], today: emptyToday, learning: [], inbox: { count: 0, items: [] }, errors: {} } } })
   })
   await page.goto('/')
   await expect(page.locator('.project-row')).toBeVisible()

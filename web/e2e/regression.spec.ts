@@ -150,6 +150,7 @@ async function installAPIMocks(page: Page): Promise<MockState> {
     if (path === '/api/v1/courses') return json(route, { data: courses })
     if (path === '/api/v1/workspace/home') return json(route, { data: {
       date: '2026-09-29', focus: { kind: 'learning', title: currentLesson.lesson.title, course_id: 1, course_name: courses[0].name, unit_title: currentLesson.unit.title, lesson_id: currentLesson.lesson.id, current_level: 'understand', cognitive_status: 'stable' },
+      daily_focus: { work: null, life: null },
       today: { date: '2026-09-29', doing: [], due: [], next: [] }, projects: [],
       learning: [{ course_id: 1, course_name: courses[0].name, unit_title: currentLesson.unit.title, lesson_id: currentLesson.lesson.id, lesson_title: currentLesson.lesson.title, core_question: currentLesson.lesson.core_question, current_level: 'understand', cognitive_status: 'stable', last_learning_at: now, has_current_lesson: true, updated_at: now }],
       inbox: { count: 0, items: [] }, errors: {},
@@ -432,6 +433,10 @@ test('移动端导航可以打开、关闭和切换页面', async ({ page }) => 
 
   await page.getByLabel('打开导航').click()
   await expect(drawer).toBeVisible()
+  // Overlay click can be intercepted while the drawer transition is still running.
+  await drawer.evaluate(el => Promise.all(el.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => undefined))).then(() => undefined))
+  await page.locator('.el-overlay.is-drawer').evaluate(el => Promise.all(el.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => undefined))).then(() => undefined))
+  await page.waitForTimeout(120)
   await page.locator('.el-overlay.is-drawer').click({ position: { x: 360, y: 400 } })
   await expect(drawer).toBeHidden()
   await expect(page.getByLabel('打开导航')).toBeFocused()
@@ -638,7 +643,8 @@ test('深色主题下首页和课程档案保持基础可读性', async ({ page 
   await page.goto('/')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await expect(page.getByRole('heading', { name: '今天，专注一件事' })).toBeVisible()
-  await expect(page.locator('#focus-title')).toHaveText(currentLesson.lesson.title)
+  await expect(page.locator('.continue-focus')).toContainText('学习位置')
+  await expect(page.locator('.continue-focus')).toContainText(currentLesson.lesson.title)
   if (process.env.CAPTURE_VISUALS) await page.screenshot({ path: testInfo.outputPath('dashboard-dark.png'), fullPage: true })
   await page.goto('/courses')
   await expect(page.locator('.domain-tile').first()).toBeVisible()

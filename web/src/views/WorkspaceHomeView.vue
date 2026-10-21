@@ -35,7 +35,7 @@
 
     <div v-if="loading && !home" class="workspace-home__grid workspace-home__grid--loading" aria-label="正在整理工作区" aria-busy="true">
       <div ref="focusFrame" class="focus-card-frame">
-        <section class="focus-card focus-card--skeleton" aria-label="当前旅程正在加载">
+        <section class="focus-card focus-card--skeleton daily-focus-card--skeleton" aria-label="今日焦点正在加载">
           <el-skeleton animated :rows="3" />
         </section>
       </div>
@@ -51,49 +51,33 @@
 
     <div v-else-if="home" class="workspace-home__grid" :class="{ 'workspace-home__grid--switching': isSwitching }" :aria-busy="loading">
       <span v-if="isSwitching" class="sr-only" role="status">{{ loadError || '正在切换场景…' }}</span>
-      <div class="home-focus-lane">
+      <div ref="focusLane" class="home-focus-lane" :style="focusLaneStyle">
+      <div ref="focusCluster" class="focus-cluster" :style="focusClusterStyle">
       <div ref="focusFrame" class="focus-card-frame">
-        <section ref="focusCard" class="focus-card" :inert="isSwitching" :style="{ minHeight: sceneGeometry.focus ? sceneGeometry.focus + 'px' : undefined }" aria-labelledby="focus-title">
-          <div class="focus-card__heading">
-            <span class="section-kicker"><WorkspaceIcon name="focus" />继续处理建议</span>
-            <span v-if="home.focus.kind !== 'empty'" class="focus-card__state">{{ home.focus.kind === 'task' ? taskStatusLabel(home.focus.status) : '学习位置' }}</span>
-          </div>
-          <div class="focus-card__copy">
-            <template v-if="home.focus.kind === 'task'">
-              <h2 id="focus-title">{{ home.focus.title }}</h2>
-              <p v-if="focusTask?.description" class="focus-card__description">{{ focusTask.description }}</p>
-              <p class="focus-card__reason">
-                <span>{{ focusReason }}</span>
-                <span v-if="focusUpdatedAt">最近更新 {{ relativeTime(focusUpdatedAt) }}</span>
-              </p>
-              <p class="focus-card__context">
-                <span>{{ home.focus.project_title || '项目任务' }}</span>
-                <span v-if="home.focus.priority === 'high'">高优先级</span>
-                <span v-if="focusDueLabel">{{ focusDueLabel }}</span>
-              </p>
-            </template>
-            <template v-else-if="home.focus.kind === 'learning'">
-              <p class="focus-card__context">
-                <span>{{ home.focus.course_name }}</span>
-                <span v-if="home.focus.unit_title">{{ home.focus.unit_title }}</span>
-              </p>
-              <h2 id="focus-title">{{ home.focus.title }}</h2>
-              <p v-if="focusLearning?.core_question" class="focus-card__question">{{ focusLearning.core_question }}</p>
-              <p class="focus-card__reason">
-                <span>最近的学习位置</span>
-                <span v-if="focusLearning?.last_learning_at">最近学习 {{ relativeTime(focusLearning.last_learning_at) }}</span>
-                <span v-else-if="focusLearning?.updated_at">领域更新 {{ relativeTime(focusLearning.updated_at) }}</span>
-                <span v-if="home.focus.current_level">{{ levelLabel(home.focus.current_level) }} · {{ cognitiveStatusLabel(home.focus.cognitive_status) }}</span>
-              </p>
-            </template>
-            <template v-else>
-              <h2 id="focus-title">{{ scene === 'life' ? '今天可以留白' : '当前场景暂无继续处理建议' }}</h2>
-              <p class="focus-card__reason">建议来自当前场景的已有任务，可以按自己的节奏继续。</p>
-            </template>
-          </div>
-          <RouterLink v-if="focusTarget" :to="focusTarget" class="home-card-entry focus-card-entry" :aria-label="'打开：' + home.focus.title"><span aria-hidden="true">↗</span></RouterLink>
-        </section>
-
+        <DailyFocusCard
+          class="daily-focus-card"
+          :style="focusCardStyle"
+          :scene="scene"
+          :date="currentDate"
+          :focuses="focusViews"
+          :busy="focusBusy"
+          :errors="focusErrors"
+          :conflicts="focusConflicts"
+          :load-error="home.errors.daily_focus ?? ''"
+          :switching="isSwitching"
+          @pick="openFocusPicker"
+          @clear="clearFocus"
+          @complete="completeFocus"
+          @retry="retryFocus"
+          @reload="load"
+        />
+      </div>
+      <div v-if="home.focus.kind !== 'empty'" class="continue-focus">
+        <span class="continue-focus__label">继续处理建议</span>
+        <RouterLink v-if="suggestionTarget" :to="suggestionTarget" class="continue-focus__link" :aria-label="'打开建议：' + home.focus.title">{{ home.focus.title }}</RouterLink>
+        <strong v-else class="continue-focus__link">{{ home.focus.title }}</strong>
+        <small v-if="suggestionNote" class="continue-focus__note">{{ suggestionNote }}</small>
+      </div>
       </div>
 
       <section class="home-section learning-section" aria-labelledby="learning-title">
@@ -205,22 +189,33 @@
       </nav>
     </div>
 
+    <FocusPickerDialog
+      v-model="pickerOpen"
+      :date="currentDate"
+      :context="pickerContext ?? 'work'"
+      :current="pickerFocus"
+      @saved="applyPickedFocus"
+      @conflict="load"
+    />
     <QuickCaptureDialog v-model="captureOpen" @created="captured" />
   </PageShell>
 </template>
 
 <script setup lang="ts">
 import DailyPlanPanel from '@/components/workspace/DailyPlanPanel.vue'
+import DailyFocusCard from '@/components/workspace/DailyFocusCard.vue'
+import FocusPickerDialog from '@/components/workspace/FocusPickerDialog.vue'
 import { subscribeTaskChanges } from '@/task-changes'
 import { currentUser } from '@/api/auth'
 import { readWorkspaceContext, saveWorkspaceContext, type WorkspaceContext } from '@/workspace-context'
 import PageShell from '@/components/PageShell.vue'
 import WorkspaceIcon from '@/components/WorkspaceIcon.vue'
-import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onMounted, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { APIRequestError } from '@/api/http'
 import { type InboxItem } from '@/api/inbox'
-import type { Project, ProjectTask } from '@/api/projects'
+import { emptyDailyFocus, setDailyFocus, dailyFocusTaskRoute, type DailyFocusContext, type DailyFocusView, type WorkspaceDailyFocus } from '@/api/dailyFocus'
+import { getTask, updateTask, type Project, type ProjectTask } from '@/api/projects'
 import { getWorkspaceHome, getWorkspaceRecent, type WorkspaceRecent, type WorkspaceHome, type WorkspaceLearningItem } from '@/api/workspace'
 import EmptyState from '@/components/EmptyState.vue'
 import PageHeader from '@/components/PageHeader.vue'
@@ -240,14 +235,21 @@ const contextCanPersist = ref(true)
 const contextReady = ref(false)
 let contextUserID: number | undefined
 const loadedScene = ref<WorkspaceContext>()
-const focusCard = ref<HTMLElement | null>(null)
+const focusLane = ref<HTMLElement | null>(null)
+const focusCluster = ref<HTMLElement | null>(null)
+const focusFrame = ref<HTMLElement | null>(null)
 const projectsCard = ref<HTMLElement | null>(null)
 const todayCard = ref<HTMLElement | null>(null)
-const sceneGeometry = ref({ focus: 0, projects: 0, today: 0 })
+const sceneGeometry = ref({ focus: 0, focusCluster: 0, focusLane: 0, projects: 0, today: 0 })
 function preserveSceneGeometry() {
   // Keep the space already used in this viewport; longer content can still grow.
+  // The focus lane and its card+suggestion cluster are recorded separately:
+  // a scene switch can remove the secondary suggestion row, and the reserved
+  // heights keep the learning/today/projects positions stable without shrinking.
   sceneGeometry.value = {
-    focus: Math.max(sceneGeometry.value.focus, focusCard.value?.getBoundingClientRect().height ?? 0),
+    focus: Math.max(sceneGeometry.value.focus, focusFrame.value?.getBoundingClientRect().height ?? 0),
+    focusCluster: Math.max(sceneGeometry.value.focusCluster, focusCluster.value?.getBoundingClientRect().height ?? 0),
+    focusLane: Math.max(sceneGeometry.value.focusLane, focusLane.value?.getBoundingClientRect().height ?? 0),
     projects: Math.max(sceneGeometry.value.projects, projectsCard.value?.getBoundingClientRect().height ?? 0),
     today: Math.max(sceneGeometry.value.today, todayCard.value?.getBoundingClientRect().height ?? 0),
   }
@@ -256,10 +258,11 @@ let sceneViewportWidth = 0
 function resetSceneGeometry() {
   if (sceneViewportWidth === window.innerWidth) return
   sceneViewportWidth = window.innerWidth
-  sceneGeometry.value = { focus: 0, projects: 0, today: 0 }
+  sceneGeometry.value = { focus: 0, focusCluster: 0, focusLane: 0, projects: 0, today: 0 }
 }
 watch([scene, currentDate], () => {
  if (contextUserID !== undefined) contextCanPersist.value = saveWorkspaceContext(contextUserID, scene.value)
+ resetFocusWriteState()
  preserveSceneGeometry()
  void load()
 }, { flush: 'sync' })
@@ -304,51 +307,136 @@ function projectIcon(project: Pick<Project, 'title'> & { icon?: string | null })
   const icon = project.icon?.trim()
   return icon && !/^[·•.。∙⋅…]+$/u.test(icon) ? icon : Array.from(project.title.trim())[0] || '项'
 }
-const focusTask = computed(() => {
-  const focus = home.value?.focus
-  if (focus?.kind !== 'task' || !focus.task_id) return undefined
-  const today = home.value?.today
-  return [...(home.value?.planning?.items ?? []), ...(home.value?.planning?.due_today ?? []), ...(home.value?.planning?.overdue ?? []), ...(home.value?.planning?.previous_plan ?? []), ...(today?.doing ?? []), ...(today?.due ?? []), ...(today?.next ?? [])].find(task => task.id === focus.task_id)
+// Daily focus is the user's explicit choice for each scene. It only changes
+// after the server confirms the write; failed writes keep the last confirmed
+// view (no optimistic UI) and expose a retry.
+const focusViews = ref<WorkspaceDailyFocus>(emptyDailyFocus())
+const focusBusy = reactive<Record<DailyFocusContext, boolean>>({ work: false, life: false })
+const focusErrors = reactive<Record<DailyFocusContext, string>>({ work: '', life: '' })
+const focusConflicts = reactive<Record<DailyFocusContext, boolean>>({ work: false, life: false })
+type FocusAttempt = { kind: 'clear' } | { kind: 'set'; taskID: number } | { kind: 'complete' }
+const focusAttempts = reactive<Record<DailyFocusContext, FocusAttempt | null>>({ work: null, life: null })
+const pickerContext = ref<DailyFocusContext | null>(null)
+const pickerOpen = computed({
+  get: () => pickerContext.value !== null,
+  set: value => { if (!value) pickerContext.value = null },
 })
-const focusLearning = computed(() => {
-  const focus = home.value?.focus
-  return focus?.kind === 'learning' ? home.value?.learning.find(item => item.course_id === focus.course_id) : undefined
-})
-const focusUpdatedAt = computed(() => focusTask.value?.updated_at ?? focusLearning.value?.last_learning_at ?? focusLearning.value?.updated_at ?? '')
-const focusDueLabel = computed(() => {
-  const dueDate = home.value?.focus.due_date
-  if (!dueDate) return ''
-  const days = dateDifference(dueDate, home.value?.date ?? '')
-  if (days > 0) return '逾期 ' + days + ' 天'
-  if (days === 0) return '今天到期'
-  return '到期 ' + formatShortDate(dueDate)
-})
-const focusReason = computed(() => {
-  const focus = home.value?.focus
-  if (!focus) return ''
-  if (focus.kind === 'learning') return '最近的学习位置'
-  if (focus.kind !== 'task') return ''
-  if (focus.status === 'doing') return '当前正在推进'
-  if (home.value?.planning?.items.some(task => task.id === focus.task_id)) return '今天主动安排的任务'
-  if (focus.due_date) {
-    const days = dateDifference(focus.due_date, home.value?.date ?? '')
-    if (days > 0) return '已到期，需要处理'
-    if (days === 0) return '今天到期'
+const pickerFocus = computed(() => (pickerContext.value ? focusViews.value[pickerContext.value] : null))
+const focusCardStyle = computed(() => (sceneGeometry.value.focus ? { minHeight: sceneGeometry.value.focus + 'px' } : {}))
+const focusClusterStyle = computed(() => (sceneGeometry.value.focusCluster ? { minHeight: sceneGeometry.value.focusCluster + 'px' } : {}))
+const focusLaneStyle = computed(() => (sceneGeometry.value.focusLane ? { minHeight: sceneGeometry.value.focusLane + 'px' } : {}))
+function resetFocusWriteState() {
+  for (const context of ['work', 'life'] as const) {
+    focusBusy[context] = false
+    focusErrors[context] = ''
+    focusConflicts[context] = false
+    focusAttempts[context] = null
   }
-  if (focus.status === 'next' && focus.priority === 'high') return '当前优先级最高的下一步'
-  return '当前可继续处理的任务'
-})
+  pickerContext.value = null
+}
+function applyDailyFocus(source?: WorkspaceDailyFocus | null) {
+  focusViews.value = { work: source?.work ?? null, life: source?.life ?? null }
+}
+function focusScopeKey() { return `${scene.value}:${currentDate.value}` }
+function openFocusPicker(context: DailyFocusContext) {
+  focusErrors[context] = ''
+  focusConflicts[context] = false
+  pickerContext.value = context
+}
+function applyPickedFocus(focus: DailyFocusView) {
+  focusViews.value = { ...focusViews.value, [focus.context]: focus }
+  focusErrors[focus.context] = ''
+  focusConflicts[focus.context] = false
+  focusAttempts[focus.context] = null
+  pickerContext.value = null
+}
+function findHomeTask(taskID: number): ProjectTask | undefined {
+  const data = home.value
+  if (!data) return undefined
+  const pools = [data.planning?.items, data.planning?.due_today, data.planning?.overdue, data.planning?.previous_plan, data.today?.doing, data.today?.due, data.today?.next, ...data.projects.map(project => project.tasks)]
+  for (const pool of pools) {
+    const match = pool?.find(task => task.id === taskID)
+    if (match) return match
+  }
+  return undefined
+}
+async function resolveFocusTask(focus: DailyFocusView): Promise<ProjectTask> {
+  if (!focus.task_id) throw new APIRequestError({ code: 'DAILY_FOCUS_TASK_INVALID', message: '焦点任务已不存在，请刷新后重试。', retryable: true })
+  return findHomeTask(focus.task_id) ?? await getTask(focus.task_id)
+}
+async function runFocusAttempt(context: DailyFocusContext, attempt: FocusAttempt) {
+  if (focusBusy[context]) return
+  const scope = focusScopeKey()
+  focusBusy[context] = true
+  focusErrors[context] = ''
+  focusConflicts[context] = false
+  focusAttempts[context] = attempt
+  try {
+    if (attempt.kind === 'complete') {
+      const focus = focusViews.value[context]
+      if (!focus?.task_id) return
+      // The focus view carries the task's updated_at; only older payloads need
+      // the extra lookup, so the normal path never issues an extra GET.
+      const expectedUpdatedAt = focus.task_updated_at ?? (await resolveFocusTask(focus)).updated_at
+      const saved = await updateTask(focus.task_id, { status: 'done', expected_updated_at: expectedUpdatedAt })
+      if (disposed || scope !== focusScopeKey()) return
+      focusViews.value = {
+        ...focusViews.value,
+        [context]: { ...focus, state: 'completed', task_status: 'done', completed_at: saved.completed_at ?? new Date().toISOString(), task_updated_at: saved.updated_at, updated_at: saved.updated_at },
+      }
+      focusAttempts[context] = null
+      return
+    }
+    const current = focusViews.value[context]
+    const result = await setDailyFocus(currentDate.value, context, attempt.kind === 'set' ? attempt.taskID : null, current?.revision ?? 0)
+    if (disposed || scope !== focusScopeKey()) return
+    focusViews.value = { ...focusViews.value, [context]: result.focus }
+    focusAttempts[context] = null
+  } catch (reason) {
+    if (disposed || scope !== focusScopeKey()) return
+    if (reason instanceof APIRequestError && reason.status === 409) {
+      focusConflicts[context] = true
+      focusErrors[context] = '内容刚刚在别处更新，已重新加载最新状态，请重试。'
+      void load()
+    } else {
+      focusErrors[context] = safeMessage(reason, attempt.kind === 'complete' ? '任务没有完成，焦点保持原状态。' : '焦点没有保存，仍保持之前确认的状态。')
+    }
+  } finally {
+    focusBusy[context] = false
+  }
+}
+function clearFocus(context: DailyFocusContext) { void runFocusAttempt(context, { kind: 'clear' }) }
+function completeFocus(focus: DailyFocusView) { void runFocusAttempt(focus.context, { kind: 'complete' }) }
+function retryFocus(context: DailyFocusContext) {
+  const attempt = focusAttempts[context]
+  if (attempt) void runFocusAttempt(context, attempt)
+}
 
 function projectTaskTotal(project: Project) { return Math.max(0, project.open_task_count + project.done_task_count) }
 const searchResults = computed<HomeSearchResult[]>(() => {
   const query = homeSearch.value.trim().toLocaleLowerCase()
   if (!query || !home.value || isSwitching.value) return []
   const entries: HomeSearchResult[] = []
-  const focus = home.value.focus
-  if (focus.kind !== 'empty') entries.push({ key: 'focus', title: focus.title, group: '当前重点', open: continueFocus })
+  for (const context of ['work', 'life'] as const) {
+    const focus = focusViews.value[context]
+    if (!focus?.title) continue
+    entries.push({
+      key: 'daily-focus-' + context,
+      title: focus.title,
+      group: '今日焦点',
+      open: () => {
+        const target = dailyFocusTaskRoute(focus)
+        if (target) void router.push(target)
+        else openFocusPicker(context)
+      },
+    })
+  }
+  const suggestion = home.value.focus
+  if (suggestion.kind !== 'empty') entries.push({ key: 'suggestion', title: suggestion.title, group: '继续处理建议', open: openSuggestion })
+  const focusTasks = new Set(Object.values(focusViews.value).filter((focus): focus is DailyFocusView => focus !== null).map(focus => focus.task_id))
   const tasks = [...(home.value.planning?.items ?? []), ...(home.value.planning?.due_today ?? []), ...(home.value.planning?.overdue ?? []), ...(home.value.planning?.previous_plan ?? []), ...(home.value.today?.doing ?? []), ...(home.value.today?.due ?? []), ...(home.value.today?.next ?? [])]
   for (const task of new Map(tasks.map(task => [task.id, task])).values()) {
-    if (focus.kind === 'task' && task.id === focus.task_id) continue
+    if (focusTasks.has(task.id)) continue
     entries.push({ key: 'task-' + task.id, title: task.title, group: '任务', open: () => openTask(task) })
   }
   for (const project of home.value.projects) entries.push({ key: 'project-' + project.id, title: project.title, group: '项目', open: () => openProject(project.id) })
@@ -376,16 +464,6 @@ function levelLabel(level: string) {
 }
 function cognitiveStatusLabel(status?: string) {
   return ({ unknown: '尚无证据', developing: '发展中', stable: '稳定', needs_review: '待复核' } as Record<string, string>)[status ?? ''] ?? '尚无证据'
-}
-function dateOrdinal(value: string) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
-  if (!match) return Number.NaN
-  return Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
-}
-function dateDifference(from: string, to: string) {
-  const fromOrdinal = dateOrdinal(from)
-  const toOrdinal = dateOrdinal(to)
-  return Number.isFinite(fromOrdinal) && Number.isFinite(toOrdinal) ? Math.round((toOrdinal - fromOrdinal) / 86_400_000) : 0
 }
 function relativeTime(value: string) {
   const timestamp = new Date(value).getTime()
@@ -415,7 +493,12 @@ async function load() {
     const requestedScene = scene.value
     const requestedDate = currentDate.value
     const result = await getWorkspaceHome(requestedDate, controller.signal, requestedScene)
-    if (!disposed && controller === homeRequest && requestedScene === scene.value && requestedDate === currentDate.value) { home.value = result; loadedScene.value = requestedScene; loadedRequestDate.value = requestedDate }
+    if (!disposed && controller === homeRequest && requestedScene === scene.value && requestedDate === currentDate.value) {
+      home.value = result
+      applyDailyFocus(result.daily_focus)
+      loadedScene.value = requestedScene
+      loadedRequestDate.value = requestedDate
+    }
   } catch (reason) {
     if (!disposed && !controller.signal.aborted) loadError.value = safeMessage(reason, '工作区暂时无法加载，请检查连接后重试。')
   } finally {
@@ -455,17 +538,23 @@ function openTask(task: ProjectTask) {
 function openProject(projectID: number) {
   router.push({ path: '/projects', query: { project: String(projectID), view: 'board' } })
 }
-const focusTarget = computed(() => {
+// The former auto-suggestion is secondary now: it never writes daily focus.
+const suggestionTarget = computed(() => {
   const focus = home.value?.focus
   if (focus?.kind === 'task' && focus.task_id) return { path: '/projects', query: { project: String(focus.project_id ?? 'all'), view: 'board', task: String(focus.task_id) } }
   if (focus?.kind === 'learning' && focus.course_id) return focus.lesson_id ? '/courses/' + focus.course_id + '/learn' : '/courses/' + focus.course_id + '/map'
   return null
 })
-function continueFocus() { if (focusTarget.value) void router.push(focusTarget.value) }
+const suggestionNote = computed(() => {
+  const focus = home.value?.focus
+  if (!focus || focus.kind === 'empty') return ''
+  if (focus.kind === 'learning') return ['学习位置', focus.course_name, focus.unit_title].filter(Boolean).join(' · ')
+  return [focus.project_title || '项目任务', taskStatusLabel(focus.status)].filter(Boolean).join(' · ')
+})
+function openSuggestion() { if (suggestionTarget.value) void router.push(suggestionTarget.value) }
 function learningTarget(item: WorkspaceLearningItem) { return '/courses/' + item.course_id + (item.has_current_lesson ? '/learn' : '/map') }
 function openLearning(item: WorkspaceLearningItem) { void router.push(learningTarget(item)) }
 // Share the actual card axis with the header, including constrained reading widths.
-const focusFrame = ref<HTMLElement | null>(null)
 let axisObserver: ResizeObserver | undefined
 let axisShell: HTMLElement | null = null
 function updateNavigationAxis() {
@@ -588,20 +677,13 @@ onBeforeUnmount(() => {
 .home-focus-lane, .home-project-lane { display: flex; flex-direction: column; gap: 22px; min-width: 0; grid-row: 1; }
 .home-focus-lane { grid-column: 2; }
 .home-project-lane { grid-column: 1; }
+/* Card + secondary suggestion row form one block so a scene switch that hides
+   the suggestion cannot shrink the lane or move later sections upward. */
+.focus-cluster { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
 .focus-card-frame { position: relative; min-width: 0; }
 .focus-card, .home-section { position: relative; min-width: 0; border: 1px solid var(--home-edge); border-radius: 16px; background: linear-gradient(120deg,var(--home-glass-glint),transparent 26%,transparent 76%,var(--home-glass-shade)),linear-gradient(145deg,var(--home-sheen),transparent 42%),var(--home-panel); background-clip: padding-box; box-shadow: var(--home-panel-inset); backdrop-filter: var(--home-glass-filter); -webkit-backdrop-filter: var(--home-glass-filter); transition: background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease; }
 .focus-card { min-height: 360px; padding: 28px; display: flex; flex-direction: column; gap: 24px; }
 .focus-card { background: linear-gradient(120deg,var(--home-glass-glint),transparent 26%,transparent 76%,var(--home-glass-shade)),linear-gradient(180deg,var(--home-focus-top) 0%,var(--home-focus-top) 52%,var(--home-focus-mid) 82%,var(--home-focus-bottom) 100%); }
-.focus-card__heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
-.section-kicker { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 600; }
-.section-kicker svg { width: 22px; height: 22px; color: var(--home-secondary); }
-.focus-card__state { margin-right: 26px; font-size: 12px; color: var(--home-muted); }
-.focus-card__copy { min-width: 0; flex: 1; }
-.focus-card h2 { margin: 0; font-size: 36px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
-.focus-card__description, .focus-card__question { margin: 12px 0 0; font-size: 15px; line-height: 1.8; color: var(--home-secondary); overflow-wrap: anywhere; }
-.focus-card__reason { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 12px 0 0; color: var(--home-muted); font-size: 13px; line-height: 1.75; }
-.focus-card__context { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 0; color: var(--home-secondary); font-size: 12px; }
-.focus-card__context span { border: 1px solid var(--home-edge); border-radius: 999px; padding: 3px 10px; background: var(--home-tint); }
 .home-section { padding: 26px; }
 .projects-section, .today-section { min-height:300px; }
 .home-section__icon { position: absolute; top: 29px; left: 26px; width: 21px; height: 21px; color: var(--home-secondary); }
@@ -615,7 +697,7 @@ onBeforeUnmount(() => {
 .home-section :deep(.empty-state .el-button) { background: var(--home-tint); border-color: var(--home-edge); color: var(--home-link); border-radius: 999px; }
 @media (hover: hover) {
   .focus-card:hover, .home-section:hover { border-color: var(--home-reflection); background-color: var(--home-panel-hover); box-shadow: var(--home-panel-hover-shadow); }
-  .focus-card:hover .section-kicker, .home-section:hover :deep(.section-header h2) { color: var(--home-link); }
+  .home-section:hover :deep(.section-header h2) { color: var(--home-link); }
 }
 .projects-section, .today-section { flex: none; }
 .home-project-grid { display: grid; }
@@ -640,6 +722,14 @@ onBeforeUnmount(() => {
 .home-card-entry > span { position: absolute; top: 26px; right: 26px; font-size: 20px; line-height: 24px; }
 .home-card-entry:focus-visible { outline: 2px solid var(--home-link); outline-offset: 4px; }
 .focus-card:focus-within, .home-section:focus-within { border-color: var(--home-reflection); background-color: var(--home-panel-hover); box-shadow: var(--home-panel-hover-shadow); }
+.daily-focus-card--skeleton { min-height: 320px; }
+/* Secondary suggestion row: the old automatic focus, demoted below the card. */
+.continue-focus { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 12px; margin-top: -6px; padding: 12px 4px 0; border-top: 1px solid var(--home-edge); color: var(--home-muted); font-size: 13px; line-height: 1.7; }
+.continue-focus__label { flex: none; font-size: 12px; color: var(--home-muted); }
+.continue-focus__link { min-width: 0; color: var(--home-secondary); font-size: 14px; font-weight: 500; text-decoration: none; overflow-wrap: anywhere; }
+a.continue-focus__link:hover { color: var(--home-link); text-decoration: underline; text-underline-offset: 3px; }
+a.continue-focus__link:focus-visible { outline: 2px solid var(--home-link); outline-offset: 3px; border-radius: 4px; }
+.continue-focus__note { color: var(--home-muted); font-size: 12px; }
 
 
 .learning-row__text { display: flex; flex-direction: column; align-items: stretch; gap: 14px; min-width: 0; }
@@ -711,12 +801,15 @@ onBeforeUnmount(() => {
   .workspace-home :deep(.page-header__description) { font-size: 13px; margin-top: 10px; }
   .workspace-home__grid { display: flex; flex-direction: column; gap: 22px; }
   .home-focus-lane, .home-project-lane { display: contents; }
+  .focus-cluster { order: 1; }
   .focus-card-frame { order: 1; }
   .today-section { order: 2; }
   .learning-section { order: 3; }
   .projects-section { order: 4; }
   .recent-section { order: 5; }
   .home-shortcuts { order: 6; gap: 10px 18px; }
+  .continue-focus { order: 2; margin-top: 0; padding-top: 10px; }
+  .continue-focus__link { display: inline-flex; align-items: center; min-height: 44px; }
   .focus-card { min-height: 0; padding: 24px; gap: 24px; }
   .focus-card h2 { font-size: 26px; }
   .home-section { padding: 24px; }
