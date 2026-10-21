@@ -11,7 +11,7 @@
 
 ## 当前首页收尾与复用规范
 
-以根目录[DESIGN.md的LearnOS implementation rules](../DESIGN.md#learnos-implementation-rules--首页样板与后续逐页适配)为本轮落地规范。已成熟材质移入现有workspace-theme.css的可选--console-*变量，首页先采用；旧业务页的全局映射不变。普通/重点/弱化表面、文本三级、边缘、hover和32px图标容器共用语义，圆角/间距/按钮复用现有tokens及公共组件。首页局部主光不推广到普通表面。
+以根目录[design.md的落地语义表](../design.md#8-实现入口与维护)为本轮落地规范。已成熟材质移入现有workspace-theme.css的可选--console-*变量，首页先采用；旧业务页的全局映射不变。普通/重点/弱化表面、文本三级、边缘、hover和32px图标容器共用语义，圆角/间距/按钮复用现有tokens及公共组件。首页局部主光不推广到普通表面。
 
 桌面第二排通过自然Grid拉伸等高，不设置高度；单栏恢复自然占高。第一排去除主卡260px最小高度并收紧上下padding/gap，目标约230–240px；长内容仍可增长。今天为三个只读统计分组（23px数字/12px说明），逾期沿用既有日期逻辑判断，只对到期统计数字使用语义红，不改变总数。主光收窄横向、加高椭圆并降低中心alpha，让两端和上下柔和衰减。项目图标保留原值；空/占位圆点改为名称首字。后续验收见WORKSPACE_HOME_FINAL_POLISH.md。
 
@@ -45,7 +45,7 @@
 
 ## 当前规范与共享页面基础
 
-根目录 [DESIGN.md](../DESIGN.md) 是当前视觉规范：Wope 深紫画布、玻璃表面、紫色强调、中文优先。`workspace-theme.css` 是颜色、几何、字体和 Element Plus 映射的唯一 token 来源；旧变量通过别名兼容，不重复定义第二套主题。实施说明见 [DESIGN_IMPLEMENTATION.md](DESIGN_IMPLEMENTATION.md)。
+根目录 [design.md](../design.md) 是当前视觉规范：透明玻璃、分布式自然环境光、深浅主题与自定义色系、统一顶部导航。`workspace-theme.css` 是颜色、几何、字体和 Element Plus 映射的唯一 token 来源；旧变量通过别名兼容，不重复定义第二套主题。实施说明见 [DESIGN_IMPLEMENTATION.md](DESIGN_IMPLEMENTATION.md)。
 
 PageShell standard 最大 1248px、wide 使用可用宽度、reading 正文 760px、lesson 内容 800px。AppShell 统一 32/24/16px 外边距；PageHeader 与主体同基线，页面标题 28px，普通控件 36px，窄屏关键按钮至少 44px。Wiki 外挂目录，课程固定输入与正文共享宽度；Markdown 的 h1 仅在渲染时调整，原文不变。
 
