@@ -16,6 +16,16 @@
         </button>
       </div>
     </fieldset>
+    <fieldset class="appearance-section">
+      <legend>环境光</legend>
+      <div class="appearance-modes">
+        <button type="button" :aria-pressed="ambientPreference === 'auto'" @click="setAmbientPreference('auto')">自动</button>
+        <button type="button" :aria-pressed="ambientPreference === 'css'" @click="setAmbientPreference('css')">仅 CSS</button>
+        <button type="button" :aria-pressed="ambientPreference === 'webgl'" :disabled="!webglSupported" @click="setAmbientPreference('webgl')">WebGL</button>
+      </div>
+      <p class="appearance-note">默认使用现有 CSS 光场。WebGL 在支持的浏览器中启用增强光效；系统开启「减少动态效果」时会自动退回 CSS。</p>
+      <p v-if="!webglSupported" class="appearance-note">当前浏览器不支持 WebGL2，将始终使用 CSS 光场。</p>
+    </fieldset>
     <label class="appearance-custom">
       <span><strong>自定义颜色</strong><small>各页面的背景光与主题色同步变化</small></span>
       <code>{{ accent || '默认' }}</code>
@@ -33,11 +43,15 @@
 import { computed } from 'vue'
 import { homeColorPresets, setHomeAccent, useHomeAppearance } from '@/home-appearance'
 import { setThemePreference, useTheme, type ThemePreference } from '@/theme'
+import { setAmbientPreference, useAmbientPreference } from '@/ambient-preference'
+import { detectWebGL2 } from '@/visual-engine'
 const props = defineProps<{ modelValue: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
 const open = computed({ get: () => props.modelValue, set: value => emit('update:modelValue', value) })
 const { accent, canPersist } = useHomeAppearance()
 const { preference } = useTheme()
+const { preference: ambientPreference } = useAmbientPreference()
+const webglSupported = detectWebGL2().supported
 const modes: { value: ThemePreference; label: string }[] = [{ value: 'light', label: '浅色' }, { value: 'dark', label: '深色' }, { value: 'system', label: '跟随系统' }]
 function chooseColor(event: Event) { setHomeAccent((event.target as HTMLInputElement).value) }
 </script>
@@ -61,5 +75,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--el-color-pr
 .appearance-custom code { font-size: 12px; color: var(--text-secondary); }
 .appearance-custom input { width: 48px; height: 44px; border: 1px solid var(--border-default); padding: 3px; border-radius: 8px; background: transparent; cursor: pointer; }
 .appearance-warning { color: var(--text-secondary); font-size: 13px; line-height: 1.7; }
+.appearance-note { margin: 12px 0 0; color: var(--text-secondary); font-size: 12px; line-height: 1.7; }
+.appearance-modes button:disabled { opacity: .45; cursor: not-allowed; }
 @media (max-width: 380px) { .appearance-palettes { grid-template-columns: repeat(3,minmax(0,1fr)); } .appearance-custom code { display: none; } }
 </style>

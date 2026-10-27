@@ -3,7 +3,7 @@
     <button class="plan-task__complete" type="button" :disabled="busy" :aria-label="'完成任务：' + task.title" @click="$emit('complete', task)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg></button>
     <div class="plan-task__copy">
       <button type="button" class="plan-task__title" @click="$emit('open', task)">{{ task.title }}</button>
-      <p class="plan-task__meta"><span>{{ task.project_title }}</span><span v-if="context === 'all'">{{ contextLabel(task.effective_context) }}</span></p>
+      <p class="plan-task__meta"><span>{{ task.project_title }}</span><span v-if="context === 'all'">{{ contextLabel(task.effective_context) }}</span><span v-if="isFocus" class="plan-task__focus">今日焦点</span></p>
       <p v-if="task.due_date" class="plan-task__date" :class="{ 'is-overdue': task.due_date < date }">{{ task.due_date < date ? '已逾期' : task.due_date === date ? '今天截止' : '截止' }} {{ task.due_date }}</p>
       <p v-if="task.plan_date && task.plan_date !== date" class="plan-task__meta">{{ task.plan_date < date ? '原计划' : '计划' }} {{ task.plan_date }}</p>
     </div>
@@ -19,7 +19,7 @@
 <script setup lang="ts">
 import type { PlanningTask } from '@/api/workspace'
 import type { WorkspaceContext } from '@/workspace-context'
-defineProps<{ task: PlanningTask; date: string; context: WorkspaceContext; planned?: boolean; busy: boolean }>()
+defineProps<{ task: PlanningTask; date: string; context: WorkspaceContext; planned?: boolean; busy: boolean; isFocus?: boolean }>()
 defineEmits<{ complete: [task: PlanningTask]; open: [task: PlanningTask]; today: [task: PlanningTask]; schedule: [task: PlanningTask]; remove: [task: PlanningTask] }>()
 function contextLabel(value: string) { return value === 'work' ? '工作' : value === 'life' ? '生活' : '未分类' }
 </script>
@@ -32,6 +32,7 @@ function contextLabel(value: string) { return value === 'work' ? '工作' : valu
 .plan-task__title { padding:3px 0; border:0; background:transparent; color:var(--home-ink); font:inherit; font-size:14px; line-height:1.6; text-align:left; overflow-wrap:anywhere; cursor:pointer; }
 .plan-task__title:hover { color:var(--home-link); }
 .plan-task__meta,.plan-task__date { display:flex; flex-wrap:wrap; gap:4px 8px; margin:4px 0 0; font-size:12px; line-height:1.6; color:var(--home-muted); overflow-wrap:anywhere; }
+.plan-task__focus { border:1px solid var(--home-edge); border-radius:999px; padding:0 7px; color:var(--home-link); font-size:11px; line-height:1.7; }
 .plan-task__date.is-overdue { color:var(--color-danger); }
 .plan-task__actions { display:flex; flex-direction:column; align-items:flex-end; gap:4px; flex:none; }
 .plan-task__more { border-color:transparent; }

@@ -1,0 +1,75 @@
+/* Visual Effects Kit — opt-in classes only. Loaded with the admin gallery chunk. */
+
+:root {
+  --fx-duration-fast: 160ms;
+  --fx-duration-base: 220ms;
+  --fx-ease: cubic-bezier(.2, .7, .3, 1);
+  --fx-spotlight-radius: 180px;
+  --fx-spotlight-speed: 160ms;
+  --fx-spotlight-color: rgba(139, 128, 220, .16);
+  --fx-spotlight-accent: rgba(113, 61, 255, .18);
+  --fx-depth-shadow-color: rgba(36, 66, 106, .26);
+}
+
+html[data-theme='dark'] {
+  --fx-spotlight-color: rgba(201, 179, 255, .12);
+  --fx-spotlight-accent: rgba(160, 120, 255, .18);
+  --fx-depth-shadow-color: rgba(0, 0, 0, .5);
+}
+
+/* ---- Spotlight Surface ---------------------------------------------------- */
+
+.fx-spotlight {
+  position: relative;
+  overflow: hidden;
+}
+
+.fx-spotlight::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(
+    var(--fx-spotlight-radius) circle at var(--fx-x, 50%) var(--fx-y, 0%),
+    var(--fx-spotlight-color),
+    transparent 62%
+  );
+  opacity: 0;
+  transition: opacity var(--fx-spotlight-speed) var(--fx-ease);
+}
+
+.fx-spotlight:hover::after,
+.fx-spotlight:focus-within::after {
+  opacity: calc(var(--fx-intensity, .6) * .9);
+}
+
+/* ---- Surface Depth -------------------------------------------------------- */
+
+.fx-depth {
+  position: relative;
+  border: 1px solid color-mix(in srgb, var(--home-edge), var(--home-link) calc(var(--fx-depth-edge, .5) * 45%));
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--home-panel) calc(var(--fx-depth-bg, .7) * 100%), transparent);
+  backdrop-filter: var(--home-glass-filter);
+  box-shadow:
+    0 calc(8px + var(--fx-depth-shadow, .6) * 18px) calc(22px + var(--fx-depth-shadow, .6) * 26px) calc(-14px) var(--fx-depth-shadow-color);
+}
+
+@supports not (background: color-mix(in srgb, red, blue)) {
+  .fx-depth { background: var(--home-panel); border-color: var(--home-edge); }
+}
+
+/* ---- Reduced motion / frozen preview ------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-spotlight::after { display: none; }
+  .motion-reveal.is-entering > * { animation: none; }
+}
+
+.fx-stage[data-fx-reduced] .fx-spotlight::after { display: none; }
+.fx-stage[data-fx-reduced] .motion-reveal.is-entering > * { animation: none; }
+.fx-stage[data-fx-frozen] .fx-spotlight::after { display: none; }
+.fx-stage[data-fx-frozen] .motion-reveal.is-entering > * { animation: none; }
+.fx-stage[data-fx-frozen] .fx-spotlight { transition: none; }

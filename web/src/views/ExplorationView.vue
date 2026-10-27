@@ -31,7 +31,8 @@
     <el-alert v-if="error" :title="error" type="error" show-icon :closable="false" />
     <el-tabs v-model="activeTab" class="exploration-tabs">
       <el-tab-pane label="探索雷达" name="radar">
-        <el-card shadow="never" class="exploration-card unfamiliar-card">
+        <SoftReveal :enabled="revealActive" :trigger="activeTab">
+        <el-card v-fx-spotlight="exploreActive ? pilotSettings.explore.intensity : undefined" shadow="never" class="exploration-card unfamiliar-card">
           <div class="unfamiliar-card__content">
             <div>
               <span class="eyebrow">陌生知识</span>
@@ -52,6 +53,7 @@
             </div>
           </div>
         </el-card>
+        </SoftReveal>
 
         <section class="exploration-workspace" v-loading="loading">
           <div class="exploration-workspace__header"><div><span class="eyebrow">探索雷达</span><h2>值得打开的新区域</h2></div><el-button text @click="refreshRadar">刷新探索推荐</el-button></div>
@@ -63,7 +65,8 @@
       </el-tab-pane>
 
       <el-tab-pane label="问题池" name="questions">
-        <el-card shadow="never" class="exploration-card" v-loading="questionsLoading">
+        <SoftReveal :enabled="revealActive" :trigger="activeTab">
+        <el-card v-fx-spotlight="exploreActive ? pilotSettings.explore.intensity : undefined" shadow="never" class="exploration-card" v-loading="questionsLoading">
           <template #header><div class="card-header-row"><span>问题池</span><el-button text @click="refreshQuestions">刷新问题池</el-button></div></template>
           <div class="question-pool-filters" aria-label="问题池筛选">
             <el-select v-model="questionDomainID" placeholder="全部领域" clearable @change="loadQuestions()"><el-option v-for="course in courses" :key="course.id" :label="course.name" :value="course.id" /></el-select>
@@ -95,13 +98,19 @@
             <el-button plain @click="visibleQuestionCount += QUESTION_PAGE_SIZE">再显示 {{ Math.min(QUESTION_PAGE_SIZE, questions.length - visibleQuestions.length) }} 个问题</el-button>
           </div>
         </el-card>
+        </SoftReveal>
       </el-tab-pane>
     </el-tabs>
+    <EffectsPilotBar page="explore" />
   </PageShell>
 </template>
 
 <script setup lang="ts">
 import PageShell from '@/components/PageShell.vue'
+import EffectsPilotBar from '@/components/effects/EffectsPilotBar.vue'
+import SoftReveal from '@/effects/SoftReveal.vue'
+import { usePilot } from '@/effects/pilot'
+import { fxSpotlight } from '@/effects/spotlight'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { listCourses } from '@/api/courses'
@@ -114,6 +123,8 @@ import type { ExplorationDirection, ExplorationQuestion } from '@/types/explorat
 import { isRequestAborted } from '@/api/http'
 
 const router = useRouter()
+const { exploreActive, revealActive, settings: pilotSettings } = usePilot()
+const vFxSpotlight = fxSpotlight
 const courses = ref<Course[]>([])
 const courseID = ref(0)
 const directions = ref<ExplorationDirection[]>([])

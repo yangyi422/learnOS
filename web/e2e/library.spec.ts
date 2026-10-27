@@ -660,3 +660,18 @@ test('failed gallery cover keeps a stable frame and reference-style body cover i
   await expect(page.locator('.library-image-failed')).toBeVisible();
   expect(row.body).toBe(original);
 });
+
+test("资料库首页提供挖角手帐工具入口", async ({ page }) => {
+  await mock(page);
+  await page.goto("/explore/library");
+  await expect(
+    page.getByRole("heading", { name: "工具", exact: true }),
+  ).toBeVisible();
+  const link = page.getByRole("link", { name: /万缕千丝 · 挖角手帐/ });
+  await expect(link).toBeVisible();
+  await expect(link).toHaveAttribute(
+    "href",
+    "/library-tools/fefw-planner/planner.html?from=library",
+  );
+  await expect(link).toHaveAttribute("target", "_blank");
+});

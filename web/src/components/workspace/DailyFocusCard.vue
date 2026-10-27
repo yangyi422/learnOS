@@ -7,7 +7,6 @@
   >
     <div class="daily-focus-card__heading">
       <span class="section-kicker"><WorkspaceIcon name="focus" /><span id="focus-card-title">今日焦点</span></span>
-      <span class="daily-focus-card__hint">每天每个场景最多一件</span>
     </div>
 
     <div v-if="loadError" class="daily-focus-error daily-focus-load-error" role="alert">
@@ -204,6 +203,21 @@ a.daily-focus-title:focus-visible { outline: 2px solid var(--home-link); outline
 .focus-action:disabled { opacity: .55; cursor: wait; }
 .focus-action--complete { border-color: transparent; background: var(--home-primary); color: var(--button-primary-text, #fff); }
 .focus-action--complete:hover:not(:disabled) { color: #fff; filter: brightness(1.06); }
+:root[data-theme='light'] .focus-action {
+  border-color: rgba(74,96,122,.16);
+  background: rgba(255,255,255,.50);
+}
+:root[data-theme='light'] .focus-action:hover:not(:disabled) {
+  border-color: rgba(74,96,122,.24);
+  background: rgba(255,255,255,.72);
+}
+:root[data-theme='light'] .focus-action--complete {
+  border-color: transparent;
+  background: var(--home-primary);
+}
+:root[data-theme='light'] .focus-action--clear {
+  background: transparent;
+}
 .focus-action--clear { background: transparent; color: var(--home-secondary); }
 .focus-action--pick { border-color: var(--home-edge); background: var(--home-tint); color: var(--home-link); }
 .daily-focus-saving { color: var(--home-muted); font-size: 12px; }

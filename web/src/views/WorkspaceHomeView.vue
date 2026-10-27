@@ -1,6 +1,6 @@
 <template>
   <PageShell class="workspace-home" variant="wide">
-    <PageHeader title="今天，专注一件事" :description="dateLabel">
+    <PageHeader :title="pageTitle" :description="dateLabel">
       <template #actions>
         <div class="workspace-context-bar">
           <el-radio-group v-model="scene" :disabled="!contextReady" aria-label="工作台场景" class="workspace-context-switch">
@@ -34,15 +34,20 @@
     </p>
 
     <div v-if="loading && !home" class="workspace-home__grid workspace-home__grid--loading" aria-label="正在整理工作区" aria-busy="true">
+      <div class="home-left-lane">
+        <section class="home-section home-section--skeleton today-section" aria-label="今日计划正在加载"><el-skeleton animated :rows="3" /></section>
+        <section class="home-section home-section--skeleton projects-section" aria-label="项目正在加载"><el-skeleton animated :rows="3" /></section>
+      </div>
       <div ref="focusFrame" class="focus-card-frame">
         <section class="focus-card focus-card--skeleton daily-focus-card--skeleton" aria-label="今日焦点正在加载">
           <el-skeleton animated :rows="3" />
         </section>
       </div>
-      <section v-for="section in loadingSections" :key="section" class="home-section home-section--skeleton" :class="sectionClass(section)">
-        <SectionHeader :title="sectionTitle(section)" />
-        <el-skeleton animated :rows="3" />
-      </section>
+      <div class="home-right-lane">
+        <section class="home-section home-section--skeleton capture-section" aria-label="快速记录正在加载"><el-skeleton animated :rows="1" /></section>
+        <section class="home-section home-section--skeleton recent-section" aria-label="最近内容正在加载"><el-skeleton animated :rows="3" /></section>
+        <section class="home-section home-section--skeleton learning-section" aria-label="学习位置正在加载"><el-skeleton animated :rows="2" /></section>
+      </div>
     </div>
 
     <div v-else-if="!home && loadError" class="workspace-home__fatal-error" role="alert">
@@ -51,11 +56,60 @@
 
     <div v-else-if="home" class="workspace-home__grid" :class="{ 'workspace-home__grid--switching': isSwitching }" :aria-busy="loading">
       <span v-if="isSwitching" class="sr-only" role="status">{{ loadError || '正在切换场景…' }}</span>
+      <div class="home-left-lane">
+        <section ref="todayCard" class="home-section today-section glass-tier glass-tier--secondary" :inert="isSwitching" :style="{ minHeight: sceneGeometry.today ? sceneGeometry.today + 'px' : undefined }" aria-labelledby="today-title">
+          <WorkspaceIcon name="calendar" class="home-section__icon" />
+          <DailyPlanPanel :planning="home.planning" :date="currentDate" :context="scene" :focus-task-ids="focusTaskIds" :loading="loading || isSwitching" :error="home.errors.planning" @open="openTask" @refresh="load" />
+        </section>
+
+        <section ref="projectsCard" class="home-section projects-section glass-tier glass-tier--secondary" :inert="isSwitching" :style="{ minHeight: sceneGeometry.projects ? sceneGeometry.projects + 'px' : undefined }" aria-labelledby="projects-title">
+          <WorkspaceIcon name="projects" class="home-section__icon" />
+          <SectionHeader :title="projectsSectionTitle" id="projects-title">
+            <template #actions>
+              <el-button text @click="router.push('/projects?view=list')">项目列表 →</el-button>
+            </template>
+          </SectionHeader>
+          <div v-if="home.errors.projects" class="module-error" role="alert">
+            <span>{{ home.errors.projects }}</span>
+            <button class="inline-action" type="button" @click="load">重试</button>
+          </div>
+          <div v-else-if="home.projects.length" class="home-project-grid">
+            <button
+              v-for="project in home.projects.slice(0, 5)"
+              :key="project.id"
+              class="project-row"
+              type="button"
+              :aria-label="project.title + '，打开项目看板'"
+              @click="openProject(project.id)"
+            >
+              <span class="project-row__accent" :style="{ color: project.accent || undefined, borderColor: project.accent || undefined }">{{ projectIcon(project) }}</span>
+              <span class="project-row__text">
+                <span class="project-row__heading"><strong>{{ project.title }}</strong><span class="project-row__arrow" aria-hidden="true">→</span></span>
+                <small v-if="project.description">{{ project.description }}</small>
+                <span v-if="projectTaskTotal(project)" class="project-row__progress-line">
+                  <span class="project-row__progress" aria-hidden="true"><i :style="{ width: Math.min(100, project.done_task_count / projectTaskTotal(project) * 100) + '%' }" /></span>
+                  <small class="project-row__counts" :title="'已完成 ' + project.done_task_count + ' 项，共 ' + projectTaskTotal(project) + ' 项任务'">{{ project.done_task_count }} / {{ projectTaskTotal(project) }}</small>
+                </span>
+              </span>
+            </button>
+          </div>
+          <EmptyState
+            v-else
+            :title="projectEmptyTitle"
+            :description="projectEmptyDescription"
+            action-label="查看项目"
+            @action="router.push('/projects?view=list')"
+          />
+        </section>
+      </div>
+
       <div ref="focusLane" class="home-focus-lane" :style="focusLaneStyle">
       <div ref="focusCluster" class="focus-cluster" :style="focusClusterStyle">
       <div ref="focusFrame" class="focus-card-frame">
         <DailyFocusCard
-          class="daily-focus-card"
+          v-fx-spotlight="homeActive ? pilotSettings.home.intensity : undefined"
+          class="daily-focus-card glass-tier glass-tier--primary glass-hero"
+          :class="{ 'is-empty': focusEmpty, 'glass-refract': homeRefraction }"
           :style="focusCardStyle"
           :scene="scene"
           :date="currentDate"
@@ -72,112 +126,70 @@
           @reload="load"
         />
       </div>
-      <div v-if="home.focus.kind !== 'empty'" class="continue-focus">
-        <span class="continue-focus__label">继续处理建议</span>
-        <RouterLink v-if="suggestionTarget" :to="suggestionTarget" class="continue-focus__link" :aria-label="'打开建议：' + home.focus.title">{{ home.focus.title }}</RouterLink>
-        <strong v-else class="continue-focus__link">{{ home.focus.title }}</strong>
+      <div v-if="showSuggestion" class="continue-focus">
+        <span class="continue-focus__label">继续上次</span>
+        <RouterLink v-if="suggestionTarget" :to="suggestionTarget" class="continue-focus__link" :aria-label="'继续上次：' + suggestionTitle">{{ suggestionTitle }}</RouterLink>
+        <strong v-else class="continue-focus__link">{{ suggestionTitle }}</strong>
         <small v-if="suggestionNote" class="continue-focus__note">{{ suggestionNote }}</small>
       </div>
       </div>
-
-      <section class="home-section learning-section" aria-labelledby="learning-title">
-        <WorkspaceIcon name="courses" class="home-section__icon" />
-        <SectionHeader title="继续学习 · 全局" id="learning-title" />
-        <div v-if="home.errors.learning" class="module-error" role="alert">
-          <span>{{ home.errors.learning }}</span>
-          <button class="inline-action" type="button" @click="load">重试</button>
-        </div>
-        <div v-else-if="home.learning[0]" class="learning-row">
-          <span class="learning-row__mark" aria-hidden="true"><WorkspaceIcon name="courses" /></span>
-          <span class="learning-row__text">
-            <small class="learning-row__course">{{ home.learning[0].course_name }}</small>
-            <strong>{{ home.learning[0].lesson_title || '选择下一段学习' }}</strong>
-            <small class="learning-row__summary" :title="home.learning[0].core_question || home.learning[0].unit_title">{{ home.learning[0].core_question || home.learning[0].unit_title || (home.learning[0].has_current_lesson ? '当前学习单元' : '从知识地图选择一个主题') }}</small>
-            <span class="learning-row__meta">
-              <small v-if="home.learning[0].core_question && home.learning[0].unit_title">{{ home.learning[0].unit_title }}</small>
-              <small class="learning-row__level">{{ levelLabel(home.learning[0].current_level) }} · {{ cognitiveStatusLabel(home.learning[0].cognitive_status) }}</small>
-            </span>
-            <svg class="learning-path" viewBox="0 0 220 200" fill="none" aria-hidden="true" focusable="false">
-              <circle cx="110" cy="18" r="10" /><path d="M110 28v12c0 18-62 12-62 38M110 40c0 18 62 12 62 38" />
-              <rect x="18" y="78" width="60" height="38" rx="4" /><rect x="142" y="78" width="60" height="38" rx="4" />
-              <path d="m37 96 7 7 15-16M164 91l16 14m0-14-16 14M48 116c0 34 62 24 62 52M172 116c0 34-62 24-62 52" /><circle cx="110" cy="179" r="10" />
-            </svg>
-          </span>
-        </div>
-        <EmptyState
-          v-else
-          title="知识世界还是空的"
-          description="创建一个学习领域后，这里会保存你最近的学习位置。"
-          action-label="开始一个学习领域"
-          @action="router.push('/domains/new')"
-        />
-        <RouterLink v-if="!home.errors.learning && home.learning[0]" :to="learningTarget(home.learning[0])" class="home-card-entry learning-card-entry" :aria-label="(home.learning[0].has_current_lesson ? '继续学习：' : '打开知识地图：') + (home.learning[0].lesson_title || home.learning[0].course_name)"><span aria-hidden="true">↗</span></RouterLink>
-      </section>
-      </div>
-      <div class="home-project-lane">
-      <section ref="projectsCard" class="home-section projects-section" :inert="isSwitching" :style="{ minHeight: sceneGeometry.projects ? sceneGeometry.projects + 'px' : undefined }" aria-labelledby="projects-title">
-        <WorkspaceIcon name="projects" class="home-section__icon" />
-        <SectionHeader title="正在推进" id="projects-title">
-          <template #actions>
-            <el-button text @click="router.push('/projects?view=list')">项目列表 →</el-button>
-          </template>
-        </SectionHeader>
-        <div v-if="home.errors.projects" class="module-error" role="alert">
-          <span>{{ home.errors.projects }}</span>
-          <button class="inline-action" type="button" @click="load">重试</button>
-        </div>
-        <div v-else-if="home.projects.length" class="home-project-grid">
-          <button
-            v-for="project in home.projects.slice(0, 5)"
-            :key="project.id"
-            class="project-row"
-            type="button"
-            :aria-label="project.title + '，打开项目看板'"
-            @click="openProject(project.id)"
-          >
-            <span class="project-row__accent" :style="{ color: project.accent || undefined, borderColor: project.accent || undefined }">{{ projectIcon(project) }}</span>
-            <span class="project-row__text">
-              <span class="project-row__heading"><strong>{{ project.title }}</strong><span class="project-row__arrow" aria-hidden="true">→</span></span>
-              <small v-if="project.description">{{ project.description }}</small>
-              <span v-if="projectTaskTotal(project)" class="project-row__progress-line">
-                <span class="project-row__progress" aria-hidden="true"><i :style="{ width: Math.min(100, project.done_task_count / projectTaskTotal(project) * 100) + '%' }" /></span>
-                <small class="project-row__counts" :title="'已完成 ' + project.done_task_count + ' 项，共 ' + projectTaskTotal(project) + ' 项任务'">{{ project.done_task_count }} / {{ projectTaskTotal(project) }}</small>
+        <section v-if="learningVisible" class="home-section learning-section learning-section--compact glass-tier glass-tier--reading" aria-labelledby="learning-title">
+          <WorkspaceIcon name="courses" class="home-section__icon" />
+          <SectionHeader title="继续学习 · 全局" id="learning-title" />
+          <div v-if="home.errors.learning" class="module-error" role="alert">
+            <span>{{ home.errors.learning }}</span>
+            <button class="inline-action" type="button" @click="load">重试</button>
+          </div>
+          <div v-else-if="home.learning[0]" class="learning-row">
+            <span class="learning-row__text">
+              <small class="learning-row__course">{{ home.learning[0].course_name }}</small>
+              <strong>{{ home.learning[0].lesson_title || '选择下一段学习' }}</strong>
+              <small class="learning-row__summary" :title="home.learning[0].core_question || home.learning[0].unit_title">{{ home.learning[0].core_question || home.learning[0].unit_title || (home.learning[0].has_current_lesson ? '当前学习单元' : '从知识地图选择一个主题') }}</small>
+              <span class="learning-row__meta">
+                <small class="learning-row__level">{{ levelLabel(home.learning[0].current_level) }} · {{ cognitiveStatusLabel(home.learning[0].cognitive_status) }}</small>
               </span>
             </span>
-          </button>
-        </div>
-        <EmptyState
-          v-else
-          title="当前场景还没有进行中的项目"
-          description="创建项目后，正在推进的任务会集中显示在这里。"
-          action-label="查看项目"
-          @action="router.push('/projects?view=list')"
-        />
-      </section>
+          </div>
+          <EmptyState
+            v-else
+            title="还没有学习位置"
+            description="创建一个学习领域后，这里会记住你最近学到哪里。"
+            action-label="开始一个学习领域"
+            @action="router.push('/domains/new')"
+          />
+          <RouterLink v-if="!home.errors.learning && home.learning[0]" :to="learningTarget(home.learning[0])" class="home-card-entry learning-card-entry" :aria-label="(home.learning[0].has_current_lesson ? '继续学习：' : '打开知识地图：') + (home.learning[0].lesson_title || home.learning[0].course_name)"><span aria-hidden="true">↗</span></RouterLink>
+        </section>
+      </div>
 
-      <section ref="todayCard" class="home-section today-section" :inert="isSwitching" :style="{ minHeight: sceneGeometry.today ? sceneGeometry.today + 'px' : undefined }" aria-labelledby="today-title">
-        <WorkspaceIcon name="calendar" class="home-section__icon" />
-        <DailyPlanPanel :planning="home.planning" :date="currentDate" :context="scene" :loading="loading || isSwitching" :error="home.errors.planning" @open="openTask" @refresh="load" />
-      </section>
+      <div class="home-right-lane">
+        <section class="home-section capture-section glass-tier glass-tier--secondary" aria-labelledby="capture-title">
+          <WorkspaceIcon name="inbox" class="home-section__icon" />
+          <SectionHeader title="快速记录" id="capture-title" />
+          <button type="button" class="capture-entry" @click="captureOpen = true">
+            <span class="capture-entry__text">记下一个想法，或一条链接</span>
+            <span class="capture-entry__meta" aria-hidden="true">Enter 保存</span>
+          </button>
+        </section>
+
+        <section v-if="recentVisible" class="home-section recent-section glass-tier glass-tier--reading" aria-labelledby="recent-title">
+          <WorkspaceIcon name="inbox" class="home-section__icon" />
+          <SectionHeader title="最近留下的 · 全局" id="recent-title" />
+          <p v-if="recentLoading && !recent" class="home-muted" role="status">正在读取最近记录…</p>
+          <div v-if="recentItems.length" class="home-recent-grid">
+          <RouterLink v-for="item in recentItems" :key="item.key" :to="item.to" class="home-recent-row" :title="item.title">
+            <span v-if="item.cover" class="home-recent-cover"><img :src="item.cover" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" @error="hideFailedImage" /></span>
+            <span v-else class="home-recent-icon" aria-hidden="true"><WorkspaceIcon :name="item.key.startsWith('library-') ? 'courses' : 'life'" /></span>
+            <span class="home-recent-copy"><strong>{{ item.title }}</strong><small><span>{{ item.source }}</span><span class="home-recent-date">{{ item.dateLabel }}</span></small></span>
+            <span class="home-muted" aria-hidden="true">→</span>
+          </RouterLink>
+          </div>
+          <p v-if="recentError || recentProblems.length" class="module-error" role="status">
+            <span>{{ recentError || recentProblems.join(' ') }}</span>
+            <button class="inline-action" type="button" @click="loadRecent">重试最近内容</button>
+          </p>
+        </section>
 
       </div>
-      <section v-if="recentItems.length || recentLoading || recentError || recentProblems.length" class="home-section recent-section" aria-labelledby="recent-title">
-        <WorkspaceIcon name="inbox" class="home-section__icon" />
-        <SectionHeader title="最近留下的 · 全局" id="recent-title" />
-        <p v-if="recentLoading && !recent" class="home-muted" role="status">正在读取最近记录…</p>
-        <div v-if="recentItems.length" class="home-recent-grid">
-        <RouterLink v-for="item in recentItems" :key="item.key" :to="item.to" class="home-recent-row" :title="item.title">
-          <span v-if="item.cover" class="home-recent-cover"><img :src="item.cover" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" @error="hideFailedImage" /></span>
-          <span v-else class="home-recent-icon" aria-hidden="true"><WorkspaceIcon :name="item.key.startsWith('library-') ? 'courses' : 'life'" /></span>
-          <span class="home-recent-copy"><strong>{{ item.title }}</strong><small><span>{{ item.source }}</span><span class="home-recent-date">{{ item.dateLabel }}</span></small></span>
-          <span class="home-muted" aria-hidden="true">→</span>
-        </RouterLink>
-        </div>
-        <p v-if="recentError || recentProblems.length" class="module-error" role="status">
-          <span>{{ recentError || recentProblems.join(' ') }}</span>
-          <button class="inline-action" type="button" @click="loadRecent">重试最近内容</button>
-        </p>
-      </section>
 
       <nav class="home-shortcuts" aria-label="个人档案快捷入口">
         <span class="home-shortcuts__label">个人档案</span>
@@ -198,6 +210,7 @@
       @conflict="load"
     />
     <QuickCaptureDialog v-model="captureOpen" @created="captured" />
+    <EffectsPilotBar page="home" />
   </PageShell>
 </template>
 
@@ -209,6 +222,9 @@ import { subscribeTaskChanges } from '@/task-changes'
 import { currentUser } from '@/api/auth'
 import { readWorkspaceContext, saveWorkspaceContext, type WorkspaceContext } from '@/workspace-context'
 import PageShell from '@/components/PageShell.vue'
+import EffectsPilotBar from '@/components/effects/EffectsPilotBar.vue'
+import { usePilot } from '@/effects/pilot'
+import { fxSpotlight } from '@/effects/spotlight'
 import WorkspaceIcon from '@/components/WorkspaceIcon.vue'
 import { computed, onMounted, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -225,9 +241,9 @@ import { libraryCardImageURL, localLibraryImage } from '@/utils/libraryMarkdown'
 import { safeExternalLink } from '@/utils/externalLinks'
 import { domainLabel } from '@/api/life'
 
-type HomeSection = 'today' | 'projects' | 'learning'
-
 const router = useRouter()
+const { homeActive, homeRefraction, settings: pilotSettings } = usePilot()
+const vFxSpotlight = fxSpotlight
 const scene = ref<WorkspaceContext>('all')
 const currentDate = ref(localDate())
 const loadedRequestDate = ref('')
@@ -273,7 +289,6 @@ const loadError = ref('')
 const captureOpen = ref(false)
 const homeSearch = ref(''), searchFocused = ref(false)
 interface HomeSearchResult { key: string; title: string; group: string; open: () => void }
-const loadingSections: HomeSection[] = ['today', 'projects', 'learning']
 const recent = ref<WorkspaceRecent | null>(null)
 const recentLoading = ref(true), recentError = ref('')
 const recentProblems = computed(() => Object.values(recent.value?.errors ?? {}))
@@ -303,6 +318,29 @@ const recentItems = computed(() => {
 let homeRequest: AbortController | undefined, recentRequest: AbortController | undefined
 let disposed = false
 const dateLabel = computed(() => new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(new Date(currentDate.value + 'T12:00:00')))
+// Scene-specific but restrained: the title describes the working mode, never
+// the amount of work. The date stays the same line in every scene.
+const pageTitle = computed(() => {
+  if (scene.value === 'work') return '今天，专注重要的事'
+  if (scene.value === 'life') return '留一点时间给自己'
+  return '今天，按自己的节奏'
+})
+const projectsSectionTitle = computed(() => {
+  if (scene.value === 'work') return '正在推进的工作项目'
+  if (scene.value === 'life') return '生活里正在做的事'
+  return '正在推进'
+})
+const projectEmptyTitle = computed(() => {
+  if (scene.value === 'work') return '还没有进行中的工作项目'
+  if (scene.value === 'life') return '还没有个人的项目'
+  return '当前场景还没有进行中的项目'
+})
+const projectEmptyDescription = computed(() => {
+  if (scene.value === 'work') return '创建项目并拆出下一步，推进中的工作会集中在这里。'
+  if (scene.value === 'life') return '生活不需要被项目填满；想整理时再创建一个。'
+  return '创建项目后，正在推进的任务会集中显示在这里。'
+})
+const suggestion = computed(() => home.value?.focus)
 function projectIcon(project: Pick<Project, 'title'> & { icon?: string | null }) {
   const icon = project.icon?.trim()
   return icon && !/^[·•.。∙⋅…]+$/u.test(icon) ? icon : Array.from(project.title.trim())[0] || '项'
@@ -337,6 +375,26 @@ function resetFocusWriteState() {
 function applyDailyFocus(source?: WorkspaceDailyFocus | null) {
   focusViews.value = { work: source?.work ?? null, life: source?.life ?? null }
 }
+const focusTaskIds = computed<Set<number>>(() => {
+  const ids = new Set<number>()
+  for (const focus of Object.values(focusViews.value)) {
+    if (focus?.task_id) ids.add(focus.task_id)
+  }
+  return ids
+})
+const focusEmpty = computed(() => {
+  if (scene.value === 'all') return !focusViews.value.work && !focusViews.value.life
+  return !focusViews.value[scene.value as DailyFocusContext]
+})
+// The secondary "continue last" row is a resume shortcut, never a disguised
+// focus: it disappears when the suggestion is already one of today's focuses.
+const showSuggestion = computed(() => {
+  const value = suggestion.value
+  return value?.kind === 'task' && !!value.task_id && !focusTaskIds.value.has(value.task_id)
+})
+const suggestionTitle = computed(() => suggestion.value?.title ?? '')
+const recentVisible = computed(() => recentItems.value.length > 0 || recentLoading.value || !!recentError.value || recentProblems.value.length > 0)
+const learningVisible = computed(() => (home.value?.learning.length ?? 0) > 0 || !!home.value?.errors.learning || (!recentVisible.value && !recentLoading.value && !recentError.value))
 function focusScopeKey() { return `${scene.value}:${currentDate.value}` }
 function openFocusPicker(context: DailyFocusContext) {
   focusErrors[context] = ''
@@ -431,8 +489,7 @@ const searchResults = computed<HomeSearchResult[]>(() => {
       },
     })
   }
-  const suggestion = home.value.focus
-  if (suggestion.kind !== 'empty') entries.push({ key: 'suggestion', title: suggestion.title, group: '继续处理建议', open: openSuggestion })
+  if (showSuggestion.value) entries.push({ key: 'suggestion', title: suggestionTitle.value, group: '继续上次', open: openSuggestion })
   const focusTasks = new Set(Object.values(focusViews.value).filter((focus): focus is DailyFocusView => focus !== null).map(focus => focus.task_id))
   const tasks = [...(home.value.planning?.items ?? []), ...(home.value.planning?.due_today ?? []), ...(home.value.planning?.overdue ?? []), ...(home.value.planning?.previous_plan ?? []), ...(home.value.today?.doing ?? []), ...(home.value.today?.due ?? []), ...(home.value.today?.next ?? [])]
   for (const task of new Map(tasks.map(task => [task.id, task])).values()) {
@@ -451,10 +508,6 @@ function leaveSearch(event: FocusEvent) {
 function localDate() {
   const date = new Date()
   return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0')
-}
-function sectionClass(section: HomeSection) { return section + '-section' }
-function sectionTitle(section: HomeSection) {
-  return ({ today: '今日计划', projects: '正在推进', learning: '继续学习' })[section]
 }
 function taskStatusLabel(status?: string) {
   return ({ doing: '进行中', next: '下一步', inbox: '待整理' } as Record<string, string>)[status ?? ''] ?? '项目任务'
@@ -643,7 +696,7 @@ onBeforeUnmount(() => {
 .workspace-home__grid--switching :is(.focus-card,.projects-section,.today-section)::after { content:'正在加载…'; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--home-muted); font-size:14px; pointer-events:none; }
 
 .workspace-context-bar { position:relative; display:flex; flex-direction:column; align-items:flex-end; gap:8px; min-width:0; }
-.workspace-context-switch { display:inline-flex; flex-wrap:nowrap; gap:4px; padding:4px; border:1px solid var(--home-edge); border-radius:999px; background:var(--home-panel); box-shadow:var(--home-panel-inset); backdrop-filter:var(--home-glass-filter); -webkit-backdrop-filter:var(--home-glass-filter); }
+.workspace-context-switch { display:inline-flex; flex-wrap:nowrap; gap:4px; padding:4px; border:1px solid var(--home-edge); border-radius:999px; background:var(--home-panel); box-shadow:var(--home-panel-inset); backdrop-filter:var(--home-glass-filter); }
 .workspace-context-switch :deep(.el-radio-button__inner) { min-height:36px; display:flex; align-items:center; padding:0 18px; border:0; outline:0; border-radius:999px; background:transparent; color:var(--home-secondary); font-family:var(--font-ui); font-size:14px; font-weight:500; line-height:1.4; box-shadow:none; transition:background-color 180ms ease,color 180ms ease; }
 .workspace-context-switch :deep(.el-radio-button.is-active .el-radio-button__original-radio:not(:disabled) + .el-radio-button__inner) { background:var(--home-tint); color:var(--home-link); box-shadow:none; }
 .workspace-context-switch :deep(.el-radio-button__inner:hover) { color:var(--home-link); }
@@ -673,25 +726,29 @@ onBeforeUnmount(() => {
 .workspace-home :deep(.page-header) { margin-bottom: 40px; }
 .workspace-home :deep(.page-header h1) { font-family: var(--font-ui); font-size: 44px; font-weight: 600; line-height: 1.4; color: var(--home-ink); }
 .workspace-home :deep(.page-header__description) { margin-top: 12px; font-size: 15px; color: var(--home-muted); }
-.workspace-home__grid { position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.3fr) minmax(0,1fr); align-items: stretch; gap: 24px; }
-.home-focus-lane, .home-project-lane { display: flex; flex-direction: column; gap: 22px; min-width: 0; grid-row: 1; }
+.workspace-home__grid { position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.3fr) minmax(0,1fr); align-items: start; gap: 24px; }
+.home-left-lane, .home-focus-lane, .home-right-lane { display: flex; flex-direction: column; gap: 22px; min-width: 0; grid-row: 1; }
+.home-left-lane { grid-column: 1; }
 .home-focus-lane { grid-column: 2; }
-.home-project-lane { grid-column: 1; }
+.home-right-lane { grid-column: 3; }
+.home-right-lane > .home-section { flex: none; }
 /* Card + secondary suggestion row form one block so a scene switch that hides
    the suggestion cannot shrink the lane or move later sections upward. */
 .focus-cluster { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
 .focus-card-frame { position: relative; min-width: 0; }
-.focus-card, .home-section { position: relative; min-width: 0; border: 1px solid var(--home-edge); border-radius: 16px; background: linear-gradient(120deg,var(--home-glass-glint),transparent 26%,transparent 76%,var(--home-glass-shade)),linear-gradient(145deg,var(--home-sheen),transparent 42%),var(--home-panel); background-clip: padding-box; box-shadow: var(--home-panel-inset); backdrop-filter: var(--home-glass-filter); -webkit-backdrop-filter: var(--home-glass-filter); transition: background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease; }
-.focus-card { min-height: 360px; padding: 28px; display: flex; flex-direction: column; gap: 24px; }
-.focus-card { background: linear-gradient(120deg,var(--home-glass-glint),transparent 26%,transparent 76%,var(--home-glass-shade)),linear-gradient(180deg,var(--home-focus-top) 0%,var(--home-focus-top) 52%,var(--home-focus-mid) 82%,var(--home-focus-bottom) 100%); }
-.home-section { padding: 26px; }
-.projects-section, .today-section { min-height:300px; }
-.home-section__icon { position: absolute; top: 29px; left: 26px; width: 21px; height: 21px; color: var(--home-secondary); }
-.home-section :deep(.section-header) { padding-left: 32px; margin-bottom: 22px; gap: 10px; flex-direction: row; flex-wrap: wrap; align-items: center; text-align: left; }
+.focus-card, .home-section { position: relative; min-width: 0; border: 1px solid var(--glass-card-edge); border-radius: 16px; background: linear-gradient(120deg,var(--home-glass-glint),transparent 26%,transparent 76%,var(--home-glass-shade)),linear-gradient(145deg,var(--home-sheen),transparent 42%),var(--glass-card-base); background-clip: padding-box; box-shadow: var(--home-panel-inset); backdrop-filter: var(--home-glass-filter); transition: background-color var(--motion-base) var(--motion-ease-standard), border-color var(--motion-base) var(--motion-ease-standard), box-shadow var(--motion-base) var(--motion-ease-standard); }
+.focus-card { min-height: 340px; padding: 26px; display: flex; flex-direction: column; gap: 22px; }
+.focus-card.is-empty { min-height: 250px; }
+.focus-card { background: linear-gradient(120deg,var(--home-glass-glint),transparent 26%,transparent 76%,var(--home-glass-shade)),linear-gradient(180deg,var(--home-focus-top) 0%,var(--home-focus-top) 52%,var(--home-focus-mid) 82%,var(--home-focus-bottom) 100%),var(--glass-card-base); }
+.home-section { padding: 24px; }
+.projects-section, .today-section { min-height: 220px; }
+.projects-section { min-height: 200px; }
+.home-section__icon { position: absolute; top: 26px; left: 24px; width: 21px; height: 21px; color: var(--home-secondary); }
+.home-section :deep(.section-header) { padding-left: 30px; margin-bottom: 18px; gap: 10px; flex-direction: row; flex-wrap: wrap; align-items: center; text-align: left; }
 .home-section :deep(.section-header__actions) { justify-content: flex-end; }
-.home-section :deep(.section-header h2) { font-size: 18px; font-weight: 600; line-height: 1.5; color: var(--home-ink); }
+.home-section :deep(.section-header h2) { font-size: 17px; font-weight: 600; line-height: 1.5; color: var(--home-ink); }
 .home-section :deep(.section-header__actions .el-button) { padding: 0; height: auto; font-size: 12px; color: var(--home-muted); }
-.home-section :deep(.empty-state) { padding: 18px 0; text-align: left; border: 0; background: transparent; }
+.home-section :deep(.empty-state) { padding: 14px 0; text-align: left; border: 0; background: transparent; }
 .home-section :deep(.empty-state h3) { margin: 0 0 10px; font-size: 15px; font-weight: 500; color: var(--home-secondary); }
 .home-section :deep(.empty-state p) { margin: 0 0 16px; font-size: 13px; color: var(--home-muted); line-height: 1.8; }
 .home-section :deep(.empty-state .el-button) { background: var(--home-tint); border-color: var(--home-edge); color: var(--home-link); border-radius: 999px; }
@@ -714,10 +771,13 @@ onBeforeUnmount(() => {
 .project-row__progress i { display: block; height: 100%; border-radius: inherit; background: var(--home-link); opacity: .8; }
 .project-row__counts { flex: none; font-size: 13px; color: var(--home-secondary); font-variant-numeric: tabular-nums; }
 .project-row:hover strong { color: var(--home-link); }
-.today-section :deep(.section-header) { margin-bottom: 14px; }
-.recent-section { grid-column: 3; grid-row: 1; align-self: stretch; }
-.learning-row { display: block; width: 100%; min-width: 0; padding: 5px 0 0; color: var(--home-ink); }
-.learning-row__mark { display: none; }
+.today-section :deep(.section-header) { margin-bottom: 12px; }
+.capture-entry { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 46px; padding: 10px 14px; border: 1px solid var(--home-edge); border-radius: 12px; background: var(--home-tint); color: var(--home-secondary); font: inherit; font-size: 14px; text-align: left; cursor: pointer; transition: border-color 180ms ease, color 180ms ease; }
+.capture-entry:hover { border-color: var(--home-reflection); color: var(--home-link); }
+.capture-entry:focus-visible { outline: 2px solid var(--home-link); outline-offset: 3px; }
+.capture-entry__text { min-width: 0; overflow-wrap: anywhere; }
+.capture-entry__meta { flex: none; font-size: 11px; color: var(--home-muted); }
+.learning-row { display: block; width: 100%; min-width: 0; padding: 2px 0 0; color: var(--home-ink); }
 .home-card-entry { position: absolute; inset: -1px; z-index: 1; border-radius: inherit; color: var(--home-link); text-decoration: none; }
 .home-card-entry > span { position: absolute; top: 26px; right: 26px; font-size: 20px; line-height: 24px; }
 .home-card-entry:focus-visible { outline: 2px solid var(--home-link); outline-offset: 4px; }
@@ -738,16 +798,22 @@ a.continue-focus__link:focus-visible { outline: 2px solid var(--home-link); outl
 .learning-row__summary { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--home-secondary); font-size: 14px; line-height: 1.8; }
 .learning-row__meta { display: flex; flex-wrap: wrap; gap: 5px 12px; color: var(--home-muted); font-size: 13px; line-height: 1.7; }
 .learning-row__meta small { font-size: inherit; }
-.learning-path { display: block; width: min(200px,100%); height: 200px; margin: 18px auto; stroke: var(--home-link); stroke-width: 1.2; opacity: .65; }
+/* Learning is a global entry, not a second focus: keep it compact in the right rail. */
+.learning-section--compact .learning-row { padding-top: 0; }
+.learning-section--compact .learning-row__text { display: flex; flex-direction: column; gap: 6px; }
+.learning-section--compact .learning-row__text strong { font-size: 18px; line-height: 1.55; font-weight: 600; }
+.learning-section--compact .learning-row__course { font-size: 13px; line-height: 1.6; }
+.learning-section--compact .learning-row__summary { font-size: 13px; line-height: 1.7; -webkit-line-clamp: 2; }
+.learning-section--compact .learning-row__meta { font-size: 12px; }
 .home-recent-grid { display: grid; }
-.home-recent-row { display: grid; grid-template-columns: 26px minmax(0,1fr) 12px; align-items: start; gap: 12px; min-width: 0; padding: 14px 0; border-bottom: 1px solid var(--home-edge); text-decoration: none; color: var(--home-ink); }
-.home-recent-row:last-child { border-bottom: 0; padding-bottom: 4px; }
-.home-recent-cover, .home-recent-icon { display: grid; place-items: center; width: 26px; height: 32px; border-radius: 5px; overflow: hidden; color: var(--home-secondary); }
+.home-recent-row { display: grid; grid-template-columns: 26px minmax(0,1fr) 12px; align-items: start; gap: 12px; min-width: 0; padding: 12px 0; border-bottom: 1px solid var(--home-edge); text-decoration: none; color: var(--home-ink); }
+.home-recent-row:last-child { border-bottom: 0; padding-bottom: 2px; }
+.home-recent-cover, .home-recent-icon { display: grid; place-items: center; width: 26px; height: 30px; border-radius: 5px; overflow: hidden; color: var(--home-secondary); }
 .home-recent-cover img { width: 100%; height: 100%; object-fit: cover; }
-.home-recent-icon svg { width: 20px; height: 20px; }
-.home-recent-copy { display: grid; gap: 7px; min-width: 0; }
-.home-recent-copy strong { font-size: 15px; line-height: 1.7; font-weight: 500; overflow-wrap: anywhere; }
-.home-recent-copy small { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; line-height: 1.65; color: var(--home-muted); }
+.home-recent-icon svg { width: 19px; height: 19px; }
+.home-recent-copy { display: grid; gap: 5px; min-width: 0; }
+.home-recent-copy strong { font-size: 14px; line-height: 1.65; font-weight: 500; overflow-wrap: anywhere; }
+.home-recent-copy small { display: flex; flex-wrap: wrap; gap: 3px 10px; font-size: 12px; line-height: 1.6; color: var(--home-muted); }
 .home-recent-date { font-variant-numeric: tabular-nums; }
 .home-muted { color: var(--home-muted); font-size: 13px; }
 .home-recent-row:hover strong { color: var(--home-link); }
@@ -755,11 +821,8 @@ a.continue-focus__link:focus-visible { outline: 2px solid var(--home-link); outl
 .inline-action { padding: 0; border: 0; background: transparent; color: var(--home-link); font: inherit; cursor: pointer; }
 .workspace-home__refresh-error { display: flex; flex-wrap: wrap; gap: 8px; color: var(--color-warning); font-size: 14px; margin: -16px 0 24px; }
 .workspace-home__fatal-error { max-width: 560px; margin: 8vh auto; }
-.workspace-home__grid--loading .focus-card-frame { grid-column: 2; grid-row: 1; }
-.workspace-home__grid--loading .projects-section { grid-column: 1; grid-row: 1; }
-.workspace-home__grid--loading .today-section { grid-column: 1; grid-row: 2; }
-.workspace-home__grid--loading .learning-section { grid-column: 2; grid-row: 2; }
-.home-section--skeleton { min-height: 230px; }
+.workspace-home__grid--loading > .focus-card-frame { grid-column: 2; grid-row: 1; }
+.home-section--skeleton { min-height: 200px; }
 .home-shortcuts { grid-column: 1 / -1; grid-row: 2; display: flex; align-items: center; flex-wrap: wrap; gap: 12px 24px; padding: 10px 0; font-size: 12px; }
 .home-shortcuts__label { color: var(--home-muted); }
 .home-shortcuts a { color: var(--home-secondary); text-decoration: none; line-height: 1.8; }
@@ -779,45 +842,325 @@ a.continue-focus__link:focus-visible { outline: 2px solid var(--home-link); outl
 .home-search__results p { margin: 8px; font-size: 13px; }
 .home-capture-button.el-button { height: 38px; padding-inline: 16px; border: 1px solid var(--home-edge); border-radius: 999px; background: var(--home-tint); color: var(--home-ink); font-size: 13px; }
 .home-capture-button :deep(svg) { width: 16px; height: 16px; margin-right: 7px; }
+
+/* Home glass tiers: one shared material, three translucency/edge levels. */
+.glass-tier--primary {
+  --tier-base: rgba(255,255,255,.14);
+  --tier-glint: rgba(255,255,255,.16);
+  --tier-sheen: rgba(255,255,255,.05);
+  --tier-shade: rgba(52,84,120,.05);
+  --tier-edge: rgba(74,96,122,.20);
+  --tier-highlight: rgba(255,255,255,.12);
+  --tier-blur: 12px;
+  --tier-sat: 1.1;
+  --tier-inset: inset 0 -14px 26px -22px rgba(40,64,90,.08);
+  --tier-shadow: 0 2px 4px -1px rgba(40,64,90,.075), 0 12px 26px -20px rgba(40,64,90,.18);
+  --tier-shadow-hover: 0 2px 4px rgba(40,64,90,.06), 0 16px 32px -20px rgba(40,64,90,.22);
+  --tier-fallback: rgba(247,250,255,.86);
+}
+.glass-tier--secondary {
+  --tier-base: rgba(255,255,255,.10);
+  --tier-glint: rgba(255,255,255,.12);
+  --tier-sheen: rgba(255,255,255,.04);
+  --tier-shade: rgba(52,84,120,.04);
+  --tier-edge: rgba(74,96,122,.17);
+  --tier-highlight: rgba(255,255,255,.09);
+  --tier-blur: 10px;
+  --tier-sat: 1.08;
+  --tier-inset: inset 0 -10px 22px -20px rgba(40,64,90,.06);
+  --tier-shadow: 0 2px 4px -1px rgba(40,64,90,.065), 0 8px 20px -18px rgba(40,64,90,.14);
+  --tier-shadow-hover: 0 1px 3px rgba(40,64,90,.05), 0 12px 26px -18px rgba(40,64,90,.18);
+  --tier-fallback: rgba(246,250,255,.84);
+}
+.glass-tier--reading {
+  --tier-base: rgba(255,255,255,.26);
+  --tier-glint: rgba(255,255,255,.08);
+  --tier-sheen: rgba(255,255,255,.03);
+  --tier-shade: rgba(52,84,120,.03);
+  --tier-edge: rgba(74,96,122,.18);
+  --tier-highlight: rgba(255,255,255,.06);
+  --tier-blur: 10px;
+  --tier-sat: 1.05;
+  --tier-inset: inset 0 -10px 20px -18px rgba(40,64,90,.05);
+  --tier-shadow: 0 2px 4px -1px rgba(40,64,90,.055), 0 8px 18px -18px rgba(40,64,90,.12);
+  --tier-shadow-hover: 0 1px 3px rgba(40,64,90,.04), 0 12px 24px -18px rgba(40,64,90,.16);
+  --tier-fallback: rgba(248,251,255,.88);
+}
+:root[data-theme='dark'] .glass-tier--primary {
+  --tier-base: rgba(24,16,54,.30);
+  --tier-glint: rgba(198,170,255,.16);
+  --tier-sheen: rgba(223,202,255,.10);
+  --tier-shade: rgba(0,0,0,.22);
+  --tier-edge: rgba(167,142,225,.24);
+  --tier-highlight: rgba(224,207,255,.08);
+  --tier-blur: 16px;
+  --tier-sat: 1.2;
+  --tier-inset: inset 0 -18px 30px -24px rgba(0,0,0,.45);
+  --tier-shadow: 0 2px 4px rgba(0,0,0,.25), 0 20px 40px -24px rgba(0,0,0,.55);
+  --tier-shadow-hover: 0 2px 6px rgba(0,0,0,.28), 0 24px 46px -24px rgba(0,0,0,.60);
+  --tier-fallback: rgba(12,8,28,.80);
+}
+:root[data-theme='dark'] .glass-tier--secondary {
+  --tier-base: rgba(24,16,54,.24);
+  --tier-glint: rgba(198,170,255,.12);
+  --tier-sheen: rgba(223,202,255,.06);
+  --tier-shade: rgba(0,0,0,.18);
+  --tier-edge: rgba(167,142,225,.20);
+  --tier-highlight: rgba(224,207,255,.06);
+  --tier-blur: 14px;
+  --tier-sat: 1.16;
+  --tier-inset: inset 0 -14px 24px -20px rgba(0,0,0,.35);
+  --tier-shadow: 0 1px 3px rgba(0,0,0,.16), 0 14px 30px -22px rgba(0,0,0,.45);
+  --tier-shadow-hover: 0 1px 4px rgba(0,0,0,.18), 0 18px 34px -22px rgba(0,0,0,.50);
+  --tier-fallback: rgba(12,8,28,.78);
+}
+:root[data-theme='dark'] .glass-tier--reading {
+  --tier-base: rgba(24,16,54,.40);
+  --tier-glint: rgba(198,170,255,.10);
+  --tier-sheen: rgba(223,202,255,.05);
+  --tier-shade: rgba(0,0,0,.24);
+  --tier-edge: rgba(167,142,225,.22);
+  --tier-highlight: rgba(224,207,255,.04);
+  --tier-blur: 12px;
+  --tier-sat: 1.12;
+  --tier-inset: inset 0 -12px 22px -18px rgba(0,0,0,.40);
+  --tier-shadow: 0 1px 2px rgba(0,0,0,.14), 0 10px 24px -20px rgba(0,0,0,.40);
+  --tier-shadow-hover: 0 1px 3px rgba(0,0,0,.16), 0 14px 28px -20px rgba(0,0,0,.44);
+  --tier-fallback: rgba(12,8,28,.84);
+}
+.glass-tier {
+  border: 1px solid var(--tier-edge);
+  background:
+    linear-gradient(120deg, var(--tier-glint), transparent 26%, transparent 76%, var(--tier-shade)),
+    linear-gradient(145deg, var(--tier-sheen), transparent 42%),
+    var(--tier-base);
+  background-clip: padding-box;
+  box-shadow: var(--tier-inset), var(--tier-shadow);
+  backdrop-filter: blur(var(--tier-blur)) saturate(var(--tier-sat));
+}
+.glass-tier::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 9%;
+  width: 36%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--tier-highlight), transparent);
+  pointer-events: none;
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass-tier { background: var(--tier-fallback); }
+}
+
+/* Hero Glass: the focus card alone gets a larger, curved specular surface. */
+.glass-hero {
+  --tier-base: rgba(255,255,255,.12);
+  isolation: isolate;
+  border-color: rgba(74,96,122,.20);
+  background:
+    radial-gradient(125% 95% at 84% -20%, rgba(255,255,255,.22), transparent 58%),
+    radial-gradient(70% 55% at 6% 4%, rgba(255,255,255,.09), transparent 64%),
+    linear-gradient(158deg, rgba(255,255,255,.04), transparent 42%, rgba(52,84,120,.04)),
+    var(--tier-base);
+  box-shadow:
+    0 2px 4px -1px rgba(40,64,90,.075),
+    0 18px 38px -26px rgba(40,64,90,.22),
+    inset 0 5px 12px -10px rgba(255,255,255,.40),
+    inset 0 -20px 32px -28px rgba(40,64,90,.10);
+  backdrop-filter: blur(12px) saturate(1.12);
+}
+.glass-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  width: auto;
+  height: auto;
+  border-radius: inherit;
+  background:
+    radial-gradient(62% 38% at 86% 4%, rgba(255,255,255,.17), transparent 70%),
+    radial-gradient(42% 28% at 8% 8%, rgba(255,255,255,.08), transparent 72%);
+  pointer-events: none;
+}
+:root[data-theme='dark'] .glass-hero {
+  --tier-base: rgba(26,17,58,.34);
+  border-color: rgba(167,142,225,.24);
+  /* Light comes through the shared horizon behind the card, not a top lamp. */
+  background:
+    linear-gradient(180deg, rgba(0,0,0,.12), transparent 72%),
+    var(--tier-base);
+  box-shadow:
+    0 2px 6px rgba(0,0,0,.26),
+    0 28px 60px -30px rgba(0,0,0,.62),
+    inset 0 -26px 38px -28px rgba(0,0,0,.52);
+  backdrop-filter: blur(10px) saturate(1.18);
+}
+:root[data-theme='dark'] .glass-hero::before {
+  background: none;
+}
+.glass-hero.glass-refract {
+  --tier-base: rgba(255,255,255,.08);
+}
+:root[data-theme='dark'] .glass-hero.glass-refract {
+  --tier-base: rgba(20,14,44,.18);
+}
+
+/* Admin-only refraction pilot: a clearer card so the sampled background shows. */
+.glass-refract {
+  --tier-base: rgba(255,255,255,.08);
+  --tier-glint: rgba(255,255,255,.18);
+  --tier-sheen: rgba(255,255,255,.04);
+  --tier-highlight: rgba(255,255,255,.20);
+  backdrop-filter: blur(8px) saturate(1.15);
+}
+:root[data-theme='dark'] .glass-refract {
+  --tier-base: rgba(20,14,44,.18);
+  --tier-glint: rgba(198,170,255,.10);
+  --tier-sheen: rgba(223,202,255,.04);
+  --tier-highlight: rgba(224,207,255,.07);
+}
+
+/* Soft Mist Glass — homepage light only. Dark materials and all layout metrics
+   stay intact.
+    Why the old cards read as solid boxes: the material was a single opaque-ish
+   fill painted on the element itself, so its alpha was identical at the centre
+   and at the 1px border — a filled rectangle with a hard edge, no matter how
+   low the alpha went. The surface is now a separate feathered layer: the card
+   element itself is transparent, and `::before` paints a centre-weighted film
+   that reaches transparent before the border box, so the edge dissolves into
+   the mist instead of ending on a line. Text, buttons and inputs are never in
+   that layer and keep full opacity. */
+:root[data-theme='light'] .glass-tier {
+  --mist-fill: rgba(250,252,255,.44);
+  --mist-light: rgba(255,255,255,.46);
+  --mist-edge: rgba(74,96,122,.018);
+  isolation: isolate;
+  border-color: var(--mist-edge);
+  /* No rectangular fill on the element: only the feathered layer carries colour. */
+  background: none;
+  box-shadow:
+    0 1px 2px rgba(44,64,92,.02),
+    0 10px 26px -20px rgba(44,64,92,.08);
+  backdrop-filter: blur(6px) saturate(1.06);
+}
+:root[data-theme='light'] .glass-tier--primary {
+  --mist-fill: rgba(250,252,255,.56);
+  --mist-light: rgba(255,255,255,.58);
+  --mist-edge: rgba(74,96,122,.025);
+}
+:root[data-theme='light'] .glass-tier--reading {
+  --mist-fill: rgba(250,252,255,.48);
+  --mist-light: rgba(255,255,255,.48);
+  --mist-edge: rgba(74,96,122,.02);
+}
+/* Feathered surface: light gathers at the upper-left of the pane, the film thins
+   toward every edge and is already transparent at the border box. */
+:root[data-theme='light'] .glass-tier::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  width: auto;
+  height: auto;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(112% 88% at 28% 2%, var(--mist-light), transparent 60%),
+    linear-gradient(180deg, transparent 58%, rgba(226,235,247,.12)),
+    radial-gradient(122% 118% at 50% 44%, var(--mist-fill) 36%, rgba(247,251,255,.12) 86%, transparent 100%);
+  /* Per-axis feather instead of one radial: a wide card keeps its middle but
+     every edge still dissolves by ~8% of its own side, at any aspect ratio. */
+  /* Fixed-width feather (~26px) rather than a percentage: the rim dissolves at
+     every card size while the surface behind the content keeps full strength. */
+  -webkit-mask-image:
+    linear-gradient(90deg, transparent, #000 26px, #000 calc(100% - 26px), transparent),
+    linear-gradient(180deg, transparent, #000 26px, #000 calc(100% - 26px), transparent);
+  mask-image:
+    linear-gradient(90deg, transparent, #000 26px, #000 calc(100% - 26px), transparent),
+    linear-gradient(180deg, transparent, #000 26px, #000 calc(100% - 26px), transparent);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+:root[data-theme='light'] .glass-tier.fx-spotlight::after { background: none; }
+@media (hover: hover) {
+  :root[data-theme='light'] .glass-tier:hover {
+    --mist-fill: rgba(250,252,255,.50);
+    --mist-light: rgba(255,255,255,.52);
+    border-color: rgba(74,96,122,.08);
+    box-shadow: 0 2px 10px -6px rgba(44,64,92,.10);
+  }
+}
+:root[data-theme='light'] .glass-tier:focus-within {
+  border-color: rgba(74,96,122,.22);
+  box-shadow: 0 2px 10px -6px rgba(44,64,92,.10);
+}
+/* Without backdrop blur or masks, keep a readable static pane instead. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root[data-theme='light'] .glass-tier { background: rgba(247,250,254,.78); }
+  :root[data-theme='light'] .glass-tier::before { display: none; }
+}
+@supports not ((mask-image: radial-gradient(#000,#000)) or (-webkit-mask-image: radial-gradient(#000,#000))) {
+  :root[data-theme='light'] .glass-tier::before {
+    background:
+      radial-gradient(112% 88% at 28% 2%, var(--mist-light), transparent 60%),
+      linear-gradient(180deg, transparent 58%, rgba(226,235,247,.16)),
+      radial-gradient(112% 108% at 50% 44%, var(--mist-fill) 34%, rgba(247,251,255,.12) 80%, transparent 96%);
+  }
+}
+
+:root[data-theme='light'] .workspace-context-switch {
+  border-color: rgba(74,96,122,.14);
+  background: rgba(255,255,255,.55);
+  box-shadow: 0 1px 2px rgba(40,64,90,.05);
+  backdrop-filter: blur(10px) saturate(1.05);
+}
+:root[data-theme='light'] .workspace-context-switch :deep(.el-radio-button.is-active .el-radio-button__original-radio:not(:disabled) + .el-radio-button__inner) {
+  background: rgba(70,83,223,.10);
+}
+:root[data-theme='light'] .capture-entry {
+  border-color: rgba(74,96,122,.14);
+  background: rgba(255,255,255,.50);
+}
+:root[data-theme='light'] .capture-entry:hover {
+  border-color: rgba(74,96,122,.22);
+  background: rgba(255,255,255,.72);
+}
+
 @media (min-width: 701px) {
-  .learning-row__text { display: grid; grid-template-columns: minmax(0,1fr) 130px; gap: 12px; }
-  .learning-row__text > * { grid-column: 1 / -1; }
-  .learning-row__text > .learning-row__summary, .learning-row__text > .learning-row__meta { grid-column: 1; }
-  .learning-row__text > .learning-path { grid-column: 2; grid-row: 3 / span 2; width: 130px; height: 110px; margin: 0; align-self: center; }
+  .learning-row__text { display: flex; flex-direction: column; gap: 6px; }
 }
 @media (max-width: 1099px) and (min-width: 701px) {
   .workspace-home__grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
-  .home-focus-lane { grid-column: 1; }
-  .home-project-lane { grid-column: 2; }
-  .recent-section { grid-column: 1 / -1; grid-row: 2; }
+  .home-focus-lane { grid-column: 1; grid-row: 1; }
+  .home-left-lane { grid-column: 2; grid-row: 1; }
+  .home-right-lane { grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: repeat(auto-fit,minmax(250px,1fr)); gap: 22px; }
   .home-shortcuts { grid-row: 3; }
-  .workspace-home__grid--loading .focus-card-frame { grid-column: 1; }
-  .workspace-home__grid--loading .projects-section, .workspace-home__grid--loading .today-section { grid-column: 2; }
-  .workspace-home__grid--loading .learning-section { grid-column: 1; grid-row: 2; }
+  .workspace-home__grid--loading > .focus-card-frame { grid-column: 1; }
 }
 @media (max-width: 700px) {
-  .workspace-home :deep(.page-header) { margin-bottom: 30px; }
+  .workspace-home :deep(.page-header) { margin-bottom: 28px; }
   .workspace-home :deep(.page-header h1) { font-size: 28px; line-height: 1.5; }
   .workspace-home :deep(.page-header__description) { font-size: 13px; margin-top: 10px; }
-  .workspace-home__grid { display: flex; flex-direction: column; gap: 22px; }
-  .home-focus-lane, .home-project-lane { display: contents; }
+  .workspace-home__grid { display: flex; flex-direction: column; gap: 18px; }
+  .home-left-lane, .home-focus-lane, .home-right-lane { display: contents; }
   .focus-cluster { order: 1; }
-  .focus-card-frame { order: 1; }
   .today-section { order: 2; }
-  .learning-section { order: 3; }
-  .projects-section { order: 4; }
+  .projects-section { order: 3; }
+  .capture-section { order: 4; }
   .recent-section { order: 5; }
-  .home-shortcuts { order: 6; gap: 10px 18px; }
+  .learning-section { order: 6; }
+  .home-shortcuts { order: 7; gap: 10px 18px; }
   .continue-focus { order: 2; margin-top: 0; padding-top: 10px; }
   .continue-focus__link { display: inline-flex; align-items: center; min-height: 44px; }
-  .focus-card { min-height: 0; padding: 24px; gap: 24px; }
-  .focus-card h2 { font-size: 26px; }
-  .home-section { padding: 24px; }
-  .home-section__icon { left: 24px; top: 27px; }
-  .home-section :deep(.section-header) { margin-bottom: 22px; }
-  .home-section :deep(.section-header h2) { font-size: 17px; }
-  .learning-row__text strong { font-size: 21px; }
-  .learning-path { width: 160px; height: 150px; margin-block: 10px; }
+  .focus-card { min-height: 0; padding: 22px; gap: 20px; }
+  .focus-card.is-empty { min-height: 0; }
+  .home-section { padding: 20px; }
+  .home-section__icon { left: 20px; top: 23px; }
+  .home-section :deep(.section-header) { margin-bottom: 18px; }
+  .home-section :deep(.section-header h2) { font-size: 16px; }
+  .capture-entry { min-height: 48px; }
+  .capture-entry__meta { display: none; }
+  .learning-section--compact .learning-row__text strong { font-size: 18px; }
   .home-shortcuts__label { width: 100%; }
   .home-search { display: none; }
   .home-capture-button.el-button { min-height: 44px; padding-inline: 12px; font-size: 12px; }

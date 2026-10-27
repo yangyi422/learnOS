@@ -13,19 +13,20 @@
 
     <el-alert v-if="error" :title="error" type="error" show-icon :closable="false" />
     <div class="projects-toolbar">
-      <nav class="projects-tabs" aria-label="项目视图">
+      <nav class="projects-tabs" :class="{ 'projects-tabs--motion': projectsTabs }" aria-label="项目视图">
         <button v-for="tab in tabs" :key="tab.key" type="button" :class="{ 'is-active': view === tab.key }" :aria-current="view === tab.key ? 'page' : undefined" @click="setView(tab.key)">{{ tab.label }}</button>
       </nav>
     </div>
 
     <div v-loading="loading" class="projects-content">
+      <MotionReveal :trigger="view" :duration="180" :distance="4" :enabled="projectsTabs">
       <template v-if="view === 'board'">
         <div v-if="selectedProject" class="projects-context">
           <span class="projects-context__accent" :style="{ background: selectedProject.accent || '#94a3b8' }" />
           <div><strong>{{ selectedProject.icon }} {{ selectedProject.title }}</strong><p v-if="selectedProject.description">{{ selectedProject.description }}</p></div>
           <el-tag size="small" effect="plain">{{ projectStatusLabel(selectedProject.status) }}</el-tag><LifeCaptureButton v-if="selectedProject.status === 'completed'" source-type="project" :source-id="selectedProject.id" />
         </div>
-        <KanbanBoard :tasks="tasks" :projects="projectMap" :selected-project-id="selectedProjectID" :active-task-id="taskDrawerOpen ? editingTask?.id ?? null : null" :done-count="doneCount" :busy="busy || loading" :today="today" @open="openTask" @add="openNewTask" @move="handleMove" @more-done="loadMoreDone" @archive="confirmArchive" />
+        <KanbanBoard :motion-pilot="projectsCards" :tasks="tasks" :projects="projectMap" :selected-project-id="selectedProjectID" :active-task-id="taskDrawerOpen ? editingTask?.id ?? null : null" :done-count="doneCount" :busy="busy || loading" :today="today" @open="openTask" @add="openNewTask" @move="handleMove" @more-done="loadMoreDone" @archive="confirmArchive" />
         <details v-if="selectedProjectID" class="project-records" @toggle="recordsExpanded = ($event.target as HTMLDetailsElement).open"><summary>项目记录</summary><RecordsPanel v-if="recordsExpanded" :key="selectedProjectID" :project-id="selectedProjectID" /></details>
       </template>
 
@@ -81,9 +82,10 @@
         </article>
         </template>
       </div>
+      </MotionReveal>
     </div>
 
-    <TaskDrawer ref="taskDrawer" v-model="taskDrawerOpen" :task="editingTask" :projects="projects" :default-project-id="selectedProjectID" :default-status="newTaskStatus" :busy="busy" :save-error="drawerError" @save="saveTask" @status="changeTaskStatus" @delete="removeTask" @archive="archiveTask" />
+    <TaskDrawer ref="taskDrawer" v-model="taskDrawerOpen" :motion-pilot="projectsDrawer" :task="editingTask" :projects="projects" :default-project-id="selectedProjectID" :default-status="newTaskStatus" :busy="busy" :save-error="drawerError" @save="saveTask" @status="changeTaskStatus" @delete="removeTask" @archive="archiveTask" />
 
     <el-dialog append-to-body v-model="projectDialogOpen" :title="editingProject ? '编辑项目' : '新建项目'" width="min(460px, 92vw)">
       <el-form label-position="top" @submit.prevent="saveProject">
@@ -105,11 +107,15 @@
       </el-form>
       <template #footer><el-button @click="projectDialogOpen = false">取消</el-button><el-button type="primary" :loading="busy" :disabled="!projectForm.title.trim()" @click="saveProject">保存</el-button></template>
     </el-dialog>
+    <EffectsPilotBar page="projects" />
   </PageShell>
 </template>
 
 <script setup lang="ts">
 import PageShell from '@/components/PageShell.vue'
+import EffectsPilotBar from '@/components/effects/EffectsPilotBar.vue'
+import MotionReveal from '@/motion/MotionReveal.vue'
+import { usePilot } from '@/effects/pilot'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -127,6 +133,7 @@ import { groupTodayTasks, localCalendarDate } from '@/utils/projectTasks'
 type View = 'board' | 'today' | 'list'
 const tabs: { key: View; label: string }[] = [{ key: 'board', label: '看板' }, { key: 'today', label: '今天' }, { key: 'list', label: '项目列表' }]
 const route = useRoute()
+const { projectsCards, projectsTabs, projectsDrawer } = usePilot()
 const router = useRouter()
 const projects = ref<Project[]>([])
 const tasks = ref<ProjectTask[]>([])
@@ -387,6 +394,9 @@ watch(() => route.query.task, async value => {
 .projects-tabs button:hover { color: var(--text-primary); }
 .projects-tabs button.is-active { color: var(--color-primary); font-weight: 670; }
 .projects-tabs button.is-active::after { position: absolute; right: 0; bottom: -9px; left: 0; height: 2px; border-radius: 2px; background: var(--color-primary); content: ''; }
+.projects-tabs--motion button { transition: color var(--motion-fast) var(--motion-ease-standard); }
+.projects-tabs--motion button::after { position: absolute; right: 0; bottom: -9px; left: 0; height: 2px; border-radius: 2px; background: var(--color-primary); content: ''; transform: scaleX(0); transform-origin: left center; transition: transform var(--motion-base) var(--motion-ease-standard); }
+.projects-tabs--motion button.is-active::after { transform: scaleX(1); }
 .projects-content { min-height: 360px; }
 .projects-context { display: flex; align-items: center; gap: 12px; margin-bottom: 15px; padding: 2px 0; }
 .projects-context__accent { align-self: stretch; width: 3px; min-height: 30px; border-radius: 4px; }

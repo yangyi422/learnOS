@@ -34,7 +34,7 @@
             v-for="task in lists[column.status]"
             :key="task.id"
             class="task-card"
-            :class="{ 'task-card--selected': activeTaskId === task.id }"
+            :class="{ 'task-card--selected': activeTaskId === task.id, 'task-card--motion': motionPilot }"
             :data-task-id="task.id"
             role="button"
             tabindex="0"
@@ -70,7 +70,7 @@ import { VueDraggable } from 'vue-draggable-plus'
 import { localCalendarDate, taskDueDate } from '@/utils/projectTasks'
 import type { Project, ProjectTask, TaskPriority, TaskStatus } from '@/api/projects'
 
-const props = defineProps<{ tasks: ProjectTask[]; projects: Record<number, Project>; selectedProjectId: number | null; activeTaskId?: number | null; doneCount: number; busy: boolean; today?: string }>()
+const props = defineProps<{ tasks: ProjectTask[]; projects: Record<number, Project>; selectedProjectId: number | null; activeTaskId?: number | null; doneCount: number; busy: boolean; today?: string; motionPilot?: boolean }>()
 const emit = defineEmits<{
   (e: 'open', task: ProjectTask): void
   (e: 'add', status: TaskStatus): void
@@ -190,6 +190,8 @@ function dueLabel(value: string, status: TaskStatus) {
 .kanban-column__cards { display: grid; align-content: start; gap: 9px; min-height: 42px; }
 .task-card { position: relative; display: grid; min-width: 0; gap: 13px; padding: 15px 16px 14px; border: 1px solid var(--card-border); border-radius: var(--radius-card); background: var(--card-surface); box-shadow: var(--shadow-card); cursor: grab; transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease; }
 .task-card:active { cursor: grabbing; }
+.task-card--motion:active { transform: translateY(1px); }
+.task-card--motion.task-card--dragging { transform: none; transition: none; }
 .task-card::before { position: absolute; top: 0; right: 8px; left: 8px; height: 1px; background: linear-gradient(90deg, transparent, var(--card-highlight), transparent); content: ''; pointer-events: none; }
 .task-card:hover { border-color: var(--card-border-hover); background: var(--card-surface-hover); box-shadow: var(--shadow-card-hover); }
 .task-card:focus-within { border-color: var(--color-primary); box-shadow: 0 0 0 2px var(--focus-ring), var(--shadow-card-hover); }

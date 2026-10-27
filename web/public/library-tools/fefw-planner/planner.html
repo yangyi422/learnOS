@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>挖角手帐 · 万缕千丝四线规划（复刻）</title>
+<meta name="description" content="万缕千丝（Fire Emblem: Fortune's Weave）四线挖角与培养规划手帐，本地复刻版。" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%2314151a'/%3E%3Crect x='4.5' y='4.5' width='23' height='23' fill='none' stroke='%23c9a24e'/%3E%3Ctext x='16' y='22' font-size='15' text-anchor='middle' fill='%23c9a24e' font-family='serif'%3E%E5%B8%90%3C/text%3E%3C/svg%3E" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="app">
+  <header class="masthead">
+    <div class="masthead-left">
+      <a class="backlink" id="backLink" href="/explore/library" hidden>返回资料库</a>
+      <div class="brand">
+        <span class="seal" aria-hidden="true">帐</span>
+        <div class="brand-text">
+          <h1>挖角手帐</h1>
+          <p>万缕千丝 · 四线规划 <span class="edition">本地复刻</span></p>
+        </div>
+      </div>
+    </div>
+    <div class="head-actions">
+      <span class="save-state" id="saveState" role="status"><i class="dot" aria-hidden="true"></i><span id="saveText">本地已保存</span></span>
+      <button class="btn ghost" type="button" data-action="export">导出 JSON</button>
+      <button class="btn ghost" type="button" data-action="import">导入</button>
+      <button class="btn ghost quiet" type="button" data-action="reset">重置</button>
+      <input type="file" id="importFile" accept="application/json,.json" hidden />
+    </div>
+  </header>
+
+  <div class="shell">
+    <nav class="rail" id="rail" aria-label="路线"></nav>
+
+    <main class="main" id="main">
+      <div id="routeView">
+        <section class="route-head" id="routeHead"></section>
+        <div class="toolbar" id="toolbar">
+          <label class="search">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"></circle><path d="M13 13l4 4"></path></svg>
+            <input id="search" type="search" placeholder="搜索角色名" autocomplete="off" />
+          </label>
+          <label class="switch">
+            <input type="checkbox" id="hideSkip" />
+            <span class="track" aria-hidden="true"><span class="knob"></span></span>
+            <span>隐藏不挖角</span>
+          </label>
+          <label class="filter">
+            <span class="filter-label">名声</span>
+            <select id="fameFilter" aria-label="按名声门槛筛选">
+              <option value="">全部</option>
+              <option value="story">剧情</option>
+              <option value="2">Lv.2</option><option value="3">Lv.3</option><option value="4">Lv.4</option><option value="5">Lv.5</option><option value="6">Lv.6</option><option value="7">Lv.7</option><option value="8">Lv.8</option><option value="9">Lv.9</option><option value="10">Lv.10</option>
+            </select>
+          </label>
+          <p class="hint">点按状态循环：<span>未规划</span> / <span>主力</span> / <span>板凳</span> / <span>不挖角</span></p>
+        </div>
+        <div class="roster" id="roster"></div>
+      </div>
+
+      <div id="overviewView" hidden></div>
+    </main>
+  </div>
+</div>
+
+<div class="backdrop" id="backdrop" hidden></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-hidden="true" aria-label="角色详情"></aside>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 <template>
   <el-container class="app-shell" :class="{ 'app-shell--home': route.path === '/' }">
     <el-container class="app-content" direction="vertical">
-      <div class="home-ambient" aria-hidden="true"><HomeLightField /></div>
+      <div class="home-ambient" aria-hidden="true"><HomeAmbient /></div>
       <header class="home-topbar">
         <button ref="mobileMenuButton" type="button" class="mobile-menu-button" aria-label="打开导航" aria-controls="mobile-navigation" :aria-expanded="drawerOpen" @click="openDrawer"><WorkspaceIcon name="menu" /></button>
         <RouterLink to="/" class="home-brand" aria-label="LearnOS 工作区"><strong>LifeOS</strong><span>LearnOS</span></RouterLink>
@@ -15,6 +15,7 @@
             <el-dropdown-menu>
               <el-dropdown-item @click="appearanceOpen = true">外观设置</el-dropdown-item>
               <el-dropdown-item @click="router.push('/explore')">探索空间</el-dropdown-item>
+              <el-dropdown-item v-if="current?.role === 'admin'" @click="router.push('/admin/visual-effects')">视觉实验室</el-dropdown-item>
               <el-dropdown-item v-if="current?.role === 'admin'" @click="router.push('/settings')">系统设置</el-dropdown-item>
               <el-dropdown-item v-if="current?.role === 'admin'" @click="router.push('/users')">用户管理</el-dropdown-item>
               <el-dropdown-item divided @click="signOut">退出登录</el-dropdown-item>
@@ -58,7 +59,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { currentUser, logout, type User } from '@/api/auth'
 import WorkspaceIcon from '@/components/WorkspaceIcon.vue'
 import HomeAppearanceDialog from '@/components/HomeAppearanceDialog.vue'
-import HomeLightField from '@/components/HomeLightField.vue'
+import HomeAmbient from '@/components/ambient/HomeAmbient.vue'
 
 const route = useRoute()
 const router = useRouter()

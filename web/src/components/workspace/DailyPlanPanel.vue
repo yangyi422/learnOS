@@ -3,17 +3,17 @@
     <SectionHeader title="今日计划" id="today-title"><template #actions><el-button text :disabled="loading || busy" @click="openPicker">加入今天</el-button></template></SectionHeader>
     <p v-if="error" class="plan-error" role="alert">{{ error }} <button class="inline-action" @click="$emit('refresh')">重试</button></p>
     <template v-else>
-      <p class="plan-summary">已安排 {{ planning?.summary.planned ?? 0 }} 项<span v-if="reminderCount">，另有 {{ reminderCount }} 项待处理提醒</span></p>
+      <p class="plan-summary">{{ planSummary }}</p>
       <template v-if="planning?.items.length">
-        <PlanningTaskRow v-for="task in visibleItems" :key="task.id" :task="task" :date="date" :context="context" planned :busy="busy || loading" @complete="complete" @open="$emit('open', $event)" @remove="remove" @schedule="reschedule" />
+        <PlanningTaskRow v-for="task in visibleItems" :key="task.id" :task="task" :date="date" :context="context" :is-focus="focusTaskIds?.has(task.id)" planned :busy="busy || loading" @complete="complete" @open="$emit('open', $event)" @remove="remove" @schedule="reschedule" />
         <button v-if="planning.items.length > 5" class="inline-action plan-expand" @click="expanded = !expanded">{{ expanded ? '收起计划' : `查看全部计划（${planning.items.length}）` }}</button>
       </template>
-      <EmptyState v-else :title="context === 'life' ? '今天可以留白' : '今天还没有安排'" description="可以从已有任务中选择，也可以随时记录想法。" />
+      <EmptyState v-else :title="context === 'life' ? '今天可以留白' : '今天还没有安排'" :description="context === 'life' ? '不安排也完全没问题；想做事时再从已有任务里选。' : '可以从已有任务中选择，也可以随时记录想法。'" />
       <details v-if="reminderCount" class="plan-reminders">
         <summary>待处理提醒（{{ reminderCount }}）</summary>
         <section v-for="group in reminderGroups.filter(item => item.tasks.length)" :key="group.key" :aria-label="group.title">
           <h3>{{ group.title }} <span>{{ group.tasks.length }}</span></h3>
-          <PlanningTaskRow v-for="task in group.tasks.slice(0, reminderExpanded ? undefined : 4)" :key="task.id" :task="task" :date="date" :context="context" :busy="busy || loading" @complete="complete" @open="$emit('open', $event)" @today="addToday" @schedule="reschedule" />
+          <PlanningTaskRow v-for="task in group.tasks.slice(0, reminderExpanded ? undefined : 4)" :key="task.id" :task="task" :date="date" :context="context" :is-focus="focusTaskIds?.has(task.id)" :busy="busy || loading" @complete="complete" @open="$emit('open', $event)" @today="addToday" @schedule="reschedule" />
         </section>
         <button v-if="reminderGroups.some(group => group.tasks.length > 4)" class="inline-action plan-expand" @click="reminderExpanded = !reminderExpanded">{{ reminderExpanded ? '收起提醒' : '展开全部提醒' }}</button>
       </details>
@@ -53,7 +53,7 @@ import type { WorkspaceContext } from '@/workspace-context'
 import SectionHeader from '@/components/SectionHeader.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import PlanningTaskRow from './PlanningTaskRow.vue'
-const props = defineProps<{ planning?: WorkspacePlanning; date: string; context: WorkspaceContext; loading: boolean; error?: string }>()
+const props = defineProps<{ planning?: WorkspacePlanning; date: string; context: WorkspaceContext; loading: boolean; error?: string; focusTaskIds?: Set<number> }>()
 defineEmits<{ open: [task: ProjectTask]; refresh: [] }>()
 const expanded = ref(false), reminderExpanded = ref(false)
 const busy = ref(false), message = ref(''), writeError = ref('')
@@ -65,6 +65,19 @@ type Attempt = { task: ProjectTask; patch: Partial<TaskInput>; closePicker: bool
 const failed = ref<Attempt | null>(null)
 let candidateRequest: AbortController | undefined, searchTimer: ReturnType<typeof setTimeout> | undefined
 const visibleItems = computed(() => props.planning?.items.slice(0, expanded.value ? undefined : 5) ?? [])
+// In the all-scenes view the single plan list stays interleaved, but the summary
+// still separates work and life so the overview keeps its scene distinction.
+const planSummary = computed(() => {
+  const planned = props.planning?.summary.planned ?? 0
+  if (props.context !== 'all' || planned === 0) return `已安排 ${planned} 项`
+  const counts = { work: 0, life: 0, unclassified: 0 }
+  for (const task of props.planning?.items ?? []) counts[task.effective_context] += 1
+  const parts: string[] = []
+  if (counts.work) parts.push(`工作 ${counts.work} 项`)
+  if (counts.life) parts.push(`生活 ${counts.life} 项`)
+  if (counts.unclassified) parts.push(`未分类 ${counts.unclassified} 项`)
+  return parts.length ? `已安排 ${planned} 项（${parts.join('、')}）` : `已安排 ${planned} 项`
+})
 const reminderGroups = computed(() => [
   { key: 'due', title: '今天到期', tasks: props.planning?.due_today ?? [] },
   { key: 'overdue', title: '已逾期', tasks: props.planning?.overdue ?? [] },

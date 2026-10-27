@@ -1,7 +1,7 @@
 import { expect, test, type Page, type Route } from '@playwright/test'
 import type { InboxItem } from '../src/api/inbox'
 import type { Project, ProjectTask } from '../src/api/projects'
-import type { WorkspaceHome, WorkspaceLearningItem, WorkspaceRecent, WorkspacePlanning } from '../src/api/workspace'
+import type { PlanningTask, WorkspaceHome, WorkspaceLearningItem, WorkspaceRecent, WorkspacePlanning } from '../src/api/workspace'
 
 const timestamp = '2026-09-29T08:00:00Z'
 const project: Project = { id: 7, title: 'LearnOS', description: '', status: 'active', icon: 'L', accent: '#3b82f6', archived_at: null, tasks: [], open_task_count: 1, next_task_count: 1, doing_task_count: 0, done_task_count: 0, created_at: timestamp, updated_at: timestamp }
@@ -156,7 +156,9 @@ test('Workspace Home 保留核心区域并能从焦点打开任务', async ({ pa
   await page.goto('/')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
   await expect(focusTitle(page)).toHaveText(task.title)
-  await expect(page.locator('.continue-focus')).toContainText('继续处理建议')
+  // The automatic suggestion is the same task as the chosen focus, so the
+  // resume row is suppressed instead of repeating it.
+  await expect(page.locator('.continue-focus')).toHaveCount(0)
   await expect(page.getByRole('heading', { name: '今日计划', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: '正在推进' })).toBeVisible()
   await expect(page.getByRole('heading', { name: '继续学习 · 全局' })).toBeVisible()
@@ -218,9 +220,12 @@ test('Current Focus 使用最近学习位置作为回退', async ({ page }) => {
     learning: [learning],
   })
   await page.goto('/')
-  await expect(page.locator('.continue-focus')).toContainText('学习位置')
-  await expect(page.locator('.continue-focus')).toContainText(learning.lesson_title)
-  await expect(page.locator('.continue-focus').getByRole('link').first()).toBeVisible()
+  // Learning is a global right-rail entry, never the middle action focus.
+  const learningSection = page.locator('.home-right-lane .learning-section')
+  await expect(learningSection).toContainText(learning.lesson_title)
+  await expect(learningSection).toContainText(learning.course_name)
+  await expect(learningSection.getByRole('link').first()).toBeVisible()
+  await expect(page.locator('.continue-focus')).toHaveCount(0)
 })
 
 test('今日计划只展示主动安排，截止提醒单独呈现', async ({ page }) => {
@@ -341,7 +346,7 @@ test('首页显示各区骨架，首屏请求失败后可重试', async ({ page 
   await installWorkspaceMocks(page, {}, { homeGate, failHomeTimes: 1 })
   await page.goto('/')
   await expect(page.locator('.daily-focus-card--skeleton, .focus-card--skeleton')).toBeVisible()
-  await expect(page.locator('.home-section--skeleton')).toHaveCount(3)
+  await expect(page.locator('.home-section--skeleton')).toHaveCount(5)
   release()
   await expect(page.locator('.workspace-home__fatal-error')).toBeVisible()
   await page.getByRole('button', { name: '重试' }).click()
@@ -373,9 +378,9 @@ test('窄屏核心区域顺序保持，快捷入口和弹层记录可用', async
   }))
   expect(layout.width).toBeLessThanOrEqual(layout.viewport)
   expect(layout.focus).toBeLessThan(layout.today)
-  expect(layout.today).toBeLessThan(layout.learning)
-  expect(layout.learning).toBeLessThan(layout.projects)
-  expect(layout.projects).toBeLessThan(layout.inbox)
+  expect(layout.today).toBeLessThan(layout.projects)
+  expect(layout.projects).toBeLessThan(layout.learning)
+  expect(layout.learning).toBeLessThan(layout.inbox)
   await page.getByRole('button', { name: '快速记录', exact: true }).click()
   await expect(page.getByRole('textbox', { name: '快速记录到收集箱' })).toBeVisible()
   await expect(page.getByRole('button', { name: '记录到收集箱' })).toBeVisible()
@@ -568,21 +573,21 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1920, 1440,
       expect(nav.x + nav.width).toBeLessThanOrEqual(actions.x)
       expect(projects.x + projects.width).toBeLessThan(focus.x)
       expect(focus.x + focus.width).toBeLessThan(recent.x)
-      expect(Math.abs(projects.y - focus.y)).toBeLessThan(1)
-      expect(Math.abs(recent.y - focus.y)).toBeLessThan(1)
-      expect(today.y).toBeGreaterThan(projects.y + projects.height)
-      expect(lesson.y).toBeGreaterThan(focus.y + focus.height)
+      expect(Math.abs(today.y - focus.y)).toBeLessThan(1)
+      expect(recent.y).toBeGreaterThan(focus.y)
+      expect(today.y).toBeLessThan(projects.y)
+      expect(lesson.y).toBeGreaterThan(recent.y)
       expect(focus.width).toBeGreaterThan(projects.width)
-      expect(recent.height).toBeGreaterThan(focus.height)
+      expect(focus.height).toBeGreaterThan(320)
     } else if (width > 700) {
       await expect(page.getByLabel('打开导航')).toBeVisible()
       expect(focus.x + focus.width).toBeLessThan(projects.x)
       expect(lesson.y).toBeGreaterThan(focus.y + focus.height)
     } else {
       expect(focus.y).toBeLessThan(today.y)
-      expect(today.y).toBeLessThan(lesson.y)
-      expect(lesson.y).toBeLessThan(projects.y)
+      expect(today.y).toBeLessThan(projects.y)
       expect(projects.y).toBeLessThan(recent.y)
+      expect(recent.y).toBeLessThan(lesson.y)
     }
     const material = await page.evaluate(() => {
       const cards = ['.focus-card', '.projects-section', '.today-section', '.learning-section', '.recent-section'].map(s => getComputedStyle(document.querySelector(s)!))
@@ -660,7 +665,7 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1920, 1440,
       await expect(page).toHaveURL(/\/projects\?project=7/)
     } else {
       await expect(projects).toContainText('还没有进行中的项目')
-      await expect(page.locator('.learning-section')).toContainText('知识世界还是空的')
+      await expect(page.locator('.learning-section')).toContainText('还没有学习位置')
       expect(await page.locator('.recent-section').count()).toBe(0)
       await page.screenshot({ path: info.outputPath(`density-${theme}-${width}-${count}.png`), fullPage: true })
       await projects.getByRole('button', { name: '查看项目', exact: true }).click()
@@ -726,7 +731,7 @@ test.describe('Home border continuity', () => {
       await expect(page.locator('.home-recent-row')).toHaveCount(4)
       await page.emulateMedia({ reducedMotion: 'reduce' })
       let sharedHover: string[] | undefined
-      for (const selector of ['.focus-card', '.today-section', '.projects-section', '.learning-section', '.recent-section']) {
+      for (const selector of ['.focus-card', '.today-section', '.projects-section', '.capture-section', '.recent-section']) {
         const card = page.locator(selector)
         await card.scrollIntoViewIfNeeded()
         await page.mouse.move(0, 0)
@@ -936,9 +941,11 @@ for (const width of [1440, 1024, 390]) {
     await expect(page.locator('.workspace-context-organize')).toBeVisible()
     const original = await page.locator('.focus-card').elementHandle()
     const geometry = () => page.evaluate(() => {
+      // Scene switching changes the number of columns/rows; the invariant under
+      // test is vertical layout stability, so compare y/height only.
       const rect = (selector: string) => {
-        const { x, y, width, height } = document.querySelector(selector)!.getBoundingClientRect()
-        return { x, y, width, height }
+        const { y, height } = document.querySelector(selector)!.getBoundingClientRect()
+        return { y, height }
       }
       return { grid: rect('.workspace-home__grid'), control: rect('.workspace-context-switch'), focus: rect('.focus-card'), projects: rect('.projects-section'), today: rect('.today-section'), learning: rect('.learning-section'), footer: rect('.home-shortcuts'), documentHeight: document.documentElement.scrollHeight, viewportWidth: document.documentElement.clientWidth }
     })
@@ -979,4 +986,65 @@ test('切场景失败保留全局区域和重试，旧任务不可操作', async
   await expect(page.locator('.workspace-home__grid--switching')).toHaveCount(0)
   await expect(page.locator('.project-row')).toHaveCount(0)
   await expect(page.locator('.projects-section')).not.toHaveAttribute('inert')
+})
+
+test('首页标题随场景变化且日期保持一致', async ({ page }) => {
+  await installWorkspaceMocks(page)
+  await page.goto('/')
+  const dateText = await page.locator('.page-header__description').innerText()
+  await expect(page.locator('.page-header h1')).toHaveText('今天，按自己的节奏')
+  await page.locator('.workspace-context-switch label').filter({ hasText: '工作' }).click()
+  await expect(page.locator('.page-header h1')).toHaveText('今天，专注重要的事')
+  await expect(page.locator('.page-header__description')).toHaveText(dateText)
+  await page.locator('.workspace-context-switch label').filter({ hasText: '生活' }).click()
+  await expect(page.locator('.page-header h1')).toHaveText('留一点时间给自己')
+  await expect(page.locator('.page-header__description')).toHaveText(dateText)
+})
+
+test('全部场景的今日计划区分工作与生活数量', async ({ page }) => {
+  const workTask: PlanningTask = { ...task, id: 71, title: '工作安排', plan_date: '2026-09-29', project_title: project.title, effective_context: 'work' }
+  const lifeTask: PlanningTask = { ...task, id: 72, title: '生活安排', plan_date: '2026-09-29', project_title: '城市漫游计划', effective_context: 'life' }
+  await installWorkspaceMocks(page, { planning: { ...emptyPlanning, items: [workTask, lifeTask], summary: { ...emptyPlanning.summary, planned: 2, total: 2 } } })
+  await page.goto('/')
+  await expect(page.locator('.plan-summary')).toHaveText('已安排 2 项（工作 1 项、生活 1 项）')
+  const rows = page.locator('.daily-plan > .plan-task')
+  await expect(rows).toHaveCount(2)
+  await expect(rows.nth(0)).toContainText('工作')
+  await expect(rows.nth(1)).toContainText('生活')
+})
+
+test('继续上次只在建议与今日焦点不同时出现', async ({ page }) => {
+  await installWorkspaceMocks(page, { daily_focus: { work: null, life: null } })
+  await page.goto('/')
+  const resume = page.locator('.continue-focus')
+  await expect(resume).toContainText('继续上次')
+  await expect(resume).toContainText(task.title)
+  await expect(resume).toContainText('LearnOS')
+  await expect(resume).toContainText('下一步')
+})
+
+test('右栏的快速记录入口打开同一个弹层', async ({ page }) => {
+  await installWorkspaceMocks(page)
+  await page.goto('/')
+  await expect(page.locator('.home-right-lane .capture-section')).toBeVisible()
+  await page.locator('.capture-entry').click()
+  const capture = page.getByRole('dialog', { name: '快速记录', exact: true })
+  await expect(capture).toBeVisible()
+  await expect(capture.getByRole('textbox', { name: '快速记录到收集箱' })).toBeVisible()
+})
+
+test('全局学习与最近内容固定在右栏，不占据中栏', async ({ page }) => {
+  const learning: WorkspaceLearningItem = {
+    course_id: 21, course_name: '认知科学', unit_title: '认知偏差', lesson_id: 22,
+    lesson_title: '为什么我们会高估自己的判断？', core_question: '从真实判断中识别直觉与证据。',
+    current_level: 'understand', cognitive_status: 'stable', last_learning_at: timestamp,
+    has_current_lesson: true, updated_at: timestamp,
+  }
+  await installWorkspaceMocks(page, { learning: [learning] }, { recent: recentFacts })
+  await installRecentSourceMocks(page)
+  await page.goto('/')
+  await expect(page.locator('.home-right-lane .learning-section')).toBeVisible()
+  await expect(page.locator('.home-right-lane .recent-section')).toBeVisible()
+  await expect(page.locator('.home-focus-lane .learning-section')).toHaveCount(0)
+  await expect(page.locator('.home-focus-lane .recent-section')).toHaveCount(0)
 })

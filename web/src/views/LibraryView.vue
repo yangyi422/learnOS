@@ -14,6 +14,28 @@
         ></template
       ></PageHeader
     >
+    <section class="library-tools" aria-labelledby="library-tools-title">
+      <header class="library-tools-head">
+        <div>
+          <h2 id="library-tools-title">工具</h2>
+          <p>独立的小工具，数据只保存在本机浏览器。</p>
+        </div>
+        <span class="library-tools-count">1 个</span>
+      </header>
+      <div class="library-tool-grid">
+        <a
+          class="library-tool-card"
+          href="/library-tools/fefw-planner/planner.html?from=library"
+          target="_blank"
+          rel="noopener"
+        >
+          <span class="library-tool-eyebrow">角色规划</span>
+          <h3>万缕千丝 · 挖角手帐</h3>
+          <p>四线挖角与培养规划：主力 / 板凳、名声与交涉条件、职业路线与备注。</p>
+          <span class="library-tool-action">打开手帐</span>
+        </a>
+      </div>
+    </section>
     <el-alert v-if="error" :title="error" type="error" :closable="false"
       ><el-button text @click="load">重试</el-button></el-alert
     >

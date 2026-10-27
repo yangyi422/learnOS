@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import DashboardView from '@/views/DashboardView.vue'
 import CoursesView from '@/views/CoursesView.vue'
 import SettingsView from '@/views/SettingsView.vue'
@@ -18,8 +18,24 @@ import MonthlyReviewView from '@/views/MonthlyReviewView.vue'
 import LifeView from '@/views/LifeView.vue'
 import FinanceView from '@/views/FinanceView.vue'
 import InboxView from '@/views/InboxView.vue'
+import { currentUser } from '@/api/auth'
+import { APIRequestError } from '@/api/http'
 
-export default createRouter({
+// Development-only experiments: not registered in production builds.
+const labRoutes: RouteRecordRaw[] = import.meta.env.DEV
+  ? [
+      { path: '/lab/webgl', component: () => import('@/views/VisualLabView.vue'), meta: { title: 'WebGL Visual Lab', requiresAdmin: true } },
+      { path: '/lab/timeline', component: () => import('@/views/TimelineVisualLabView.vue'), meta: { title: 'Timeline Visual Lab', requiresAdmin: true } },
+    ]
+  : []
+
+// Admin tools ship with normal builds. The view stays a lazy chunk so ordinary
+// business pages never download the effects gallery or its CSS.
+const adminRoutes: RouteRecordRaw[] = [
+  { path: '/admin/visual-effects', component: () => import('@/views/EffectsLabView.vue'), meta: { title: 'Visual Effects Lab', requiresAdmin: true } },
+]
+
+const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/login', component: LoginView, meta: { title: '登录' } },
@@ -62,9 +78,10 @@ export default createRouter({
     {
       path: '/settings',
       component: SettingsView,
-      meta: { title: '系统设置' },
+      meta: { title: '系统设置', requiresAdmin: true },
     },
-    { path: '/users', component: UsersView, meta: { title: '用户管理' } },
+    { path: '/users', component: UsersView, meta: { title: '用户管理', requiresAdmin: true } },
+    { path: '/forbidden', component: () => import('@/views/ForbiddenView.vue'), meta: { title: '没有访问权限' } },
     { path: '/projects', component: ProjectsView, meta: { title: '项目' } },
     {
       path: '/exploration/questions',
@@ -74,5 +91,25 @@ export default createRouter({
  { path: '/explore/library/:collection', component: LibraryCollectionView, meta: { title: '资料专题' } },
  { path: '/explore/library/:collection/pages/:page', component: LibraryCollectionView, meta: { title: '资料页面' } },
  { path: '/explore', component: ExplorationView, meta: { title: '探索' } },
+    ...labRoutes,
+    ...adminRoutes,
   ],
 })
+
+/**
+ * Admin-only routes fail closed: any unknown error (network, 500, malformed
+ * response) is treated as "no access". 401 keeps the existing redirect to /login
+ * performed by the HTTP client, so the guard only aborts the navigation.
+ */
+router.beforeEach(async (to) => {
+  if (!to.meta.requiresAdmin) return true
+  try {
+    const user = await currentUser()
+    return user.role === 'admin' ? true : { path: '/forbidden' }
+  } catch (error) {
+    if (error instanceof APIRequestError && error.status === 401) return false
+    return { path: '/forbidden' }
+  }
+})
+
+export default router

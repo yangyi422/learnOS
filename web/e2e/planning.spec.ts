@@ -70,7 +70,8 @@ async function setup(page: import('@playwright/test').Page, context: BrowserCont
 
 test('已有任务加入、移出、改期、完成并同步原看板', async ({ page, context }) => {
   const mock = await setup(page, context)
-  await expect(page.locator('.plan-summary')).toHaveText('已安排 1 项，另有 3 项待处理提醒')
+  await expect(page.locator('.plan-summary')).toHaveText('已安排 1 项')
+  await expect(page.locator('.plan-reminders summary')).toContainText('3')
   await expect(page.locator('.daily-plan > .plan-task')).toHaveCount(1)
   await page.getByRole('button', { name: '加入今天', exact: true }).click()
   const picker = page.getByRole('dialog', { name: '选择已有任务加入今天' })

@@ -1,6 +1,6 @@
 <template>
   <el-drawer append-to-body
-    class="task-drawer"
+    class="task-drawer" :class="{ 'task-drawer--motion': motionPilot }"
     modal-class="task-drawer-overlay"
     :model-value="modelValue"
     :title="task ? '任务详情' : '新建任务'"
@@ -116,6 +116,7 @@ const props = defineProps<{
   defaultStatus: TaskStatus
   busy: boolean
   saveError?: string
+  motionPilot?: boolean
 }>()
 const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
@@ -222,6 +223,7 @@ onUnmounted(() => window.removeEventListener('resize', onResize))
 </script>
 
 <style>
+.task-drawer.el-drawer.rtl.task-drawer--motion { transition: transform var(--motion-base) var(--motion-ease-standard); }
 .task-drawer.el-drawer.rtl { top: 12px; right: 12px; height: calc(100dvh - 24px); border: 1px solid var(--drawer-edge); border-radius: 12px; background: var(--drawer-bg); color: var(--text-primary); box-shadow: var(--drawer-shadow); overflow: hidden; transition: transform 170ms ease-out; }
 .task-drawer .el-drawer__body { display: flex; min-height: 0; padding: 0; overflow: hidden; }
 .task-drawer__workspace { display: flex; width: 100%; min-height: 0; flex-direction: column; }

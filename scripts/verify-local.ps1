@@ -18,12 +18,16 @@
   .\scripts\verify-local.ps1 -E2E
 
 .EXAMPLE
+  .\scripts\verify-local.ps1 -Visual
+
+.EXAMPLE
   .\scripts\verify-local.ps1 -GoPackages ./internal/model/ -SkipWeb
 #>
 param(
   [switch]$SkipGo,
   [switch]$SkipWeb,
   [switch]$E2E,
+  [switch]$Visual,
   [string[]]$GoPackages = @('./internal/...', './cmd/...'),
   [switch]$AllowEnvFailures
 )
@@ -124,6 +128,28 @@ if ($E2E) {
     } else {
       Write-Host ("  [ok]   Playwright: " + $passed + " passed")
       $summary.Add(("OK    e2e (" + $passed + " passed)"))
+    }
+  } finally {
+    Pop-Location
+  }
+}
+
+if ($Visual) {
+  Write-Host '-- Visual audit --'
+  Push-Location (Join-Path $root 'web')
+  try {
+    $visualLog = Join-Path $logDir 'visual-audit.log'
+    $env:CAPTURE_VISUALS = '1'
+    & npx playwright test e2e/visual-audit.spec.ts 2>&1 | Tee-Object -FilePath $visualLog | Out-Null
+    $visualExit = $LASTEXITCODE
+    Remove-Item Env:CAPTURE_VISUALS -ErrorAction SilentlyContinue
+    if ($visualExit -eq 0) {
+      Write-Host '  [ok]   visual audit screenshots: web/test-results/visual-audit-*/visual-*.png'
+      $summary.Add('OK    visual audit')
+    } else {
+      Write-Host ('  [fail] visual audit (exit ' + $visualExit + ', log ' + $visualLog + ')')
+      $summary.Add('FAIL  visual audit')
+      $failed = $true
     }
   } finally {
     Pop-Location
