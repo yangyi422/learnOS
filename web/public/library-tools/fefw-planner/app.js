@@ -36,6 +36,75 @@
 
   function charProf(c) { return (c && PROFICIENCIES[c.name]) || []; }
 
+  // 特技与可习得：由 web/scripts/build-fefw-data.mjs 从攻略站生成，页面不联网。
+  var SKILL_SHEET = window.FEFW_SKILL_INDEX || {};
+  var SKILL_HOLDERS = window.FEFW_SKILL_HOLDERS || { arts: {}, magic: {} };
+
+  // 职业转职条件里的熟练 → 该职业可用的战技武器类型。
+  var WEAPON_BY_PROF = {
+    '剑术': '剑', '枪术': '枪', '斧术': '斧', '箭术': '弓', '格斗术': '手甲',
+    '黑魔术': '魔法', '白魔术': '魔法',
+  };
+
+  function classWeapons(cls) {
+    if (!cls || !cls.examSummary) return [];
+    var found = [];
+    Object.keys(WEAPON_BY_PROF).forEach(function (prof) {
+      if (cls.examSummary.indexOf(prof) >= 0) {
+        var weapon = WEAPON_BY_PROF[prof];
+        if (found.indexOf(weapon) < 0) found.push(weapon);
+      }
+    });
+    return found;
+  }
+
+  /** 该职业 + 该角色可用的战技 / 魔法名称。 */
+  function classSkillHint(cls, c) {
+    var sheet = SKILL_SHEET[c.name];
+    var weapons = classWeapons(cls);
+    if (!sheet || !weapons.length) return null;
+    var arts = (sheet.arts || []).filter(function (a) { return weapons.indexOf(a.weapon) >= 0; });
+    var magic = weapons.indexOf('魔法') >= 0 ? (sheet.magic || []) : [];
+    if (!arts.length && !magic.length) return null;
+    return { arts: arts, magic: magic };
+  }
+
+  function holdersOf(kind, name) {
+    var list = (SKILL_HOLDERS[kind] || {})[name] || [];
+    return list;
+  }
+
+
+  function sheetGroup(title, count, rows) {
+    if (!count) return '';
+    return '<details class="sheet-group"><summary>' + esc(title) + ' <span class="sheet-count">' + count + '</span></summary>' +
+      '<ul class="sheet-list">' + rows + '</ul></details>';
+  }
+
+  function skillRows(list, kindOf, holdersKind) {
+    return list.map(function (s) {
+      var meta = kindOf ? kindOf(s) : '';
+      return '<li class="sheet-item" data-holders="' + esc(holdersKind) + '" data-name="' + esc(s.name) + '">' +
+        '<button type="button" class="sheet-row">' +
+          '<b>' + esc(s.name) + '</b>' +
+          (meta ? '<span class="sheet-badge">' + esc(meta) + '</span>' : '') +
+          '<span class="sheet-text">' + esc(s.text || '') + '</span>' +
+        '</button>' +
+        '<p class="sheet-holders" hidden></p>' +
+      '</li>';
+    }).join('');
+  }
+
+  function toggleHolders(item) {
+    var panel = item.querySelector('.sheet-holders');
+    if (!panel) return;
+    if (!panel.hidden) { panel.hidden = true; item.classList.remove('open'); return; }
+    var names = holdersOf(item.getAttribute('data-holders'), item.getAttribute('data-name'));
+    panel.textContent = names.length ? '可学：' + names.join('、') : '仅该角色可用（站点未记录其他习得者）';
+    panel.hidden = false;
+    item.classList.add('open');
+  }
+
   /** 转职条件里出现的所有武器/兵种熟练，例：任选其一 剑术 D 斧术 D → [剑术, 斧术]。 */
   function classProfReq(cls) {
     if (!cls || !cls.examSummary) return [];
@@ -496,6 +565,7 @@
             '<button type="button" class="statchip" data-act="status" data-status="' + plan.status + '" aria-label="' + esc(c.name) + ' 的状态：' + STATUS_LABEL[plan.status] + '，点击切换">' + STATUS_LABEL[plan.status] + '</button>' +
           '</div>' +
           '<div class="char-meta">' + meta + '</div>' +
+          personalSkillLine(c) +
           '<div class="char-foot">' +
             '<button type="button" class="planbtn' + cls + '" data-act="plan" title="' + esc(planTitle) + '">' + planInner + '</button>' +
             '<span class="notedot' + (plan.note ? ' on' : '') + '" aria-hidden="true"></span>' +
@@ -520,6 +590,14 @@
   function visiblePlan(c, routeId) {
     if (!state.hideSkip) return true;
     return getPlan(routeId, c.id).status !== 'skip';
+  }
+
+  function personalSkillLine(c) {
+    var sheet = SKILL_SHEET[c.name];
+    var skill = sheet && sheet.personal;
+    if (!skill || !skill.name) return '';
+    return '<div class="char-skill" title="' + esc(skill.text || '') + '">' +
+      '<span class="char-skill-label">个人特技</span>' + esc(skill.name) + '</div>';
   }
 
   function renderRoster() {
@@ -608,6 +686,22 @@
       .join(' · ');
   }
 
+  // 选中职业后，直接列出该职业武器类型下这名角色能用的战技/魔法。
+  function classHintHTML(cls, c) {
+    var hint = classSkillHint(cls, c);
+    if (!hint) return '';
+    var bits = [];
+    if (hint.arts.length) {
+      bits.push('<span class="stage-hint-label">可用战技</span>' +
+        hint.arts.map(function (a) { return '<span class="stage-hint-chip">' + esc(a.name) + '</span>'; }).join(''));
+    }
+    if (hint.magic.length) {
+      bits.push('<span class="stage-hint-label">可用魔法</span>' +
+        hint.magic.map(function (m) { return '<span class="stage-hint-chip">' + esc(m.name) + '</span>'; }).join(''));
+    }
+    return '<div class="stage-hint">' + bits.join('') + '</div>';
+  }
+
   function stageReqHTML(cls) {
     if (!cls) return '';
     var bits = [];
@@ -665,6 +759,7 @@
         stageReqHTML(cls) +
         '</div>' +
         (fit.length ? '<p class="stage-fit">得意技能适配：' + esc(fit.join('、')) + '</p>' : '') +
+        classHintHTML(cls, c) +
         '</div>';
     });
     html += '</div>';
@@ -672,6 +767,30 @@
     if (growth) html += '<p class="class-summary"><b>路线累计成长</b> ' + esc(growth) + '</p>';
     if (Object.keys(path).length) {
       html += '<button type="button" class="path-clear" data-act="clear-path">清空整条职业路线</button>';
+    }
+    html += '</div>';
+
+    var sheet = SKILL_SHEET[c.name];
+    html += '<div class="dsection"><h3>特技与可习得</h3>';
+    if (!sheet) {
+      html += '<p class="quote">本站暂未收录这名角色的技能资料。</p>';
+    } else {
+      if (sheet.personal && sheet.personal.name) {
+        html += '<p class="sheet-personal"><b>个人特技 · ' + esc(sheet.personal.name) + '</b>' + esc(sheet.personal.text || '') + '</p>';
+      }
+      (sheet.blood || []).filter(function (b) { return b && b.name; }).forEach(function (b) {
+        html += '<p class="sheet-personal sheet-blood"><b>血印 · ' + esc(b.name) + '</b>' + esc(b.text || '') + '</p>';
+      });
+      html += sheetGroup('Lv 特技', (sheet.lv || []).length, skillRows(sheet.lv || [], function (v) {
+        return v.level == null ? '等级待补' : 'Lv.' + v.level;
+      }, 'lv'));
+      html += sheetGroup('可习得技能', (sheet.skills || []).length, skillRows(sheet.skills || [], function (s) { return s.kind; }, 'skills'));
+      html += sheetGroup('战技', (sheet.arts || []).length, skillRows(sheet.arts || [], function (a) {
+        return [a.weapon, a.cost ? '消耗 ' + a.cost : '', a.might ? '威力 ' + a.might : '', a.hit ? '命中 ' + a.hit : ''].filter(Boolean).join(' · ');
+      }, 'arts'));
+      html += sheetGroup('魔法', (sheet.magic || []).length, skillRows(sheet.magic || [], function (m) {
+        return [m.type, m.rank, m.uses ? '次数 ' + m.uses : '', m.range ? '射程 ' + m.range : ''].filter(Boolean).join(' · ');
+      }, 'magic'));
     }
     html += '</div>';
 
@@ -1046,6 +1165,10 @@
     if (!btn) return;
     var act = btn.getAttribute('data-act');
     if (act === 'close') { closeDrawer(); return; }
+    if (btn.classList.contains('sheet-row')) {
+      var item = btn.closest('.sheet-item');
+      if (item) { toggleHolders(item); return; }
+    }
     if (act === 'status-route') {
       var rid = btn.getAttribute('data-route');
       var cur = getPlan(rid, drawerCharId);

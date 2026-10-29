@@ -519,7 +519,7 @@ img { display: block; }
   right: 0;
   bottom: 0;
   z-index: 40;
-  width: 460px;
+  width: 560px;
   max-width: 94vw;
   padding: 22px 26px 44px;
   background: var(--surface);
@@ -647,7 +647,7 @@ img { display: block; }
 .class-select:focus { border-color: var(--route); outline: none; }
 
 .classpath { display: flex; flex-direction: column; gap: 12px; }
-.stage-head { display: grid; grid-template-columns: 62px minmax(0, 0.9fr) minmax(0, 1.1fr); align-items: center; gap: 10px; }
+.stage-head { display: grid; grid-template-columns: 62px minmax(140px, 1fr) minmax(0, 1.5fr); align-items: center; gap: 12px; }
 .stage-name { font-size: 11.5px; letter-spacing: 0.14em; color: var(--dim); white-space: nowrap; }
 .stage .class-select { height: 34px; font-size: 13px; }
 .stage-fixed {
@@ -882,4 +882,42 @@ img { display: block; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
+
+/* 特技与可习得 */
+.sheet-personal { margin: 0 0 8px; font-size: 12.5px; line-height: 1.7; color: var(--text); }
+.sheet-personal b { display: block; color: var(--muted); font-weight: 500; margin-bottom: 2px; }
+.sheet-blood b { color: var(--route); }
+.sheet-group { margin-top: 10px; border-top: 1px dashed var(--line-soft); padding-top: 8px; }
+.sheet-group summary { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12px; color: var(--muted); list-style: none; }
+.sheet-group summary::-webkit-details-marker { display: none; }
+.sheet-group summary::before { content: '▸'; font-size: 9px; color: var(--dim); transition: transform .15s; }
+.sheet-group[open] summary::before { transform: rotate(90deg); }
+.sheet-count { padding: 0 6px; border: 1px solid var(--line-soft); border-radius: 2px; font-size: 10.5px; color: var(--dim); }
+.sheet-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.sheet-list li { display: block; font-size: 12px; line-height: 1.55; padding: 3px 0; }
+.sheet-list li b { font-weight: 500; color: var(--text); margin-right: 6px; }
+.sheet-badge { margin-left: 6px; font-size: 10.5px; color: var(--dim); border: 1px solid var(--line-soft); border-radius: 2px; padding: 0 4px; white-space: nowrap; }
+.sheet-text { display: block; color: var(--dim); }
+
+/* 战技/魔法可学名单、职业可用战技提示、名册个人特技 */
+.sheet-item { padding: 0; }
+.sheet-row { display: block; width: 100%; padding: 3px 0; border: 0; background: none; text-align: left;
+  font: inherit; color: inherit; cursor: pointer; }
+.sheet-row:hover b { color: var(--route); }
+.sheet-row b { font-weight: 500; margin-right: 6px; }
+.sheet-row .sheet-text { display: block; color: var(--dim); }
+.sheet-item.open .sheet-row b { color: var(--route); }
+.sheet-holders { margin: 2px 0 4px; padding: 6px 8px; border-left: 2px solid var(--line); background: var(--surface-2);
+  font-size: 11.5px; line-height: 1.65; color: var(--dim); }
+
+.stage-hint { margin: 6px 0 0 72px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: 11px; }
+.stage-hint-label { color: var(--dim); margin-right: 2px; }
+.stage-hint-chip { padding: 1px 6px; border: 1px solid var(--line-soft); border-radius: 2px; background: var(--surface-2); color: var(--text); }
+
+.char-skill { display: flex; align-items: baseline; gap: 6px; margin: 2px 0 0; font-size: 11px; color: var(--dim); }
+.char-skill-label { color: var(--dim); opacity: .8; }
+
+@media (max-width: 520px) {
+  .stage-hint { margin-left: 52px; }
 }
