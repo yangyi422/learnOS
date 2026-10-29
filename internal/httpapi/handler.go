@@ -46,6 +46,8 @@ type Handler struct {
 	records        *service.RecordService
 	workspace      *service.WorkspaceService
 	dailyFocus     *service.DailyFocusService
+	toolStates     *service.ToolStateService
+	apiTokens      *service.APITokenService
 }
 
 func NewHandler(courses *service.CourseService, graph *service.KnowledgeGraphService, optional ...interface{}) *Handler {
@@ -75,6 +77,8 @@ func NewHandler(courses *service.CourseService, graph *service.KnowledgeGraphSer
 	var workspaceService *service.WorkspaceService
 	var recentService *service.WorkspaceRecentService
 	var dailyFocusService *service.DailyFocusService
+	var toolStateService *service.ToolStateService
+	var apiTokenService *service.APITokenService
 	for _, item := range optional {
 		switch value := item.(type) {
 		case *service.CognitiveStateService:
@@ -129,9 +133,22 @@ func NewHandler(courses *service.CourseService, graph *service.KnowledgeGraphSer
 			workspaceService = value
 		case *service.DailyFocusService:
 			dailyFocusService = value
+		case *service.ToolStateService:
+			toolStateService = value
+		case *service.APITokenService:
+			apiTokenService = value
 		}
 	}
-	return &Handler{recent: recentService, images: imageService, library: libraryService, reviews: reviewService, courses: courses, graph: graph, cognitive: cognitiveService, challenges: challengeService, misconceptions: misconceptionService, exploration: explorationService, curriculum: curriculumService, grounding: groundingService, backups: backupService, databaseHealth: databaseHealthService, export: exportService, consistency: consistencyService, domainInit: domainInitService, aiConfig: aiConfigurationService, nextLesson: nextLessonService, users: userService, projects: projectService, inbox: inboxService, life: lifeService, assets: assetService, finance: financeService, records: recordService, workspace: workspaceService, dailyFocus: dailyFocusService}
+	return &Handler{recent: recentService, images: imageService, library: libraryService, reviews: reviewService, courses: courses, graph: graph, cognitive: cognitiveService, challenges: challengeService, misconceptions: misconceptionService, exploration: explorationService, curriculum: curriculumService, grounding: groundingService, backups: backupService, databaseHealth: databaseHealthService, export: exportService, consistency: consistencyService, domainInit: domainInitService, aiConfig: aiConfigurationService, nextLesson: nextLessonService, users: userService, projects: projectService, inbox: inboxService, life: lifeService, assets: assetService, finance: financeService, records: recordService, workspace: workspaceService, dailyFocus: dailyFocusService, toolStates: toolStateService, apiTokens: apiTokenService}
+}
+
+// AuthenticateAPIToken is the middleware hook for bearer credentials. It is a
+// method so the router can stay free of service wiring.
+func (h *Handler) AuthenticateAPIToken(ctx context.Context, raw string) (auth.Principal, error) {
+	if h.apiTokens == nil {
+		return auth.Principal{}, service.ErrInvalidAPIToken
+	}
+	return h.apiTokens.AuthenticateToken(ctx, raw)
 }
 
 func (h *Handler) Login(c *gin.Context) {

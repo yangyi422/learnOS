@@ -220,8 +220,8 @@ test('Current Focus 使用最近学习位置作为回退', async ({ page }) => {
     learning: [learning],
   })
   await page.goto('/')
-  // Learning is a global right-rail entry, never the middle action focus.
-  const learningSection = page.locator('.home-right-lane .learning-section')
+  // Learning is a global entry in the middle column, never the middle action focus.
+  const learningSection = page.locator('.home-focus-lane .learning-section')
   await expect(learningSection).toContainText(learning.lesson_title)
   await expect(learningSection).toContainText(learning.course_name)
   await expect(learningSection.getByRole('link').first()).toBeVisible()
@@ -590,12 +590,17 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1920, 1440,
       expect(recent.y).toBeLessThan(lesson.y)
     }
     const material = await page.evaluate(() => {
-      const cards = ['.focus-card', '.projects-section', '.today-section', '.learning-section', '.recent-section'].map(s => getComputedStyle(document.querySelector(s)!))
-      return { opacity: cards.map(s => s.opacity), fills: cards.map(s => s.backgroundColor), blur: cards.map(s => s.backdropFilter), light: getComputedStyle(document.querySelector('.home-light-field')!, '::before').backgroundImage, pointer: getComputedStyle(document.querySelector('.home-light-field')!).pointerEvents, overflow: document.documentElement.scrollWidth > innerWidth, ambient: getComputedStyle(document.querySelector('.home-ambient')!).backgroundImage }
+      const cards = ['.focus-card', '.projects-section', '.today-section', '.learning-section', '.capture-section', '.recent-section'].map(s => document.querySelector(s)!)
+      const styles = cards.map(el => getComputedStyle(el))
+      return { opacity: styles.map(s => s.opacity), fills: styles.map(s => s.backgroundColor), blur: styles.map(s => s.backdropFilter), materials: cards.map(el => {
+        const s = getComputedStyle(el), p = getComputedStyle(el, '::before')
+        return JSON.stringify([s.backgroundColor, s.backgroundImage, s.borderTopColor, s.boxShadow, s.backdropFilter, p.backgroundImage, p.maskImage])
+      }), light: getComputedStyle(document.querySelector('.home-light-field')!, '::before').backgroundImage, pointer: getComputedStyle(document.querySelector('.home-light-field')!).pointerEvents, overflow: document.documentElement.scrollWidth > innerWidth, ambient: getComputedStyle(document.querySelector('.home-ambient-host')!).backgroundImage }
     })
     expect(material.opacity.every(value => value === '1')).toBe(true)
     expect(material.fills.every(value => /^rgba/.test(value))).toBe(true)
-    expect(material.blur.every(value => value === (theme === 'light' ? 'blur(18px) saturate(1.2)' : 'blur(14px)'))).toBe(true)
+    expect(new Set(material.materials).size).toBe(1)
+    expect(material.blur.every(value => value === (theme === 'light' ? 'blur(8px) saturate(1.03)' : 'blur(10px) saturate(1.1)'))).toBe(true)
     expect(material.light.match(/radial-gradient/g)).toHaveLength(3)
     expect(material.pointer).toBe('none')
     if (theme === 'dark') expect(material.ambient).toBe('none')
@@ -751,7 +756,10 @@ test.describe('Home border continuity', () => {
         expect(base.opacity).toBe('1')
         expect(base.outline).toBe('none')
         if (selector !== '.focus-card') {
-          expect(await card.evaluate(el => getComputedStyle(el).backgroundClip.split(',').every(value => value.trim() === 'padding-box'))).toBe(true)
+          // Since the unified film, the card element paints no fill at all; the
+          // material lives on ::before (design.md §3), so there is nothing to clip.
+          expect(await card.evaluate(el => getComputedStyle(el).backgroundImage)).toBe('none')
+          expect(await card.evaluate(el => getComputedStyle(el, '::before').backgroundImage)).toContain('gradient')
         }
         const bounds = (await card.boundingBox())!
         const name = selector.slice(1)
@@ -1033,7 +1041,7 @@ test('右栏的快速记录入口打开同一个弹层', async ({ page }) => {
   await expect(capture.getByRole('textbox', { name: '快速记录到收集箱' })).toBeVisible()
 })
 
-test('全局学习与最近内容固定在右栏，不占据中栏', async ({ page }) => {
+test('全局学习固定在中栏焦点卡下方，最近内容固定在右栏', async ({ page }) => {
   const learning: WorkspaceLearningItem = {
     course_id: 21, course_name: '认知科学', unit_title: '认知偏差', lesson_id: 22,
     lesson_title: '为什么我们会高估自己的判断？', core_question: '从真实判断中识别直觉与证据。',
@@ -1043,8 +1051,8 @@ test('全局学习与最近内容固定在右栏，不占据中栏', async ({ pa
   await installWorkspaceMocks(page, { learning: [learning] }, { recent: recentFacts })
   await installRecentSourceMocks(page)
   await page.goto('/')
-  await expect(page.locator('.home-right-lane .learning-section')).toBeVisible()
+  await expect(page.locator('.home-focus-lane .learning-section')).toBeVisible()
   await expect(page.locator('.home-right-lane .recent-section')).toBeVisible()
-  await expect(page.locator('.home-focus-lane .learning-section')).toHaveCount(0)
+  await expect(page.locator('.home-right-lane .learning-section')).toHaveCount(0)
   await expect(page.locator('.home-focus-lane .recent-section')).toHaveCount(0)
 })

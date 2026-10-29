@@ -1,5 +1,155 @@
 # LearnOS Roadmap
 
+## uTools 匹配指令：搜索结果直接采集（2026-10-29）
+
+- [x] `plugin.json` 新增 `lifeos-capture-text` 功能：`over`（选中文本）+ `regex`（搜索框任意 ≥2 字符）两条匹配指令，候选文案「保存到 LifeOS 收集箱」
+- [x] payload 预填：`preload.js` 缓存早到的 `onPluginEnter` action 并在注册时补发；`App.vue` 按 payload > 草稿 > 剪贴板优先填入并全选，标注「来自 uTools 输入」，不自动提交
+- [x] 测试：插件 vitest 27/27（新增 2 项：payload 直接预填并可一次 Enter 提交、payload 优先于草稿/剪贴板且超长忽略）；构建产物浏览器实测 payload 链路（textarea=123234、备注正确、Enter 后成功）
+- [x] 修正：uTools 官方明确会**忽略任意匹配的正则**（`/.*/`、`/[\s\S]*/`），原来的 catch-all `regex` 不会生效；改为只保留 `over` 匹配指令，并去掉会误导人的 `regex` 条目
+- [x] 诊断：preload 记录最后一次进入事件（code/type/payload 长度与预览，不含凭证）到 `dbStorage`，连接设置面板显示「最近一次进入」，用于区分“没有 payload”与“onPluginEnter 未触发”
+- [x] 真机反馈修正（这一轮的真因）：preload 一旦抛错，页面就静默退化为浏览器兜底（配置落 localStorage、无事件无剪贴板）。`preload.js` 改为**完全自包含**：不引用本地文件、`require` 全包 try/catch、取不到 Node http 时退回 fetch、事件注册也包 try/catch，保证 `window.lifeos` 一定存在
+- [x] 增加「运行模式」指示（uTools 桥接 / 浏览器兜底）与「最近一次进入」诊断，避免再用截图猜 preload 是否生效
+- [x] 测试更贴近真实：`preloadBridge.test.ts` 用 dbStorage/onPluginEnter 桩加载真实 `preload.js`，对本地真实 http 服务断言 method/Authorization/body/status，并验证早到事件被缓冲、注册后补发（28 项全绿）
+- [x] 文档写明：改过 preload 后 uTools「重载」不一定生效，需完全退出 uTools 再开
+- [x] 第二轮真机定位：面板显示「浏览器兜底」证明 preload 没能把 `window.lifeos` 送到页面世界——新版 uTools 以 `contextIsolation` 运行 preload，隔离世界的赋值页面看不到。改为优先 `contextBridge.exposeInMainWorld('lifeos', …)`，失败才回退 `window.lifeos = …`
+- [x] 再补一层页面兜底：若页面本身注入了 `utools`（无 preload），`bridge.ts` 直接用页面 `utools` API 拼等价桥接，并在「运行模式」标注 `uTools 页面兜底（preload 隔离）`
+- [ ] 未验证：真机 uTools 中匹配指令的候选排序与 `over` 取值（需在装了 uTools 的机器上确认）
+
+## uTools 快速采集插件 + 采集凭证（2026-10-29）
+
+- [x] 后端最小凭证：`api_tokens` 表（sha256、`capture:inbox` 单一 scope、必填有效期、可撤销、`last_used_at`），schema 32→33
+- [x] 接口：`GET/POST/DELETE /api/v1/api-tokens`（仅会话）+ `POST /api/v1/capture/inbox`（Bearer token 或会话，复用 `InboxService.CreateWithKey`）；凭证 principal 强制 `Role=user` + 单一 scope，其他 `/api/v1/*` 仍只认会话
+- [x] Web 设置页新增「快速采集凭证」面板：生成（一次性明文 + 复制）、列表（前缀/有效期/最近使用）、撤销
+- [x] 独立插件工程 `utools-plugin/`（Vue 3 + Vite，独立 node_modules，不改 web/、desktop/、不新增数据库）：`plugin.json` 指令「LifeOS 收集」「快速记录」、preload 桥接、草稿保留、剪贴板预填、Enter/Shift+Enter、幂等 capture_key
+- [x] 跨源处理：插件页对 LifeOS 属跨源，后端不放宽 CORS；改为 preload 的 Node http 请求（`preload-request.cjs`），页面 fetch 仅作浏览器 dev 兜底
+- [x] 测试：Go 服务/处理器/迁移共 5 组新增用例；真实服务端到端（登录→发凭证→采集→撤销→401）；插件 25 项 vitest（含真实 http 运输层）；设置页 1 项 Playwright；构建产物浏览器冒烟
+- [x] 部署：本地 8080 schema 33 + `api_tokens` 表与索引存在 + 迁移前备份 `learnos-20261029-062332.zip`
+- [ ] 未验证：真机 uTools 加载（onPluginOut / dbStorage / clipboard / hideMainWindow）；远端 43.138 需重新部署才有该接口
+
+## 桌面端站内链接不再交给系统浏览器（2026-10-29）
+
+- [x] 原因：WebView2 没有标签页，`target="_blank"` 由系统浏览器处理；桌面端点挖角手帐会跳出应用
+- [x] 桌面窗口入口 URL 增加 `?shell=desktop`，新增 `web/src/shell.ts` 用 sessionStorage 记住标记（跨 401→/login 等整页跳转保留）；桌面端工具入口改为同窗口打开，网页端仍为新标签页
+- [x] 资料库工具区文案同步为「规划随账号保存（Web 与桌面端共用）」
+- [x] 验证：新增 2 项 E2E（桌面 shell 同窗口跳转并可进入工具页、web 仍 `target=_blank`），与既有 library 用例共 3 项通过；typecheck、79 项单测通过；本地 8080 实测 `?shell=desktop` 下链接无 target、纯 web 下为 `_blank`
+- [x] EXE 已重建（`bin/LifeOS.exe`、`LifeOS-debug.exe` 均含 `shell=desktop`），便携包同步更新
+- [ ] 未验证：Windows 实机点击工具后是否确实留在应用内（需在桌面端点一次）
+
+## 挖角手帐接入账号存档（2026-10-29）
+
+- [x] 后端：新增 `tool_states` 表（`user_id + tool_key` 唯一、`state_json`、`revision` 乐观锁），schema 31→32，随既有 AutoMigrate 迁移
+- [x] 接口：`GET/PUT /api/v1/library-tools/:key/state`，复用会话认证；未登录 401、未知工具 404、无存档 404（`TOOL_STATE_NOT_FOUND`）、revision 冲突 409、格式/超限 400（上限 512 KiB）
+- [x] 前端：静态工具页启动先读账号存档，404 时提示「上传本机到账号」，编辑后 900ms debounce 写回并带 revision；409 停止自动保存并提示载入账号版本；未登录/离线退回 localStorage 并明示状态
+- [x] 保留 localStorage 作为离线缓存与迁移来源，导出/导入 JSON 不变；不写资料三表、不进专题 ZIP
+- [x] 测试：service 3 项、handler 3 项（含生产路由 401）、迁移 1 项（建表 + 唯一索引 + 重开幂等）、新增 `library-tool-sync.spec.ts` 3 项 E2E；`go test ./...`、typecheck、79 项单测全通过
+- [x] 部署验证：容器 healthy、`schema_version=32`、真实库中 `tool_states` 与 `idx_tool_state_user_key` 存在、迁移前自动备份 `learnos-20261029-053607.zip`；未登录访问工具页显示「未登录 · 仅保存在本机」且本地缓存仍写入
+- [x] 修正部署脚本：此前只同步 `web/`，导致后端改动不进镜像；改为按子树同步 `internal/ cmd/ deploy/ web/ …`（不使用 `--delete`，保护镜像侧 `.env`、`data/`、`backups/`）
+- [ ] 未验证：已登录用户的真实读写在浏览器中的完整往返（本地无该账号密码，仅以 Go 集成测试与 mock E2E 覆盖）
+
+## 4K 大屏适配（2026-10-29）
+
+- [x] 定位：3840 视口下首页仍被 1680px、标准页被 1248px 上限卡住，内容缩在左上角（实测 shell 宽 1680/1248，右侧空白过半）
+- [x] 新增两级视口尺度步进（≥2200px、≥3200px）：标准页宽 1248→1440→1640，首页 1680→2000→2480，页面边距 32→40→56，卡片内边距 28→32→36，阅读 760→880、课件 800→920，首页栏距 24→28→32
+- [x] 首页/顶栏横向留白改为 `--home-gutter`（36→40→56），消除 4K 下顶栏与页面对不齐
+- [x] 字体与控件高度不随视口放大：物理字号交给操作系统缩放，避免与 150/200% 缩放叠加
+- [x] 等价性：1440/1920 四路由构建产物逐像素完全一致；2560/3840 按预期变化且无横向溢出
+- [x] typecheck、94 项 E2E（ui-foundation/workspace/home-material）通过（1 项并发抖动重跑通过）；本地 8080 与桌面 EXE 均已更新
+- [ ] 未验证：你那台 4K 显示器在 100% 与 150% 系统缩放下的实际观感
+
+## 桌面端单文件分发（2026-10-29）
+
+- [x] `desktop/desktop.config.json` 通过 `go:embed` 编入 EXE，分发只需一个 `LifeOS.exe`；运行时仍支持 `LIFEOS_API_BASE` > 同目录/当前目录配置文件 > 内置默认
+- [x] 配置解析顺序与来源写入 `LoadConfig(embedded []byte)`，新增单测覆盖「内嵌默认生效」与「环境变量覆盖内嵌」
+- [x] 该配置改为纳入版本管理（此前 gitignore），保证任何机器 `go build` 都能编译通过；地址为作者自有服务器，不含任何凭据
+- [x] 重新构建并确认 EXE 内含地址与 `embedded default` 标记；便携包更新为 `LifeOS.exe` + 可选调试版
+- [ ] Windows 实机确认：删除同名配置文件后仍能用内置地址连上服务器
+
+## 桌面端默认全屏（2026-10-29）
+
+- [x] 启动状态改为 `StartState: WindowStateFullscreen`：默认无原生标题栏、不显示任务栏；`LIFEOS_WINDOWED=1` 可回到 1440×900 窗口
+- [x] F11 仍可切换全屏/窗口；全屏下用 Alt+F4 退出（无关闭按钮）
+- [x] 说明取舍：仅"最大化"隐藏标题栏需要无边框窗口 + 自绘拖拽区与窗口按钮，属独立改动，未在本轮实现
+- [x] `bin/LifeOS-debug.exe` 与 `bin/LifeOS-new.exe` 已含新逻辑；`bin/LifeOS.exe` 运行中被占用，关闭应用后改名替换即可
+- [ ] Windows 实机确认：全屏启动是否正常、F11 是否被网页抢键、全屏下滚动与尺寸
+
+## 默认主题改为浅色（2026-10-29）
+
+- [x] `web/src/theme.ts` 兜底值与 `savedPreference()` 回退改为 `light`；`web/index.html` 首屏内联脚本默认浅色，`meta[theme-color]` 缺省 `#e1eaf5`
+- [x] 已保存的 `learnos-theme` 始终优先：`dark` 仍为深色、`system` 仍跟随系统；不清空既有偏好
+- [x] 更新 `ui-foundation` 用例为「默认浅色 + system/dark 偏好仍生效」，并补 `theme-color` 断言；117 项 E2E（ui-foundation/workspace/home-ambient/visual-audit）、79 项单测、typecheck 通过
+- [x] 本地 8080 重新部署后实测：OS 深浅两种设置下新会话都是浅色，`saved=dark` 为深色、`saved=system` 跟随 OS
+- [x] 桌面端重新构建：`bin/LifeOS.exe` 与 `bin/LifeOS-debug.exe` 均含新默认（`desktop/frontend/dist` 已重建）
+- [x] `design.md` 与 `docs/ui-design.md` 中的「默认深色」表述同步更新
+
+## 首屏"无限加载"兜底与桌面诊断（2026-10-29）
+
+- [x] 定位：Web 与桌面共有的首屏问题来自历史代码——`load()` 一旦请求不返回，`loading` 永远为真，骨架没有人任何出口（HEAD 版本即如此，非本轮引入）
+- [x] 前端：`load()` 增加 20s 上限（超时显示「加载超时」+ 重试）、`currentUser()` 启动等待 10s 上限、骨架 6s 后显示「仍在加载…」提示；不再出现无出口的骨架
+- [x] 桌面桥接：记录每个被代理的 `/api/v1/*` 调用的状态码与耗时，日志可直接指出页面停在哪个请求
+- [x] 验证：mock 挂起 `/workspace/home` 时，6.9s 出现提示、20.5s 切换为错误+重试（骨架消失）；86 项 workspace/home-material E2E、79 项单测、typecheck 通过
+- [ ] 待确认：真实环境首屏卡住的具体请求（需查看新的 `lifeos-desktop.log` 代理耗时行，或 Web 端 DevTools Network）；远端 Web 需重新部署才生效
+
+## 桌面端接入：Wails v3 + Vue 3（2026-10-29）
+
+- [x] 新增独立 `desktop/` Go 模块（`lifeos/desktop`，`go 1.26.0` + `toolchain go1.26.10`），不引用后端代码、不改现有 go.mod
+- [x] Loopback 桥接：`127.0.0.1` 随机端口提供 `go:embed` 前端，`/api/v1/*` 反代到配置的远端，`/healthz` 本地健康检查，history 深链回退 index.html
+- [x] 安全边界：只绑回环、只代理 `/api/v1/`、方法白名单、Host/Origin 校验、`apiBase` 仅允许 http(s) origin；`Set-Cookie` 去除 `Domain`/`Secure` 以适配 loopback，保留 HttpOnly/SameSite/Path/Max-Age
+- [x] 前端复用：新增 `web/vite.desktop.config.ts` 与 `build:desktop`，产物写入 `desktop/frontend/dist`；`internal/webassets/dist` 与现有 Web 构建/部署流程未改（index.html SHA 未变）
+- [x] 工具链：Wails CLI v3.0.0 装入 WSL 用户级 `~/go/bin`；`wails3 doctor` 通过；Windows 交叉编译 `CGO_ENABLED=0`，未安装 MinGW
+- [x] 构建产出 `desktop/bin/LifeOS.exe`（PE32+ GUI x86-64），前端资源已嵌入
+- [x] 验证：desktop 单元测试（Guard/代理/Cookie）通过；对真实远端 `http://43.138.202.56:8888` 的端到端代理检查通过；前端 typecheck + 79 项单测 + build:check 通过
+- [ ] Windows 实机：运行 EXE、WebView2、登录与 Cookie 落盘、深层路由刷新待手测
+
+## Phase 2A：PageHeader 视觉层级（2026-10-29）
+
+- [x] 业务页 `PageHeader h1` 字重 700→500、字距 `-0.02em`，尺寸仍为 28px；首页 44px display 标题由自身 `--font-home-display` 规则覆盖，未受影响
+- [x] 描述文字改用 `--color-text-secondary`，色阶下沉一级；字号、行高、间距、actions 布局与面包屑未改
+- [x] 实测描述字号当前为 `--font-body`(16px) 而非 14px，按"不改高度/间距"约束保持不动，差异已在交付说明中标出
+- [x] 构建产物 A/B：10 条业务路由 × 双主题 × 1440/390 下 PageHeader/描述/actions 几何与行数**完全不变**，仅标题文字像素变化；无 PageHeader 的路由 0 差异
+- [x] typecheck、79 项单测、隔离构建、40 项核心 E2E（ui-foundation + regression）通过；本地已更新为 `index-DDiPQ18a.css` 并在 8080 复核 computed 字重/字距/描述色
+
+## Phase 1：方向 B Token 语义收敛（2026-10-29）
+
+- [x] 标题尺度分层：业务页固定 `--font-page-title` 28px，新增 `--font-home-display` 44px 仅首页使用，首页 h1 改为引用 token
+- [x] 圆角语义化：`--radius-surface`(16) / `--radius-field`(9，实际生效值) / `--radius-pill`(999)；`--radius-card/-panel/-control/-button` 降为兼容别名，消除 `--radius-control` 0px 与 9px 的双重定义
+- [x] 材质收敛为同一家族三配方：`--material-surface-*`（操作卡片）、`--material-mist-*`（首页羽化，`--home-surface-*` 为别名）、`--material-reading-*`（阅读面板）；`--glass-*` 全部降为别名
+- [x] 明确 `--color-accent` 为唯一品牌强调色，success / warning / danger 语义色保留不受约束
+- [x] 等价性验证：改前/改后构建产物在 5 条路由 × 双主题下逐像素完全一致；首页 20 张基准 18 张逐位相同、2 张最大差 1 级；跨页 44 张 40 张逐位相同
+- [x] typecheck、79 项单测、隔离构建、40 项核心 E2E（ui-foundation + regression）、13 项视觉检查通过；本地服务已更新至 `index-BHkur234.css` 并复核 computed token
+- [ ] 遗留：`--home-*` 调色名仍承担全局角色、Element `--el-border-radius-small: 0px` 与 field 9px 不一致、表格/learning-composer 12px 未语义化、业务组件 4 处 eyebrow 待 Phase 2 决策
+
+## 轻量 AI 前端视觉工作流初始化（2026-10-29）
+
+- [x] 在既有 AGENTS / 设计规范 / 评审清单中建立参考读取、差异提炼、组件限制判断、局部实施、截图复核与最多两轮自动修正；优先级为结构/信息层次 → 组件语言 → 装饰
+- [x] 区分全局与局部 Token，固定已验收浅色冷白蓝灰/轻玻璃及现有深紫方向；Skill / MCP 缺失不伪造研究或强制安装
+- [x] 复用 Playwright 与现有 visual-audit / home-material：`test:ui` 默认保存固定时间/数据的首屏、整页 PNG 与来源 JSON；支持 `PLAYWRIGHT_BASE_URL` 验证已运行前端，不新增浏览器平台或依赖
+- [x] 新增 `build:check` 隔离检查构建；现有 PowerShell 验证入口保留真实 E2E 失败退出码、区分显式告警与通过，截图阶段不覆盖前一阶段输出
+- [x] 源码与实际 8080 前端各 13 项视觉检查通过，已核验 10 组 PNG/JSON 证据并抽查双主题桌面/手机；非首页沿用既有核心回归，未修改页面与业务源码
+- [x] 对齐已上线首页控件的 3px 焦点外扩断言，保留 2px 轮廓与对比度检查；不为了旧断言重画 UI
+- [x] Typecheck、79 项单测、40 项核心 E2E 与隔离构建通过；验证脚本语法、启动失败退出码及显式告警分支通过模拟验证，未重启正常运行环境
+
+## 首页层级与扫描节奏（2026-10-28，参考 Refero Styles）
+
+- [x] 参考 dope.security / Authkit / Dimension：主方向取 Dimension 的"工作台玻璃面板 + 克制 500 字重 + 细边无阴影"，仅借 Authkit 四级前景阶梯与 dope.security 数字 stamped 处理
+- [x] 首页模块标题降为标签层（14px/600、次级色、.04em 字距，六卡共用 `--home-label-*`），任务/项目/文章标题成为第一层
+- [x] 模块计数（`N 个项目` / `N 条`）以 tabular numerals 呈现，作为扫描锚点；不新增装饰性 eyebrow
+- [x] 行内更紧（项目行 16px、最近行 11px、行内 gap 4–5px），模块间更松（header 下 20px），列位置与宽度不变
+- [x] 大标题 600→500、-0.02em；输入区圆角 12→10px，与卡片 16px、控件 999px 组成半径家族
+- [x] 修正 `workspace.spec.ts` 中依赖旧 `background-clip: padding-box` 的过期断言（卡片已无元素级填充）
+- [x] 按上线现状统一文档与测试：继续学习固定在中栏焦点卡下方（与 `docs/ui-design.md` 早先记录一致），右栏只保留快速记录与最近内容；`design.md` Phase 11.1d 与两处 E2E 断言同步更正
+
+## 首页双主题材质统一精修（2026-10-28）
+
+- [x] 删除首页 Hero / Primary / Secondary / Reading 视觉分支；六卡统一圆角、薄膜、弱边界、羽化、Hover / Focus，不改内容、布局和尺寸
+- [x] `--home-surface-*` / `--home-control-*` 仅首页生效；导航、搜索、快捷记录、头像、场景筛选与记录入口统一轻玻璃基调
+- [x] 浅色抬升基底、减弱灰蓝沉降与局部白斑；深色保留深紫光场，统一低对比卡面，不新增 Canvas / Shader / 动画框架
+- [x] 六卡一致性、双主题 390–1920px、键盘焦点、选中/禁用状态、静态降级声明与路由隔离自动化验证
+- [x] 相同接口验收数据下，1440/390px 全部卡片与顶部控件的 bounds、字体、网格尺寸前后一致；项目页材质不变
+- [x] 逐视口与滚动位置抽样文字对比度：浅色最低 5.20:1，深色最低 5.38:1；文字与内容层不使用材质遮罩
+- [ ] Safari / Firefox 的原生遮罩表现与真实触屏设备视觉复核
+
+当前规则以 [设计规范](../design.md#3-光场与空间) 为准，以下为历史阶段记录。
+
 ## 首页浅色 Soft Mist Glass 视觉可见性纠偏（2026-10-27）
 
 - [x] 按最终截图采用冷白蓝灰柔雾背景、弱边界冷白膜与极低接触阴影，移除 Hero 亮面

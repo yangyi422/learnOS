@@ -118,8 +118,15 @@
   --focus-ring: color-mix(in srgb, var(--color-focus) 20%, transparent);
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
   --space-5: 20px; --space-6: 24px; --space-7: 28px; --space-8: 32px; --space-10: 40px; --space-12: 48px;
-  --radius-control: 0px; --radius-button: 999px; --radius-card: 16px;
-  --radius-panel: 16px; --radius-surface: var(--radius-panel); --radius-pill: 9999px;
+  /* Radius: semantic roles first. Legacy names below are compatibility aliases
+     with identical values, so no rendered surface changes in this phase. */
+  --radius-surface: 16px;      /* cards, panels, popovers — the surface recipe */
+  --radius-field: 9px;         /* inputs, selects, textareas — effective value */
+  --radius-pill: 999px;        /* buttons, tags, status chips, nav pills */
+  --radius-card: var(--radius-surface);
+  --radius-panel: var(--radius-surface);
+  --radius-control: var(--radius-field);  /* deprecated name; kept for consumers */
+  --radius-button: var(--radius-pill);    /* deprecated name; kept for consumers */
   --sidebar-width: 224px;
   --width-standard: 1248px; --width-reading: 760px; --width-lesson: 800px;
   --page-width-standard: var(--width-standard);
@@ -130,7 +137,12 @@
   --page-gutter: 32px;
   --font-page-title: 28px; --font-section-title: 18px; --font-card-title: 16px;
   --font-body: 16px; --font-meta: 14px; --font-caption: 14px; --font-reading: 16px;
+  /* Display scale belongs to the workspace home only; business pages stay on
+     --font-page-title so no marketing-size heading leaks into task surfaces. */
+  --font-home-display: 44px;
   --card-padding: 28px; --control-height: 36px; --duration-fast: 150ms;
+  /* Home/topbar horizontal gutter: scales with the 4K tiers below. */
+  --home-gutter: 36px;
   --el-font-family: var(--font-ui);
   --el-component-size: var(--control-height);
   --el-border-radius-base: var(--radius-control);
@@ -386,6 +398,32 @@ body { font-size: var(--font-body); line-height: 1.6; letter-spacing: normal; co
 }
 
 
+/* Large-viewport scale steps (4K-class screens).
+   Nothing at or below 1920px changes: these only widen the layout caps and
+   gutters so content is not stranded in a 1680px strip on a 2560/3840 viewport. */
+@media (min-width: 2200px) {
+  :root {
+    --width-standard: 1440px;
+    --page-gutter: 40px;
+    --card-padding: 32px;
+    --home-max-width: 2000px;
+    --home-grid-gap: 28px;
+    --home-gutter: 40px;
+  }
+}
+@media (min-width: 3200px) {
+  :root {
+    --width-standard: 1640px;
+    --width-reading: 880px;
+    --width-lesson: 920px;
+    --page-gutter: 56px;
+    --card-padding: 36px;
+    --home-max-width: 2480px;
+    --home-grid-gap: 32px;
+    --home-gutter: 56px;
+  }
+}
+
 @media (max-width: 1279px) {
  :root { --page-gutter: 24px; --sidebar-width: 64px; }
   .sidebar { width: 64px; flex-basis: 64px; padding-inline: 8px; }
@@ -542,16 +580,123 @@ body { font-size: var(--font-body); line-height: 1.6; letter-spacing: normal; co
   --home-environment: #09051b;
 }
 
-/* Homepage Soft Mist chrome. Route/theme scoped: no shell geometry changes,
-   and non-home workspaces retain their existing palette and separators. */
-:root[data-theme='light'] .app-shell--home {
-  --home-canvas: #e7eef9;
-  --home-environment: #e7eef9;
-  --home-bar: rgba(237,242,251,.10);
+/* Homepage-local material family. No root tokens or shell geometry change;
+   all six cards consume one surface, with no hero/tier distinction.
+   Names below are the canonical `mist` recipe of the shared material family;
+   the `--home-surface-*` names stay as aliases so component CSS is untouched. */
+:root[data-theme] .app-shell--home {
+  --material-mist-radius: var(--radius-surface);
+  --material-mist-film: rgba(250,252,255,.30);
+  --material-mist-tail: rgba(244,249,255,.14);
+  --material-mist-sheen: rgba(255,255,255,.12);
+  --material-mist-edge: rgba(74,96,122,.025);
+  --material-mist-edge-hover: rgba(74,96,122,.065);
+  --material-mist-edge-focus: rgba(74,96,122,.20);
+  --material-mist-shadow: 0 3px 16px -12px rgba(40,64,90,.08);
+  --material-mist-shadow-hover: 0 5px 18px -13px rgba(40,64,90,.12);
+  --material-mist-filter: blur(8px) saturate(1.03);
+  --material-mist-feather: 22px;
+  --material-mist-fallback: rgba(246,250,254,.88);
+  --home-surface-radius: var(--material-mist-radius);
+  --home-surface-film: var(--material-mist-film);
+  --home-surface-tail: var(--material-mist-tail);
+  --home-surface-sheen: var(--material-mist-sheen);
+  --home-surface-edge: var(--material-mist-edge);
+  --home-surface-edge-hover: var(--material-mist-edge-hover);
+  --home-surface-edge-focus: var(--material-mist-edge-focus);
+  --home-surface-shadow: var(--material-mist-shadow);
+  --home-surface-shadow-hover: var(--material-mist-shadow-hover);
+  --home-surface-filter: var(--material-mist-filter);
+  --home-surface-feather: var(--material-mist-feather);
+  --home-surface-fallback: var(--material-mist-fallback);
+  /* Module labels are signposts: one step back from content in size, weight and
+     colour, so task/project/article titles read first. */
+  --home-label-size: 14px;
+  --home-label-tracking: .04em;
+  --home-label-color: var(--home-secondary);
+  --home-control-fill: rgba(250,252,255,.32);
+  --home-control-hover: rgba(250,252,255,.46);
+  --home-control-edge: rgba(74,96,122,.10);
+  --home-control-edge-hover: rgba(74,96,122,.18);
+  --home-control-shadow: 0 2px 8px -7px rgba(40,64,90,.08);
+  --home-control-filter: var(--home-surface-filter);
+  --home-control-selected: var(--home-tint);
 }
-/* One existing light layer extends behind the sticky nav as well as content. */
+:root[data-theme='light'] .app-shell--home {
+  --home-canvas: #eef4fc;
+  --home-environment: #eef4fc;
+  --home-bar: rgba(242,246,252,.12);
+}
+:root[data-theme='dark'] .app-shell--home {
+  --home-bar: rgba(10,6,27,.72);
+  --home-surface-film: rgba(22,15,43,.46);
+  --home-surface-tail: rgba(16,10,35,.30);
+  --home-surface-sheen: rgba(193,172,232,.055);
+  --home-surface-edge: rgba(167,142,225,.10);
+  --home-surface-edge-hover: rgba(167,142,225,.18);
+  --home-surface-edge-focus: rgba(167,142,225,.35);
+  --home-surface-shadow: 0 8px 24px -20px rgba(0,0,0,.32);
+  --home-surface-shadow-hover: 0 10px 26px -20px rgba(0,0,0,.38);
+  --home-surface-filter: blur(10px) saturate(1.1);
+  --home-surface-fallback: rgba(16,10,32,.92);
+  --home-control-fill: rgba(23,16,38,.38);
+  --home-control-hover: rgba(32,23,48,.52);
+  --home-control-edge: rgba(167,142,225,.14);
+  --home-control-edge-hover: rgba(167,142,225,.24);
+  --home-control-shadow: 0 2px 8px -7px rgba(0,0,0,.20);
+}
+/* Only the existing light layer extends behind the sticky navigation. */
 :root[data-theme='light'] .app-shell--home .home-ambient { inset-block-start: 0; }
-:root[data-theme='light'] .app-shell--home .home-topbar {
+:root[data-theme] .app-shell--home .home-topbar {
   border-bottom-color: transparent;
   box-shadow: none;
+}
+/* Specificity exceeds the incumbent scoped base rules, including teleported
+   search/capture controls. Only material properties change, never dimensions. */
+:root[data-theme] .app-shell--home :is(.home-search, .home-capture-button.el-button, .home-account__avatar, .workspace-context-switch, .capture-entry, .mobile-menu-button) {
+  background: var(--home-control-fill);
+  border-color: var(--home-control-edge);
+  box-shadow: var(--home-control-shadow);
+  -webkit-backdrop-filter: var(--home-control-filter);
+  backdrop-filter: var(--home-control-filter);
+}
+@media (hover: hover) {
+  :root[data-theme] .app-shell--home :is(.home-search, .home-capture-button.el-button, .workspace-context-switch, .capture-entry, .mobile-menu-button):not(:disabled):not(.is-disabled):not([aria-disabled='true']):hover,
+  :root[data-theme] .app-shell--home .home-account__button:not(:disabled):hover .home-account__avatar {
+    background: var(--home-control-hover);
+    border-color: var(--home-control-edge-hover);
+  }
+  :root[data-theme] .app-shell--home .home-topnav > a:hover {
+    background: var(--home-control-hover);
+    color: var(--home-link);
+  }
+  :root[data-theme] .app-shell--home .workspace-context-switch .el-radio-button:not(.is-disabled) .el-radio-button__inner:hover {
+    background: var(--home-control-hover);
+    color: var(--home-link);
+  }
+}
+:root[data-theme] .app-shell--home .home-topnav > a { border-radius: 999px; }
+:root[data-theme] .app-shell--home .home-topnav > a[aria-current='page'],
+:root[data-theme] .app-shell--home .workspace-context-switch .el-radio-button.is-active .el-radio-button__original-radio:not(:disabled) + .el-radio-button__inner {
+  background: var(--home-control-selected);
+  color: var(--home-link);
+  box-shadow: none;
+}
+:root[data-theme] .app-shell--home :is(.home-capture-button.el-button, .capture-entry, .mobile-menu-button, .home-topnav > a):focus-visible,
+:root[data-theme] .app-shell--home .home-search:focus-within,
+:root[data-theme] .app-shell--home .home-account__button:focus-visible .home-account__avatar,
+:root[data-theme] .app-shell--home .workspace-context-switch .el-radio-button__original-radio:focus-visible + .el-radio-button__inner {
+  outline: 2px solid var(--home-link);
+  outline-offset: 3px;
+}
+:root[data-theme] .app-shell--home .home-account__button:focus-visible .home-account__avatar,
+:root[data-theme] .app-shell--home .home-search:focus-within {
+  border-color: var(--home-surface-edge-focus);
+}
+:root[data-theme] .app-shell--home :is(.home-capture-button.el-button, .capture-entry, .mobile-menu-button):is(:disabled, .is-disabled, [aria-disabled='true']) {
+  background: var(--home-control-fill);
+  border-color: var(--home-control-edge);
+  color: var(--home-muted);
+  opacity: .6;
+  cursor: not-allowed;
 }

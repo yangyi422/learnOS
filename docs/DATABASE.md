@@ -111,6 +111,8 @@ Phase 2 旧记录的新字段允许为空；历史读取会将缺失数组规范
 ## Phase 10 Dogfooding Readiness
 
 - `system_metadata`：保存当前 schema version、最近迁移时间和应用版本；启动迁移前若检测到旧 schema，会先执行 SQLite `VACUUM INTO` 备份。
+- `api_tokens`（schema 33）：`sha256` 存储的外部采集凭证，`scopes` 目前仅 `capture:inbox`，`expires_at` 必填、`revoked_at` 撤销即失效；明文只在创建响应出现一次。详见 [CAPTURE_API.md](CAPTURE_API.md)。
+- `tool_states`（schema 32）：`user_id + tool_key` 唯一的 JSON 文档表，`state_json` 为工具自有格式（后端不解析内容），`revision` 做乐观锁；目前只登记 `fefw-planner`（挖角手帐），未知 key 返回 404，文档上限 512 KiB。
 - SQLite 备份文件位于独立 backup 目录，文件名带 UTC 时间戳，按 `BACKUP_RETENTION_COUNT` 保留最近备份。
 - JSON / Markdown 导出从结构化表生成，不包含 API Key、密码哈希或系统元数据；AI 调用原始响应不进入个人导出快照。
 - Restore CLI 和设置页恢复都只接受通过 `integrity_check` 的 SQLite 文件；设置页会先固定所选快照并要求逐字确认，重启后在无活动连接时创建 pre-restore 备份，再通过临时文件原子替换目标库。失败请求不会删除现有学习数据，也不会自动重试形成重启循环。

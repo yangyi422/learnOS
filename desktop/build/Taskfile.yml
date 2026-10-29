@@ -1,0 +1,43 @@
+version: '3'
+
+tasks:
+  go:mod:tidy:
+    summary: Runs `go mod tidy` in the desktop module only
+    internal: true
+    run: once
+    cmds:
+      - go mod tidy
+
+  # The Vue build is produced from ../web with `npm run build:desktop`. That step
+  # needs node_modules for the current OS: this machine installs them on Windows,
+  # so WSL (which only compiles the Go side) reuses the existing artifact instead
+  # of running npm with Windows-native bindings. Rebuild explicitly with
+  # `wails3 task frontend` before packaging, or when the Vue sources changed.
+  build:frontend:
+    summary: Verifies desktop/frontend/dist exists (build it from web/ on the host with matching node_modules)
+    run: once
+    preconditions:
+      - sh: test -f frontend/dist/index.html
+        msg: "desktop/frontend/dist is missing. Run `npm --prefix web run build:desktop` (or `wails3 task frontend`) first."
+    cmds:
+      - echo "using existing desktop/frontend/dist"
+
+  frontend:
+    summary: Rebuilds the shared Vue 3 app into desktop/frontend/dist (never touches internal/webassets/dist)
+    dir: ../web
+    cmds:
+      - npm run build:desktop
+
+  generate:icons:
+    summary: Generates the Windows .ico from build/appicon.png
+    run: once
+    dir: build
+    sources:
+      - appicon.png
+    generates:
+      - windows/icon.ico
+    cmds:
+      # The CLI always writes a macOS .icns as well; keep it inside the ignored
+      # build/darwin/ directory so a Windows-only build does not need macOS files.
+      - mkdir -p darwin
+      - wails3 generate icons -input appicon.png -windowsfilename windows/icon.ico -macfilename darwin/icon.icns

@@ -92,7 +92,7 @@ if (-not $SkipWeb) {
   try {
     Invoke-Step 'typecheck' 'web-typecheck.log' { & npm run typecheck } | Out-Null
     Invoke-Step 'vitest' 'web-test.log' { & npm run test } | Out-Null
-    Invoke-Step 'vite build' 'web-build.log' { & npm run build } | Out-Null
+    Invoke-Step 'vite check build (isolated)' 'web-build.log' { & npm run build:check } | Out-Null
   } finally {
     Pop-Location
   }
@@ -110,18 +110,20 @@ if ($E2E) {
   Push-Location (Join-Path $root 'web')
   try {
     $log = Join-Path $logDir 'e2e.log'
-    & npx playwright test @specs 2>&1 | Tee-Object -FilePath $log | Out-Null
+    & npx playwright test @specs --output=../.tmp/e2e-check 2>&1 | Tee-Object -FilePath $log | Out-Null
     $e2eExit = $LASTEXITCODE
     $text = (Get-Content $log -Raw -ErrorAction SilentlyContinue) -join "`n"
     $passed = 0; $failedCount = 0
     if ($text -match '(\d+) passed') { $passed = [int]$matches[1] }
     if ($text -match '(\d+) failed') { $failedCount = [int]$matches[1] }
-    if ($e2eExit -ne 0 -and $failedCount -gt 0) {
+    # Startup/config/browser failures may run zero tests and have no "N failed" line.
+    # Preserve the actual process result instead of treating those failures as a pass.
+    if ($e2eExit -ne 0) {
       if ($AllowEnvFailures) {
         Write-Host ("  [warn] Playwright: " + $passed + " passed, " + $failedCount + " failed (allowed by -AllowEnvFailures)")
         $summary.Add(("WARN  e2e (" + $passed + " passed, " + $failedCount + " failed)"))
       } else {
-        Write-Host ("  [fail] Playwright: " + $passed + " passed, " + $failedCount + " failed (log " + $log + ")")
+        Write-Host ("  [fail] Playwright: " + $passed + " passed, " + $failedCount + " failed (exit " + $e2eExit + ", log " + $log + ")")
         $summary.Add('FAIL  e2e')
         $failed = $true
       }
@@ -139,13 +141,11 @@ if ($Visual) {
   Push-Location (Join-Path $root 'web')
   try {
     $visualLog = Join-Path $logDir 'visual-audit.log'
-    $env:CAPTURE_VISUALS = '1'
-    & npx playwright test e2e/visual-audit.spec.ts 2>&1 | Tee-Object -FilePath $visualLog | Out-Null
+    & npx playwright test e2e/visual-audit.spec.ts --output=../.tmp/visual-check 2>&1 | Tee-Object -FilePath $visualLog | Out-Null
     $visualExit = $LASTEXITCODE
-    Remove-Item Env:CAPTURE_VISUALS -ErrorAction SilentlyContinue
     if ($visualExit -eq 0) {
-      Write-Host '  [ok]   visual audit screenshots: web/test-results/visual-audit-*/visual-*.png'
-      $summary.Add('OK    visual audit')
+      Write-Host '  [ok]   visual tests/artifacts: .tmp/visual-check/visual-audit-*/visual-* (open images to review)'
+      $summary.Add('OK    visual tests/artifacts; manual visual review still required')
     } else {
       Write-Host ('  [fail] visual audit (exit ' + $visualExit + ', log ' + $visualLog + ')')
       $summary.Add('FAIL  visual audit')
@@ -163,5 +163,9 @@ if ($failed) {
   Write-Host 'RESULT: FAILED'
   exit 1
 }
-Write-Host 'RESULT: PASSED'
+if (@($summary | Where-Object { $_ -like 'WARN*' }).Count -gt 0) {
+  Write-Host 'RESULT: COMPLETED WITH WARNINGS (not fully verified)'
+  exit 0
+}
+Write-Host 'RESULT: PASSED (checks only; not a visual acceptance verdict)'
 exit 0

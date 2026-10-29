@@ -1,3 +1,4 @@
+import { writeFile } from 'node:fs/promises'
 import { expect, test, type Page, type Route, type TestInfo } from '@playwright/test'
 import type { InboxSummary } from '../src/api/inbox'
 import type { DailyFocusView } from '../src/api/dailyFocus'
@@ -5,21 +6,21 @@ import type { Project, ProjectTask } from '../src/api/projects'
 import type { PlanningTask, WorkspaceHome, WorkspaceLearningItem, WorkspaceRecent } from '../src/api/workspace'
 
 /**
- * Visual audit for the workspace home (Phase 11.1d).
- *
- * All APIs are intercepted, so this spec needs no Go server and no database.
- * Screenshots are only written when CAPTURE_VISUALS=1; without it the spec is a
- * fast structural smoke test of the three home scenes and the empty/completed
- * states. Run it with:
- *
- *   cd web
- *   $env:CAPTURE_VISUALS='1'; npx playwright test e2e/visual-audit.spec.ts
- *
- * Output: web/test-results/visual-audit-* /visual-*.png
+ * Reusable home visual evidence, not an aesthetic or pixel-golden verdict.
+ * APIs are fixtures; no Go server or database is needed. Every capture writes
+ * viewport/full-page PNGs plus context JSON. Use separate --output directories
+ * for before/after runs. `npm run test:ui` also runs home-material invariants.
  */
 
 const stamp = '2026-10-21T08:00:00Z'
 const date = '2026-10-21'
+
+// Fixed Date, not paused timers: async UI and failure timeouts must still work.
+// Only this screenshot spec is stabilized; interaction/motion suites stay unchanged.
+test.use({ timezoneId: 'Asia/Shanghai', locale: 'zh-CN', deviceScaleFactor: 1, reducedMotion: 'reduce' })
+test.beforeEach(async ({ page }) => {
+  await page.clock.setFixedTime(new Date(stamp))
+})
 
 function makeProject(id: number, title: string, context: 'work' | 'life', open: number, done: number): Project {
   return {
@@ -186,18 +187,50 @@ async function show(page: Page, theme: 'light' | 'dark', scene: 'all' | 'work' |
     localStorage.setItem('learnos:workspace-context:1', nextScene)
   }, [theme, scene])
   await page.reload({ waitUntil: 'networkidle' })
+  await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
   await expect(page.locator('.daily-focus-card')).toBeVisible()
   await expect(page.locator('.home-left-lane .today-section')).toBeVisible()
 }
 
 async function capture(page: Page, info: TestInfo, name: string) {
-  if (!process.env.CAPTURE_VISUALS) return
-  await page.screenshot({ path: info.outputPath(`visual-${name}.png`), fullPage: true })
+  await page.evaluate(async () => {
+    await document.fonts.ready
+    window.scrollTo(0, 0)
+  })
+  await page.mouse.move(0, 0)
+  const fullPage = info.outputPath(`visual-${name}.png`)
+  const viewport = info.outputPath(`visual-${name}-viewport.png`)
+  const metadata = info.outputPath(`visual-${name}.json`)
+  await page.screenshot({ path: fullPage, fullPage: true, animations: 'disabled' })
+  await page.screenshot({ path: viewport, animations: 'disabled' })
+  const context = await page.evaluate(() => ({
+    url: location.href,
+    theme: document.documentElement.dataset.theme,
+    viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio },
+    locale: navigator.language,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    currentTime: new Date().toISOString(),
+    reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+    font: getComputedStyle(document.body).fontFamily,
+    fontsStatus: document.fonts.status,
+    css: Array.from(document.styleSheets).map(sheet => sheet.href).filter(Boolean),
+    js: Array.from(document.scripts).map(script => script.src).filter(Boolean),
+    horizontalOverflow: document.documentElement.scrollWidth > innerWidth + 1,
+  }))
+  await writeFile(metadata, JSON.stringify({
+    ...context,
+    browserVersion: page.context().browser()?.version(),
+    dataSource: 'intercepted API fixtures; not personal or live API data',
+    fixtureTime: stamp,
+  }, null, 2) + '\n')
+  await info.attach(`visual-${name}`, { path: fullPage, contentType: 'image/png' })
+  await info.attach(`visual-${name}-viewport`, { path: viewport, contentType: 'image/png' })
+  await info.attach(`visual-${name}-context`, { path: metadata, contentType: 'application/json' })
 }
 
 test('视觉评审：桌面浅色三场景', async ({ page }, info) => {
   await installMocks(page)
-  await page.goto('/', { waitUntil: 'networkidle' })
+  await page.goto('/?ambient=css', { waitUntil: 'networkidle' })
   for (const [scene, title] of [['all', '今天，按自己的节奏'], ['work', '今天，专注重要的事'], ['life', '留一点时间给自己']] as const) {
     await show(page, 'light', scene, 1440)
     await expect(page.locator('.page-header h1')).toHaveText(title)
@@ -210,7 +243,7 @@ test('视觉评审：桌面浅色三场景', async ({ page }, info) => {
 
 test('视觉评审：桌面深色全部与生活', async ({ page }, info) => {
   await installMocks(page)
-  await page.goto('/', { waitUntil: 'networkidle' })
+  await page.goto('/?ambient=css', { waitUntil: 'networkidle' })
   for (const scene of ['all', 'life'] as const) {
     await show(page, 'dark', scene, 1440)
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
@@ -221,7 +254,7 @@ test('视觉评审：桌面深色全部与生活', async ({ page }, info) => {
 
 test('视觉评审：平板 1024 与手机 390', async ({ page }, info) => {
   await installMocks(page)
-  await page.goto('/', { waitUntil: 'networkidle' })
+  await page.goto('/?ambient=css', { waitUntil: 'networkidle' })
   await show(page, 'light', 'all', 1024)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true)
   await capture(page, info, 'tablet-light-all')
@@ -236,7 +269,7 @@ test('视觉评审：平板 1024 与手机 390', async ({ page }, info) => {
 
 test('视觉评审：空工作区自然留白', async ({ page }, info) => {
   await installMocks(page, { home: () => emptyHome(), recent: { library: [], events: [], goals: [], asset_date: '', errors: {} } })
-  await page.goto('/', { waitUntil: 'networkidle' })
+  await page.goto('/?ambient=css', { waitUntil: 'networkidle' })
   await show(page, 'light', 'all', 1440)
   await expect(page.locator('.daily-focus-empty')).toBeVisible()
   await expect(page.getByRole('heading', { name: '今天还没有安排' })).toBeVisible()
@@ -247,7 +280,7 @@ test('视觉评审：空工作区自然留白', async ({ page }, info) => {
 
 test('视觉评审：已完成焦点不展示完成按钮', async ({ page }, info) => {
   await installMocks(page, { completed: true })
-  await page.goto('/', { waitUntil: 'networkidle' })
+  await page.goto('/?ambient=css', { waitUntil: 'networkidle' })
   await show(page, 'light', 'all', 1440)
   const slot = page.locator('.daily-focus-slot[data-context="work"]')
   await expect(slot).toHaveAttribute('data-state', 'completed')

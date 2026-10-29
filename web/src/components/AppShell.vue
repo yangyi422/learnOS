@@ -166,8 +166,8 @@ watch(() => route.fullPath, () => {
 .app-shell--home { --sidebar-width: 0px; }
 .app-shell--home .app-content { background: var(--home-canvas); }
 .app-shell--home .home-ambient { inset: 76px 0 0; background: var(--home-environment); }
-.app-shell--home .main-content { padding: 48px 36px 28px; scrollbar-gutter: auto; }
-.home-topbar { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 24px; height: 76px; flex: none; padding: 0 36px; background: var(--home-bar); border-bottom: 1px solid var(--home-edge); backdrop-filter: blur(16px); color: var(--home-ink); }
+.app-shell--home .main-content { padding: 48px var(--home-gutter, 36px) 28px; scrollbar-gutter: auto; }
+.home-topbar { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 24px; height: 76px; flex: none; padding: 0 var(--home-gutter, 36px); background: var(--home-bar); border-bottom: 1px solid var(--home-edge); backdrop-filter: blur(16px); color: var(--home-ink); }
 .home-brand { display: flex; align-items: baseline; gap: 12px; text-decoration: none; color: var(--home-ink); flex: none; }
 .home-brand strong { font-size: 26px; font-weight: 650; letter-spacing: -.6px; }
 .home-brand > span { font-size: 12px; color: var(--home-muted); }

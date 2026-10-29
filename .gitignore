@@ -26,3 +26,14 @@ server
 # Personal uploaded images and complete backup bundles
 backups/
 uploads/
+
+# Desktop (Wails v3) client: local endpoint config, build output and resources
+desktop/bin/
+desktop/frontend/dist/*
+!desktop/frontend/dist/.gitkeep
+desktop/wails_windows_*.syso
+desktop/*.syso
+desktop/build/darwin/
+desktop/.task/
+desktop/portable/
+desktop/*.zip

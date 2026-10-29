@@ -54,6 +54,8 @@ func New(cfg config.Config) (*App, error) {
 	lifeService := service.NewLifeService(repository.NewLifeRepository(db))
 	recordService := service.NewRecordService(repository.NewRecordRepository(db))
 	inboxService := service.NewInboxService(repository.NewInboxRepository(db), projectRepository)
+	toolStateService := service.NewToolStateService(repository.NewToolStateRepository(db))
+	apiTokenService := service.NewAPITokenService(repository.NewAPITokenRepository(db), repository.NewUserRepository(db))
 	bootstrapContext := context.Background()
 	if cfg.Username != "" && cfg.PasswordHash != "" {
 		bootstrapUser, err := userService.EnsureBootstrap(context.Background(), cfg.Username, cfg.PasswordHash)
@@ -134,7 +136,7 @@ func New(cfg config.Config) (*App, error) {
 		return nil, fmt.Errorf("load embedded web assets: %w", err)
 	}
 
-	handler := httpapi.NewHandler(courseService, knowledgeGraphService, cognitiveStateService, challengeService, misconceptionService, explorationService, curriculumService, groundingService, backupService, databaseHealthService, exportService, consistencyService, domainInitializationService, aiConfigurationService, nextLessonService, userService, projectService, inboxService, recordService, workspaceService, recentService, lifeService, financeService, assetService, reviewService, libraryService, imageService, dailyFocusService)
+	handler := httpapi.NewHandler(courseService, knowledgeGraphService, cognitiveStateService, challengeService, misconceptionService, explorationService, curriculumService, groundingService, backupService, databaseHealthService, exportService, consistencyService, domainInitializationService, aiConfigurationService, nextLessonService, userService, projectService, inboxService, recordService, workspaceService, recentService, lifeService, financeService, assetService, reviewService, libraryService, imageService, dailyFocusService, toolStateService, apiTokenService)
 	router := httpapi.NewRouter(cfg, handler, dist, userService)
 
 	return &App{

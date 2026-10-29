@@ -174,8 +174,8 @@ function emptySlotCopy(context: DailyFocusContext) {
 .daily-focus-card { gap: 20px; }
 .daily-focus-card.is-switching > * { visibility: hidden; }
 .daily-focus-card__heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; }
-.daily-focus-card__heading .section-kicker { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 600; }
-.daily-focus-card__heading .section-kicker svg { width: 22px; height: 22px; color: var(--home-secondary); }
+.daily-focus-card__heading .section-kicker { display: flex; align-items: center; gap: 10px; font-size: var(--home-label-size, 18px); font-weight: 600; letter-spacing: var(--home-label-tracking, 0); color: var(--home-label-color, var(--home-ink)); }
+.daily-focus-card__heading .section-kicker svg { width: 22px; height: 22px; color: var(--home-muted); }
 .daily-focus-card__hint { color: var(--home-muted); font-size: 12px; }
 .daily-focus-slot { display: flex; flex-direction: column; gap: 12px; min-width: 0; flex: 1; }
 .daily-focus-slot + .daily-focus-slot { padding-top: 18px; border-top: 1px solid var(--home-edge); }
@@ -185,7 +185,7 @@ function emptySlotCopy(context: DailyFocusContext) {
 .daily-focus-state.is-done { color: var(--color-success, var(--home-link)); }
 .daily-focus-state.is-invalid { color: var(--color-warning); }
 .daily-focus-state.is-empty { color: var(--home-muted); background: transparent; }
-.daily-focus-heading { margin: 0; min-width: 0; }
+.daily-focus-heading { margin: 0; min-width: 0; font-weight: 600; letter-spacing: -.01em; }
 .daily-focus-title { display: inline-block; color: var(--home-ink); font-size: 36px; font-weight: 600; line-height: 1.45; text-decoration: none; overflow-wrap: anywhere; border-radius: 6px; }
 a.daily-focus-title { text-underline-offset: 4px; }
 a.daily-focus-title:hover { color: var(--home-link); text-decoration: underline; }

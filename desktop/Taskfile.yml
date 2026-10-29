@@ -1,0 +1,22 @@
+version: '3'
+
+vars:
+  APP_NAME: "LifeOS"
+  BIN_DIR: "bin"
+  # Overridden by `wails3 build GOOS=...`; this module only ships a Windows target.
+  GOOS: '{{.GOOS | default OS}}'
+
+includes:
+  common: ./build/Taskfile.yml
+  windows: ./build/windows/Taskfile.yml
+
+tasks:
+  build:
+    summary: Builds the LifeOS desktop client (frontend is rebuilt from ../web)
+    cmds:
+      - task: "{{.GOOS}}:build"
+
+  frontend:
+    summary: Rebuilds the shared Vue app into desktop/frontend/dist
+    cmds:
+      - task: common:build:frontend

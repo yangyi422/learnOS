@@ -101,7 +101,7 @@ func Load() (Config, error) {
 		CurriculumDraftTimeoutSeconds:        60,
 		SourceCredibilityTimeoutSeconds:      45,
 		DomainSkeletonTimeoutSeconds:         120,
-		DomainStarterBlueprintTimeoutSeconds: 60,
+		DomainStarterBlueprintTimeoutSeconds: 120,
 		DomainInitialWorldTimeoutSeconds:     180,
 	}
 

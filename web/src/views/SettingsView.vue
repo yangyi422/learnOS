@@ -113,6 +113,47 @@
       </el-descriptions>
     </el-card>
 
+    <el-card shadow="never" aria-labelledby="capture-token-title">
+      <template #header><span id="capture-token-title">快速采集凭证</span></template>
+      <p class="settings-help">
+        供 uTools 插件等外部客户端写入收集箱。凭证只能调用「快速采集」接口，不能登录、不能读取或修改其他数据，可随时撤销。
+      </p>
+      <div class="settings-actions">
+        <el-input v-model="tokenName" maxlength="60" placeholder="凭证名称（例如 uTools 采集）" aria-label="凭证名称" style="max-width: 260px" />
+        <el-select v-model="tokenDays" aria-label="有效期" style="max-width: 150px">
+          <el-option :value="30" label="30 天" />
+          <el-option :value="90" label="90 天" />
+          <el-option :value="180" label="180 天" />
+          <el-option :value="365" label="365 天" />
+        </el-select>
+        <el-button type="primary" :loading="tokenCreating" @click="createToken">生成凭证</el-button>
+      </div>
+      <el-alert v-if="createdToken" type="success" :closable="false" show-icon>
+        <template #title>凭证已生成，只显示这一次</template>
+        <div class="token-secret">
+          <code>{{ createdToken }}</code>
+          <el-button text size="small" @click="copyToken">复制</el-button>
+        </div>
+        <p class="settings-help">请立即粘贴到 uTools 插件设置中；关闭或刷新后无法再次查看。</p>
+      </el-alert>
+      <el-empty v-if="tokens.length === 0" description="还没有采集凭证" :image-size="60" />
+      <ul v-else class="token-list">
+        <li v-for="item in tokens" :key="item.id">
+          <div>
+            <strong>{{ item.name }}</strong>
+            <code>{{ item.prefix }}…</code>
+          </div>
+          <div class="token-meta">
+            <span>创建 {{ formatDate(item.created_at) }}</span>
+            <span>{{ tokenExpiryText(item) }}</span>
+            <span>{{ item.last_used_at ? `最近使用 ${formatDate(item.last_used_at)}` : '尚未使用' }}</span>
+          </div>
+          <el-button v-if="!item.revoked_at" text type="danger" @click="revokeToken(item)">撤销</el-button>
+          <span v-else class="settings-help">已撤销</span>
+        </li>
+      </ul>
+    </el-card>
+
     <el-card shadow="never" aria-labelledby="data-safety-title">
       <template #header><span id="data-safety-title">数据安全</span></template>
       <div class="settings-actions">
@@ -181,6 +222,8 @@ import {
   requestBackupRestore, testAIConnection, updateAIConfiguration,
 } from '@/api/system'
 import type { AIConfiguration, AIConnectionTest, BackupInfo, ConsistencyIssue, ConsistencyReport, Diagnostics } from '@/api/system'
+import { createAPIToken, listAPITokens, revokeAPIToken } from '@/api/apiTokens'
+import type { APITokenView } from '@/api/apiTokens'
 
 const diagnostics = ref<Diagnostics | null>(null)
 const aiConfig = ref<AIConfiguration | null>(null)
@@ -196,6 +239,11 @@ const consistencyLoading = ref(false)
 const restoreLoading = ref(false)
 const aiSaving = ref(false)
 const aiTesting = ref(false)
+const tokens = ref<APITokenView[]>([])
+const tokenName = ref('uTools 采集')
+const tokenDays = ref(90)
+const tokenCreating = ref(false)
+const createdToken = ref('')
 const error = ref('')
 const liveMessage = ref('')
 const knownModels = ['deepseek-chat', 'deepseek-reasoner']
@@ -324,7 +372,41 @@ function formatDate(value: string) { return new Date(value).toLocaleString('zh-C
 function providerText(value: string) { return value === 'deepseek' ? 'DeepSeek' : value === 'mock' ? '本地模拟' : value }
 function environmentText(value: string) { return value === 'production' ? '生产环境' : value === 'development' ? '开发环境' : value }
 function timeoutText(value: string) { return ({ evaluation: '回答评价', challenge_generation: '迁移挑战生成', curriculum_draft: '课程草案生成', source_credibility: '来源可信度评价', domain_skeleton: '领域地图生成', domain_starter_blueprint: '起步蓝图生成', domain_initial_world: '初始课程生成' } as Record<string, string>)[value] ?? value }
-onMounted(load)
+onMounted(() => { void load(); void loadTokens() })
+
+/** 采集凭证：明文只在创建响应里出现一次，随后只保留前缀。 */
+async function loadTokens() {
+  try { tokens.value = await listAPITokens() } catch (reason) { error.value = reason instanceof Error ? reason.message : '凭证列表读取失败' }
+}
+async function createToken() {
+  tokenCreating.value = true
+  try {
+    const created = await createAPIToken({ name: tokenName.value.trim() || 'uTools 采集', expires_in_days: tokenDays.value })
+    createdToken.value = created.token
+    await loadTokens()
+    ElMessage.success('凭证已生成，请复制保存')
+  } catch (reason) {
+    ElMessage.error(reason instanceof Error ? reason.message : '凭证生成失败')
+  } finally { tokenCreating.value = false }
+}
+async function copyToken() {
+  try { await navigator.clipboard.writeText(createdToken.value); ElMessage.success('已复制') } catch { ElMessage.error('复制失败，请手动选择文本') }
+}
+function tokenExpiryText(item: APITokenView) {
+  if (item.revoked_at) return '已撤销'
+  if (item.expired) return '已过期'
+  return `有效至 ${formatDate(item.expires_at)}`
+}
+async function revokeToken(item: APITokenView) {
+  try {
+    await ElMessageBox.confirm(`撤销「${item.name}」后，使用它的客户端会立即失效。`, '撤销凭证', { type: 'warning', confirmButtonText: '撤销', cancelButtonText: '取消' })
+  } catch { return }
+  try {
+    await revokeAPIToken(item.id)
+    await loadTokens()
+    ElMessage.success('凭证已撤销')
+  } catch (reason) { ElMessage.error(reason instanceof Error ? reason.message : '撤销失败') }
+}
 </script>
 
 <style scoped>
@@ -376,4 +458,14 @@ onMounted(load)
   .settings-form-grid, .effective-config, .restore-panel { grid-template-columns: minmax(0, 1fr); }
   .secret-field { align-items: flex-start; flex-direction: column; }
 }
+
+.token-secret { display: flex; align-items: center; gap: 12px; margin-top: 6px; }
+.token-secret code { font-size: 13px; word-break: break-all; }
+.token-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.token-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 16px;
+  padding: 12px 16px; border: 1px solid var(--border-default); border-radius: 12px; background: var(--bg-surface); }
+.token-list li > div { min-width: 0; }
+.token-list strong { font-weight: 600; margin-right: 8px; }
+.token-list code { font-size: 12px; color: var(--text-secondary); }
+.token-meta { grid-column: 1 / 2; display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--text-tertiary); font-size: 12px; }
 </style>

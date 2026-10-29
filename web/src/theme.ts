@@ -4,15 +4,15 @@ export type ThemePreference = 'system' | 'light' | 'dark'
 type ResolvedTheme = 'light' | 'dark'
 
 const storageKey = 'learnos-theme'
-const preference = ref<ThemePreference>('dark')
+const preference = ref<ThemePreference>('light')
 let media: MediaQueryList | null = null
 
 function savedPreference(): ThemePreference {
   try {
     const value = window.localStorage.getItem(storageKey)
-    return value === 'light' || value === 'dark' || value === 'system' ? value : 'dark'
+    return value === 'light' || value === 'dark' || value === 'system' ? value : 'light'
   } catch {
-    return 'dark'
+    return 'light'
   }
 }
 

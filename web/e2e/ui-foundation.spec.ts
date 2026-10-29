@@ -91,7 +91,9 @@ for (const theme of ['light', 'dark'] as const) {
     await capture.focus()
     await expect(capture).toHaveCSS('outline-style', 'solid')
     await expect(capture).toHaveCSS('outline-width', '2px')
-    await expect(capture).toHaveCSS('outline-offset', '2px')
+    // Homepage-local controls already use a 3px gap (workspace-theme.css).
+    // Keep the visible 2px ring above; do not alter accepted UI for a stale gap.
+    await expect(capture).toHaveCSS('outline-offset', '3px')
     const actualButton = await capture.evaluate(button => {
       const rgba = (value: string) => value.match(/[\d.]+/g)!.map(Number)
       const foreground = rgba(getComputedStyle(button).backgroundColor)
@@ -116,12 +118,18 @@ for (const theme of ['light', 'dark'] as const) {
   })
 }
 
-test('default violet dark does not discard an explicit system preference', async ({ page }) => {
+test('default light keeps an explicit system or dark preference working', async ({ page }) => {
   await page.route('**/api/v1/**', route => route.fulfill({ status: 401, contentType: 'application/json', body: '{}' }))
-  await page.emulateMedia({ colorScheme: 'light' })
+  // A new install defaults to the light workspace even when the OS is dark.
+  await page.emulateMedia({ colorScheme: 'dark' })
   await page.goto('/login')
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#e1eaf5')
+  // 'system' still follows the OS, and an explicit dark choice still wins.
   await page.evaluate(() => localStorage.setItem('learnos-theme', 'system'))
   await page.reload()
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await page.evaluate(() => localStorage.setItem('learnos-theme', 'dark'))
+  await page.reload()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
 })

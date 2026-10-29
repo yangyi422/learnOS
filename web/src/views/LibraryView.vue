@@ -18,16 +18,16 @@
       <header class="library-tools-head">
         <div>
           <h2 id="library-tools-title">工具</h2>
-          <p>独立的小工具，数据只保存在本机浏览器。</p>
+          <p>独立的小工具，规划随账号保存（Web 与桌面端共用）。</p>
         </div>
         <span class="library-tools-count">1 个</span>
       </header>
       <div class="library-tool-grid">
         <a
           class="library-tool-card"
-          href="/library-tools/fefw-planner/planner.html?from=library"
-          target="_blank"
-          rel="noopener"
+          :href="toolHref"
+          :target="toolTarget"
+          :rel="toolTarget ? 'noopener' : undefined"
         >
           <span class="library-tool-eyebrow">角色规划</span>
           <h3>万缕千丝 · 挖角手帐</h3>
@@ -103,8 +103,14 @@ import PageHeader from "@/components/PageHeader.vue";
 import CollectionDialog from "@/components/library/CollectionDialog.vue";
 import { listCollections, type Collection } from "@/api/library";
 import { safeExternalLink } from "@/utils/externalLinks";
+import { isDesktopShell } from "@/shell";
 import { localLibraryImage, libraryCardImageURL } from "@/utils/libraryMarkdown";
 import "@/library.css";
+
+// 桌面端没有标签页：在那里 target="_blank" 会被交给 Windows 打开系统浏览器，
+// 因此改为同窗口内打开；网页端保持新标签页。
+const toolHref = "/library-tools/fefw-planner/planner.html?from=library";
+const toolTarget = isDesktopShell() ? undefined : "_blank";
 const collections = ref<Collection[]>([]),
   loading = ref(false),
   error = ref(""),

@@ -110,4 +110,6 @@ Cards 详情独立阅读，可返回保留搜索条件的画廊；Wiki 保留 28
 
 ## 工具分区与静态工具入口（2026-10-26）
 
-资料库首页新增「工具」分区，提供独立静态工具入口「万缕千丝 · 挖角手帐」，地址为 `/library-tools/fefw-planner/planner.html`。它与资料库专题 / 页面模型无关：不写入三张资料表，不参与专题 ZIP、整库 JSON/Markdown 导出，也不占用资料库图片配额；规划数据仅保存在浏览器 localStorage（与 LifeOS 同源）。分区标题与工具卡片沿用资料库的玻璃表面与语义 token，点击后在新标签页打开完整工具页，工具页提供返回 `/explore/library` 的按钮。该工具只作为资料库的一个外部工具入口，不扩展 Markdown 编辑器的 iframe/脚本白名单。
+资料库首页提供「工具」分区与独立工具入口「万缕千丝 · 挖角手帐」，地址为 `/library-tools/fefw-planner/planner.html`。它与资料库专题 / 页面模型无关：不写入三张资料表，不参与专题 ZIP、整库 JSON/Markdown 导出，也不占用资料库图片配额。
+
+规划数据自 2026-10-29 起存入账号（`tool_states` 表，按 `user_id + tool_key` 唯一，`revision` 做乐观锁；接口 `GET/PUT /api/v1/library-tools/fefw-planner/state`），因此 Web 与桌面端共用同一份、随数据库备份、清缓存不丢；localStorage 退化为离线缓存与首次上传来源。密码错误或未登录时工具仍可用，只保存在本机并显示「未登录 · 仅保存在本机」。详见下方「工具状态持久化」。分区标题与工具卡片沿用资料库的玻璃表面与语义 token，点击后在新标签页打开完整工具页，工具页提供返回 `/explore/library` 的按钮。该工具只作为资料库的一个外部工具入口，不扩展 Markdown 编辑器的 iframe/脚本白名单。

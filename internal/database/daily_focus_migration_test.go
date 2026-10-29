@@ -52,7 +52,7 @@ func TestDailyFocusMigrationIsIdempotentAndPreservesWorkspace(t *testing.T) {
 		if err := db.First(&metadata, 1).Error; err != nil {
 			t.Fatal(err)
 		}
-		if model.CurrentSchemaVersion != 31 {
+		if model.CurrentSchemaVersion != 33 {
 			t.Fatalf("schema constant: %d", model.CurrentSchemaVersion)
 		}
 		if metadata.SchemaVersion != model.CurrentSchemaVersion {

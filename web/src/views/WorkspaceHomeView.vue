@@ -34,6 +34,7 @@
     </p>
 
     <div v-if="loading && !home" class="workspace-home__grid workspace-home__grid--loading" aria-label="正在整理工作区" aria-busy="true">
+      <p v-if="slowLoad" class="home-slow-hint" role="status">仍在加载…如果长时间没有内容，请检查网络后重试。</p>
       <div class="home-left-lane">
         <section class="home-section home-section--skeleton today-section" aria-label="今日计划正在加载"><el-skeleton animated :rows="3" /></section>
         <section class="home-section home-section--skeleton projects-section" aria-label="项目正在加载"><el-skeleton animated :rows="3" /></section>
@@ -57,15 +58,16 @@
     <div v-else-if="home" class="workspace-home__grid" :class="{ 'workspace-home__grid--switching': isSwitching }" :aria-busy="loading">
       <span v-if="isSwitching" class="sr-only" role="status">{{ loadError || '正在切换场景…' }}</span>
       <div class="home-left-lane">
-        <section ref="todayCard" class="home-section today-section glass-tier glass-tier--secondary" :inert="isSwitching" :style="{ minHeight: sceneGeometry.today ? sceneGeometry.today + 'px' : undefined }" aria-labelledby="today-title">
+        <section ref="todayCard" class="home-section today-section glass-tier" :inert="isSwitching" :style="{ minHeight: sceneGeometry.today ? sceneGeometry.today + 'px' : undefined }" aria-labelledby="today-title">
           <WorkspaceIcon name="calendar" class="home-section__icon" />
           <DailyPlanPanel :planning="home.planning" :date="currentDate" :context="scene" :focus-task-ids="focusTaskIds" :loading="loading || isSwitching" :error="home.errors.planning" @open="openTask" @refresh="load" />
         </section>
 
-        <section ref="projectsCard" class="home-section projects-section glass-tier glass-tier--secondary" :inert="isSwitching" :style="{ minHeight: sceneGeometry.projects ? sceneGeometry.projects + 'px' : undefined }" aria-labelledby="projects-title">
+        <section ref="projectsCard" class="home-section projects-section glass-tier" :inert="isSwitching" :style="{ minHeight: sceneGeometry.projects ? sceneGeometry.projects + 'px' : undefined }" aria-labelledby="projects-title">
           <WorkspaceIcon name="projects" class="home-section__icon" />
           <SectionHeader :title="projectsSectionTitle" id="projects-title">
             <template #actions>
+              <span v-if="home.projects.length" class="section-count">{{ home.projects.length }} 个项目</span>
               <el-button text @click="router.push('/projects?view=list')">项目列表 →</el-button>
             </template>
           </SectionHeader>
@@ -108,7 +110,7 @@
       <div ref="focusFrame" class="focus-card-frame">
         <DailyFocusCard
           v-fx-spotlight="homeActive ? pilotSettings.home.intensity : undefined"
-          class="daily-focus-card glass-tier glass-tier--primary glass-hero"
+          class="daily-focus-card glass-tier"
           :class="{ 'is-empty': focusEmpty, 'glass-refract': homeRefraction }"
           :style="focusCardStyle"
           :scene="scene"
@@ -133,7 +135,7 @@
         <small v-if="suggestionNote" class="continue-focus__note">{{ suggestionNote }}</small>
       </div>
       </div>
-        <section v-if="learningVisible" class="home-section learning-section learning-section--compact glass-tier glass-tier--reading" aria-labelledby="learning-title">
+        <section v-if="learningVisible" class="home-section learning-section learning-section--compact glass-tier" aria-labelledby="learning-title">
           <WorkspaceIcon name="courses" class="home-section__icon" />
           <SectionHeader title="继续学习 · 全局" id="learning-title" />
           <div v-if="home.errors.learning" class="module-error" role="alert">
@@ -162,7 +164,7 @@
       </div>
 
       <div class="home-right-lane">
-        <section class="home-section capture-section glass-tier glass-tier--secondary" aria-labelledby="capture-title">
+        <section class="home-section capture-section glass-tier" aria-labelledby="capture-title">
           <WorkspaceIcon name="inbox" class="home-section__icon" />
           <SectionHeader title="快速记录" id="capture-title" />
           <button type="button" class="capture-entry" @click="captureOpen = true">
@@ -171,9 +173,13 @@
           </button>
         </section>
 
-        <section v-if="recentVisible" class="home-section recent-section glass-tier glass-tier--reading" aria-labelledby="recent-title">
+        <section v-if="recentVisible" class="home-section recent-section glass-tier" aria-labelledby="recent-title">
           <WorkspaceIcon name="inbox" class="home-section__icon" />
-          <SectionHeader title="最近留下的 · 全局" id="recent-title" />
+          <SectionHeader title="最近留下的 · 全局" id="recent-title">
+            <template #actions>
+              <span v-if="recentItems.length" class="section-count">{{ recentItems.length }} 条</span>
+            </template>
+          </SectionHeader>
           <p v-if="recentLoading && !recent" class="home-muted" role="status">正在读取最近记录…</p>
           <div v-if="recentItems.length" class="home-recent-grid">
           <RouterLink v-for="item in recentItems" :key="item.key" :to="item.to" class="home-recent-row" :title="item.title">
@@ -285,6 +291,13 @@ watch([scene, currentDate], () => {
 const home = ref<WorkspaceHome | null>(null)
 const isSwitching = computed(() => home.value !== null && (loadedScene.value !== scene.value || loadedRequestDate.value !== currentDate.value))
 const loading = ref(true)
+const slowLoad = ref(false)
+let slowTimer: ReturnType<typeof setTimeout> | undefined
+// First paint must never wait forever: a hung request leaves an infinite
+// skeleton with no way out, which is what users see as "一直加载".
+const HOME_LOAD_TIMEOUT_MS = 20_000
+const AUTH_BOOT_TIMEOUT_MS = 10_000
+const SLOW_HINT_MS = 6_000
 const loadError = ref('')
 const captureOpen = ref(false)
 const homeSearch = ref(''), searchFocused = ref(false)
@@ -542,6 +555,12 @@ async function load() {
   const controller = homeRequest = new AbortController()
   loading.value = true
   loadError.value = ''
+  slowLoad.value = false
+  clearTimeout(slowTimer)
+  slowTimer = setTimeout(() => { slowLoad.value = true }, SLOW_HINT_MS)
+  const startedAt = performance.now()
+  let timedOut = false
+  const timeoutId = setTimeout(() => { timedOut = true; controller.abort() }, HOME_LOAD_TIMEOUT_MS)
   try {
     const requestedScene = scene.value
     const requestedDate = currentDate.value
@@ -553,9 +572,18 @@ async function load() {
       loadedRequestDate.value = requestedDate
     }
   } catch (reason) {
-    if (!disposed && !controller.signal.aborted) loadError.value = safeMessage(reason, '工作区暂时无法加载，请检查连接后重试。')
+    if (!disposed && controller === homeRequest) {
+      if (timedOut) loadError.value = '加载超时，请检查网络后重试。'
+      else if (!controller.signal.aborted) loadError.value = safeMessage(reason, '工作区暂时无法加载，请检查连接后重试。')
+    }
   } finally {
+    clearTimeout(timeoutId)
+    clearTimeout(slowTimer)
+    slowLoad.value = false
     if (!disposed && controller === homeRequest) loading.value = false
+    // Keep boot timings visible in the console: a slow or stalled API call is
+    // otherwise indistinguishable from a render bug.
+    if (import.meta.env.DEV) console.info(`[home] load ${Math.round(performance.now() - startedAt)}ms${timedOut ? ' (timeout)' : ''}`)
   }
 }
 async function loadRecent() {
@@ -670,18 +698,34 @@ onMounted(() => {
 })
 async function initializeContext() {
   try {
-    const user = await currentUser()
+    const user = await withTimeout(currentUser(), AUTH_BOOT_TIMEOUT_MS, 'auth/me')
     if (disposed) return
     contextUserID = user.id
     contextReady.value = true
     const saved = readWorkspaceContext(user.id)
     if (saved !== scene.value) { scene.value = saved; return }
   } catch {
+    // 401 is handled by the HTTP client (redirect to /login). A timeout or
+    // network failure must still release the skeleton, so fall through to load()
+    // which surfaces its own error and retry.
     if (disposed) return
     contextCanPersist.value = false
     contextReady.value = true
   }
   if (!disposed) void load()
+}
+
+/** Bounds a boot request so a stalled fetch cannot hold the first paint. */
+async function withTimeout<T>(task: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const expiry = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+  })
+  try {
+    return await Promise.race([task, expiry])
+  } finally {
+    clearTimeout(timer)
+  }
 }
 onBeforeUnmount(() => {
   disposed = true; homeRequest?.abort(); recentRequest?.abort(); stopTaskChanges?.(); clearTimeout(calendarTimer)
@@ -721,12 +765,12 @@ onBeforeUnmount(() => {
   --el-color-primary-dark-2: #6030dc;
   --button-primary-text: #fff;
   color: var(--home-ink);
-  max-width: 1680px;
+  max-width: var(--home-max-width, 1680px);
 }
 .workspace-home :deep(.page-header) { margin-bottom: 40px; }
-.workspace-home :deep(.page-header h1) { font-family: var(--font-ui); font-size: 44px; font-weight: 600; line-height: 1.4; color: var(--home-ink); }
+.workspace-home :deep(.page-header h1) { font-family: var(--font-ui); font-size: var(--font-home-display); font-weight: 500; line-height: 1.4; letter-spacing: -.02em; color: var(--home-ink); }
 .workspace-home :deep(.page-header__description) { margin-top: 12px; font-size: 15px; color: var(--home-muted); }
-.workspace-home__grid { position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.3fr) minmax(0,1fr); align-items: start; gap: 24px; }
+.workspace-home__grid { position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.3fr) minmax(0,1fr); align-items: start; gap: var(--home-grid-gap, 24px); }
 .home-left-lane, .home-focus-lane, .home-right-lane { display: flex; flex-direction: column; gap: 22px; min-width: 0; grid-row: 1; }
 .home-left-lane { grid-column: 1; }
 .home-focus-lane { grid-column: 2; }
@@ -736,32 +780,46 @@ onBeforeUnmount(() => {
    the suggestion cannot shrink the lane or move later sections upward. */
 .focus-cluster { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
 .focus-card-frame { position: relative; min-width: 0; }
-.focus-card, .home-section { position: relative; min-width: 0; border: 1px solid var(--glass-card-edge); border-radius: 16px; background: linear-gradient(120deg,var(--home-glass-glint),transparent 26%,transparent 76%,var(--home-glass-shade)),linear-gradient(145deg,var(--home-sheen),transparent 42%),var(--glass-card-base); background-clip: padding-box; box-shadow: var(--home-panel-inset); backdrop-filter: var(--home-glass-filter); transition: background-color var(--motion-base) var(--motion-ease-standard), border-color var(--motion-base) var(--motion-ease-standard), box-shadow var(--motion-base) var(--motion-ease-standard); }
+.focus-card, .home-section {
+  position: relative;
+  min-width: 0;
+  isolation: isolate;
+  border: 1px solid var(--home-surface-edge);
+  border-radius: var(--home-surface-radius);
+  background: none;
+  box-shadow: var(--home-surface-shadow);
+  backdrop-filter: var(--home-surface-filter);
+  transition: border-color var(--motion-base) var(--motion-ease-standard), box-shadow var(--motion-base) var(--motion-ease-standard);
+}
 .focus-card { min-height: 340px; padding: 26px; display: flex; flex-direction: column; gap: 22px; }
 .focus-card.is-empty { min-height: 250px; }
-.focus-card { background: linear-gradient(120deg,var(--home-glass-glint),transparent 26%,transparent 76%,var(--home-glass-shade)),linear-gradient(180deg,var(--home-focus-top) 0%,var(--home-focus-top) 52%,var(--home-focus-mid) 82%,var(--home-focus-bottom) 100%),var(--glass-card-base); }
 .home-section { padding: 24px; }
 .projects-section, .today-section { min-height: 220px; }
 .projects-section { min-height: 200px; }
-.home-section__icon { position: absolute; top: 26px; left: 24px; width: 21px; height: 21px; color: var(--home-secondary); }
-.home-section :deep(.section-header) { padding-left: 30px; margin-bottom: 18px; gap: 10px; flex-direction: row; flex-wrap: wrap; align-items: center; text-align: left; }
+.home-section__icon { position: absolute; top: 26px; left: 24px; width: 21px; height: 21px; color: var(--home-muted); }
+/* Module headers are signposts; the content is the ink. One step back in weight,
+   size and colour so task/project/article titles read first. */
+.home-section :deep(.section-header) { padding-left: 30px; margin-bottom: 20px; gap: 10px; flex-direction: row; flex-wrap: wrap; align-items: center; text-align: left; }
 .home-section :deep(.section-header__actions) { justify-content: flex-end; }
-.home-section :deep(.section-header h2) { font-size: 17px; font-weight: 600; line-height: 1.5; color: var(--home-ink); }
+.home-section :deep(.section-header h2) { font-size: var(--home-label-size, 14px); font-weight: 600; line-height: 1.5; letter-spacing: var(--home-label-tracking, .04em); color: var(--home-label-color, var(--home-secondary)); }
+.section-count { font-size: 12px; line-height: 1.4; letter-spacing: .06em; font-variant-numeric: tabular-nums; color: var(--home-muted); }
 .home-section :deep(.section-header__actions .el-button) { padding: 0; height: auto; font-size: 12px; color: var(--home-muted); }
 .home-section :deep(.empty-state) { padding: 14px 0; text-align: left; border: 0; background: transparent; }
 .home-section :deep(.empty-state h3) { margin: 0 0 10px; font-size: 15px; font-weight: 500; color: var(--home-secondary); }
 .home-section :deep(.empty-state p) { margin: 0 0 16px; font-size: 13px; color: var(--home-muted); line-height: 1.8; }
 .home-section :deep(.empty-state .el-button) { background: var(--home-tint); border-color: var(--home-edge); color: var(--home-link); border-radius: 999px; }
 @media (hover: hover) {
-  .focus-card:hover, .home-section:hover { border-color: var(--home-reflection); background-color: var(--home-panel-hover); box-shadow: var(--home-panel-hover-shadow); }
-  .home-section:hover :deep(.section-header h2) { color: var(--home-link); }
+  .focus-card:hover, .home-section:hover {
+    border-color: var(--home-surface-edge-hover);
+    box-shadow: var(--home-surface-shadow-hover);
+  }
 }
 .projects-section, .today-section { flex: none; }
 .home-project-grid { display: grid; }
-.project-row { display: grid; grid-template-columns: 24px minmax(0,1fr); gap: 12px; align-items: start; width: 100%; min-width: 0; padding: 17px 0; border: 0; border-bottom: 1px solid var(--home-edge); border-radius: 0; background: transparent; color: var(--home-ink); text-align: left; cursor: pointer; }
+.project-row { display: grid; grid-template-columns: 24px minmax(0,1fr); gap: 12px; align-items: start; width: 100%; min-width: 0; padding: 16px 0; border: 0; border-bottom: 1px solid var(--home-edge); border-radius: 0; background: transparent; color: var(--home-ink); text-align: left; cursor: pointer; }
 .project-row:last-child { border-bottom: 0; padding-bottom: 3px; }
 .project-row__accent { display: grid; width: 24px; height: 26px; place-items: center; border: 0; background: transparent; font-size: 14px; }
-.project-row__text { display: grid; min-width: 0; gap: 7px; }
+.project-row__text { display: grid; min-width: 0; gap: 5px; }
 .project-row__heading { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .project-row__heading strong { min-width: 0; font-size: 16px; line-height: 1.6; font-weight: 500; overflow-wrap: anywhere; }
 .project-row__arrow { flex: none; color: var(--home-muted); font-size: 12px; }
@@ -771,8 +829,8 @@ onBeforeUnmount(() => {
 .project-row__progress i { display: block; height: 100%; border-radius: inherit; background: var(--home-link); opacity: .8; }
 .project-row__counts { flex: none; font-size: 13px; color: var(--home-secondary); font-variant-numeric: tabular-nums; }
 .project-row:hover strong { color: var(--home-link); }
-.today-section :deep(.section-header) { margin-bottom: 12px; }
-.capture-entry { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 46px; padding: 10px 14px; border: 1px solid var(--home-edge); border-radius: 12px; background: var(--home-tint); color: var(--home-secondary); font: inherit; font-size: 14px; text-align: left; cursor: pointer; transition: border-color 180ms ease, color 180ms ease; }
+.today-section :deep(.section-header) { margin-bottom: 14px; }
+.capture-entry { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 46px; padding: 10px 14px; border: 1px solid var(--home-edge); border-radius: 10px; background: var(--home-tint); color: var(--home-secondary); font: inherit; font-size: 14px; text-align: left; cursor: pointer; transition: border-color 180ms ease, color 180ms ease; }
 .capture-entry:hover { border-color: var(--home-reflection); color: var(--home-link); }
 .capture-entry:focus-visible { outline: 2px solid var(--home-link); outline-offset: 3px; }
 .capture-entry__text { min-width: 0; overflow-wrap: anywhere; }
@@ -806,12 +864,12 @@ a.continue-focus__link:focus-visible { outline: 2px solid var(--home-link); outl
 .learning-section--compact .learning-row__summary { font-size: 13px; line-height: 1.7; -webkit-line-clamp: 2; }
 .learning-section--compact .learning-row__meta { font-size: 12px; }
 .home-recent-grid { display: grid; }
-.home-recent-row { display: grid; grid-template-columns: 26px minmax(0,1fr) 12px; align-items: start; gap: 12px; min-width: 0; padding: 12px 0; border-bottom: 1px solid var(--home-edge); text-decoration: none; color: var(--home-ink); }
+.home-recent-row { display: grid; grid-template-columns: 26px minmax(0,1fr) 12px; align-items: start; gap: 12px; min-width: 0; padding: 11px 0; border-bottom: 1px solid var(--home-edge); text-decoration: none; color: var(--home-ink); }
 .home-recent-row:last-child { border-bottom: 0; padding-bottom: 2px; }
 .home-recent-cover, .home-recent-icon { display: grid; place-items: center; width: 26px; height: 30px; border-radius: 5px; overflow: hidden; color: var(--home-secondary); }
 .home-recent-cover img { width: 100%; height: 100%; object-fit: cover; }
 .home-recent-icon svg { width: 19px; height: 19px; }
-.home-recent-copy { display: grid; gap: 5px; min-width: 0; }
+.home-recent-copy { display: grid; gap: 4px; min-width: 0; }
 .home-recent-copy strong { font-size: 14px; line-height: 1.65; font-weight: 500; overflow-wrap: anywhere; }
 .home-recent-copy small { display: flex; flex-wrap: wrap; gap: 3px 10px; font-size: 12px; line-height: 1.6; color: var(--home-muted); }
 .home-recent-date { font-variant-numeric: tabular-nums; }
@@ -823,6 +881,7 @@ a.continue-focus__link:focus-visible { outline: 2px solid var(--home-link); outl
 .workspace-home__fatal-error { max-width: 560px; margin: 8vh auto; }
 .workspace-home__grid--loading > .focus-card-frame { grid-column: 2; grid-row: 1; }
 .home-section--skeleton { min-height: 200px; }
+.home-slow-hint { grid-column: 1 / -1; margin: 0 0 4px; color: var(--home-muted); font-size: 13px; line-height: 1.6; }
 .home-shortcuts { grid-column: 1 / -1; grid-row: 2; display: flex; align-items: center; flex-wrap: wrap; gap: 12px 24px; padding: 10px 0; font-size: 12px; }
 .home-shortcuts__label { color: var(--home-muted); }
 .home-shortcuts a { color: var(--home-secondary); text-decoration: none; line-height: 1.8; }
@@ -843,287 +902,38 @@ a.continue-focus__link:focus-visible { outline: 2px solid var(--home-link); outl
 .home-capture-button.el-button { height: 38px; padding-inline: 16px; border: 1px solid var(--home-edge); border-radius: 999px; background: var(--home-tint); color: var(--home-ink); font-size: 13px; }
 .home-capture-button :deep(svg) { width: 16px; height: 16px; margin-right: 7px; }
 
-/* Home glass tiers: one shared material, three translucency/edge levels. */
-.glass-tier--primary {
-  --tier-base: rgba(255,255,255,.14);
-  --tier-glint: rgba(255,255,255,.16);
-  --tier-sheen: rgba(255,255,255,.05);
-  --tier-shade: rgba(52,84,120,.05);
-  --tier-edge: rgba(74,96,122,.20);
-  --tier-highlight: rgba(255,255,255,.12);
-  --tier-blur: 12px;
-  --tier-sat: 1.1;
-  --tier-inset: inset 0 -14px 26px -22px rgba(40,64,90,.08);
-  --tier-shadow: 0 2px 4px -1px rgba(40,64,90,.075), 0 12px 26px -20px rgba(40,64,90,.18);
-  --tier-shadow-hover: 0 2px 4px rgba(40,64,90,.06), 0 16px 32px -20px rgba(40,64,90,.22);
-  --tier-fallback: rgba(247,250,255,.86);
-}
-.glass-tier--secondary {
-  --tier-base: rgba(255,255,255,.10);
-  --tier-glint: rgba(255,255,255,.12);
-  --tier-sheen: rgba(255,255,255,.04);
-  --tier-shade: rgba(52,84,120,.04);
-  --tier-edge: rgba(74,96,122,.17);
-  --tier-highlight: rgba(255,255,255,.09);
-  --tier-blur: 10px;
-  --tier-sat: 1.08;
-  --tier-inset: inset 0 -10px 22px -20px rgba(40,64,90,.06);
-  --tier-shadow: 0 2px 4px -1px rgba(40,64,90,.065), 0 8px 20px -18px rgba(40,64,90,.14);
-  --tier-shadow-hover: 0 1px 3px rgba(40,64,90,.05), 0 12px 26px -18px rgba(40,64,90,.18);
-  --tier-fallback: rgba(246,250,255,.84);
-}
-.glass-tier--reading {
-  --tier-base: rgba(255,255,255,.26);
-  --tier-glint: rgba(255,255,255,.08);
-  --tier-sheen: rgba(255,255,255,.03);
-  --tier-shade: rgba(52,84,120,.03);
-  --tier-edge: rgba(74,96,122,.18);
-  --tier-highlight: rgba(255,255,255,.06);
-  --tier-blur: 10px;
-  --tier-sat: 1.05;
-  --tier-inset: inset 0 -10px 20px -18px rgba(40,64,90,.05);
-  --tier-shadow: 0 2px 4px -1px rgba(40,64,90,.055), 0 8px 18px -18px rgba(40,64,90,.12);
-  --tier-shadow-hover: 0 1px 3px rgba(40,64,90,.04), 0 12px 24px -18px rgba(40,64,90,.16);
-  --tier-fallback: rgba(248,251,255,.88);
-}
-:root[data-theme='dark'] .glass-tier--primary {
-  --tier-base: rgba(24,16,54,.30);
-  --tier-glint: rgba(198,170,255,.16);
-  --tier-sheen: rgba(223,202,255,.10);
-  --tier-shade: rgba(0,0,0,.22);
-  --tier-edge: rgba(167,142,225,.24);
-  --tier-highlight: rgba(224,207,255,.08);
-  --tier-blur: 16px;
-  --tier-sat: 1.2;
-  --tier-inset: inset 0 -18px 30px -24px rgba(0,0,0,.45);
-  --tier-shadow: 0 2px 4px rgba(0,0,0,.25), 0 20px 40px -24px rgba(0,0,0,.55);
-  --tier-shadow-hover: 0 2px 6px rgba(0,0,0,.28), 0 24px 46px -24px rgba(0,0,0,.60);
-  --tier-fallback: rgba(12,8,28,.80);
-}
-:root[data-theme='dark'] .glass-tier--secondary {
-  --tier-base: rgba(24,16,54,.24);
-  --tier-glint: rgba(198,170,255,.12);
-  --tier-sheen: rgba(223,202,255,.06);
-  --tier-shade: rgba(0,0,0,.18);
-  --tier-edge: rgba(167,142,225,.20);
-  --tier-highlight: rgba(224,207,255,.06);
-  --tier-blur: 14px;
-  --tier-sat: 1.16;
-  --tier-inset: inset 0 -14px 24px -20px rgba(0,0,0,.35);
-  --tier-shadow: 0 1px 3px rgba(0,0,0,.16), 0 14px 30px -22px rgba(0,0,0,.45);
-  --tier-shadow-hover: 0 1px 4px rgba(0,0,0,.18), 0 18px 34px -22px rgba(0,0,0,.50);
-  --tier-fallback: rgba(12,8,28,.78);
-}
-:root[data-theme='dark'] .glass-tier--reading {
-  --tier-base: rgba(24,16,54,.40);
-  --tier-glint: rgba(198,170,255,.10);
-  --tier-sheen: rgba(223,202,255,.05);
-  --tier-shade: rgba(0,0,0,.24);
-  --tier-edge: rgba(167,142,225,.22);
-  --tier-highlight: rgba(224,207,255,.04);
-  --tier-blur: 12px;
-  --tier-sat: 1.12;
-  --tier-inset: inset 0 -12px 22px -18px rgba(0,0,0,.40);
-  --tier-shadow: 0 1px 2px rgba(0,0,0,.14), 0 10px 24px -20px rgba(0,0,0,.40);
-  --tier-shadow-hover: 0 1px 3px rgba(0,0,0,.16), 0 14px 28px -20px rgba(0,0,0,.44);
-  --tier-fallback: rgba(12,8,28,.84);
-}
-.glass-tier {
-  border: 1px solid var(--tier-edge);
-  background:
-    linear-gradient(120deg, var(--tier-glint), transparent 26%, transparent 76%, var(--tier-shade)),
-    linear-gradient(145deg, var(--tier-sheen), transparent 42%),
-    var(--tier-base);
-  background-clip: padding-box;
-  box-shadow: var(--tier-inset), var(--tier-shadow);
-  backdrop-filter: blur(var(--tier-blur)) saturate(var(--tier-sat));
-}
-.glass-tier::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 9%;
-  width: 36%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--tier-highlight), transparent);
-  pointer-events: none;
-}
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .glass-tier { background: var(--tier-fallback); }
-}
-
-/* Hero Glass: the focus card alone gets a larger, curved specular surface. */
-.glass-hero {
-  --tier-base: rgba(255,255,255,.12);
-  isolation: isolate;
-  border-color: rgba(74,96,122,.20);
-  background:
-    radial-gradient(125% 95% at 84% -20%, rgba(255,255,255,.22), transparent 58%),
-    radial-gradient(70% 55% at 6% 4%, rgba(255,255,255,.09), transparent 64%),
-    linear-gradient(158deg, rgba(255,255,255,.04), transparent 42%, rgba(52,84,120,.04)),
-    var(--tier-base);
-  box-shadow:
-    0 2px 4px -1px rgba(40,64,90,.075),
-    0 18px 38px -26px rgba(40,64,90,.22),
-    inset 0 5px 12px -10px rgba(255,255,255,.40),
-    inset 0 -20px 32px -28px rgba(40,64,90,.10);
-  backdrop-filter: blur(12px) saturate(1.12);
-}
-.glass-hero::before {
+/* One homepage material for both themes and all cards, including loading
+   surfaces. Theme values live on .app-shell--home, never on card roles.
+   Content stays fully opaque above the single, non-interactive feathered film. */
+.focus-card::before, .home-section::before {
   content: '';
   position: absolute;
   inset: 0;
   z-index: -1;
-  width: auto;
-  height: auto;
-  border-radius: inherit;
-  background:
-    radial-gradient(62% 38% at 86% 4%, rgba(255,255,255,.17), transparent 70%),
-    radial-gradient(42% 28% at 8% 8%, rgba(255,255,255,.08), transparent 72%);
-  pointer-events: none;
-}
-:root[data-theme='dark'] .glass-hero {
-  --tier-base: rgba(26,17,58,.34);
-  border-color: rgba(167,142,225,.24);
-  /* Light comes through the shared horizon behind the card, not a top lamp. */
-  background:
-    linear-gradient(180deg, rgba(0,0,0,.12), transparent 72%),
-    var(--tier-base);
-  box-shadow:
-    0 2px 6px rgba(0,0,0,.26),
-    0 28px 60px -30px rgba(0,0,0,.62),
-    inset 0 -26px 38px -28px rgba(0,0,0,.52);
-  backdrop-filter: blur(10px) saturate(1.18);
-}
-:root[data-theme='dark'] .glass-hero::before {
-  background: none;
-}
-.glass-hero.glass-refract {
-  --tier-base: rgba(255,255,255,.08);
-}
-:root[data-theme='dark'] .glass-hero.glass-refract {
-  --tier-base: rgba(20,14,44,.18);
-}
-
-/* Admin-only refraction pilot: a clearer card so the sampled background shows. */
-.glass-refract {
-  --tier-base: rgba(255,255,255,.08);
-  --tier-glint: rgba(255,255,255,.18);
-  --tier-sheen: rgba(255,255,255,.04);
-  --tier-highlight: rgba(255,255,255,.20);
-  backdrop-filter: blur(8px) saturate(1.15);
-}
-:root[data-theme='dark'] .glass-refract {
-  --tier-base: rgba(20,14,44,.18);
-  --tier-glint: rgba(198,170,255,.10);
-  --tier-sheen: rgba(223,202,255,.04);
-  --tier-highlight: rgba(224,207,255,.07);
-}
-
-/* Soft Mist Glass — homepage light only. Dark materials and all layout metrics
-   stay intact.
-    Why the old cards read as solid boxes: the material was a single opaque-ish
-   fill painted on the element itself, so its alpha was identical at the centre
-   and at the 1px border — a filled rectangle with a hard edge, no matter how
-   low the alpha went. The surface is now a separate feathered layer: the card
-   element itself is transparent, and `::before` paints a centre-weighted film
-   that reaches transparent before the border box, so the edge dissolves into
-   the mist instead of ending on a line. Text, buttons and inputs are never in
-   that layer and keep full opacity. */
-:root[data-theme='light'] .glass-tier {
-  --mist-fill: rgba(250,252,255,.44);
-  --mist-light: rgba(255,255,255,.46);
-  --mist-edge: rgba(74,96,122,.018);
-  isolation: isolate;
-  border-color: var(--mist-edge);
-  /* No rectangular fill on the element: only the feathered layer carries colour. */
-  background: none;
-  box-shadow:
-    0 1px 2px rgba(44,64,92,.02),
-    0 10px 26px -20px rgba(44,64,92,.08);
-  backdrop-filter: blur(6px) saturate(1.06);
-}
-:root[data-theme='light'] .glass-tier--primary {
-  --mist-fill: rgba(250,252,255,.56);
-  --mist-light: rgba(255,255,255,.58);
-  --mist-edge: rgba(74,96,122,.025);
-}
-:root[data-theme='light'] .glass-tier--reading {
-  --mist-fill: rgba(250,252,255,.48);
-  --mist-light: rgba(255,255,255,.48);
-  --mist-edge: rgba(74,96,122,.02);
-}
-/* Feathered surface: light gathers at the upper-left of the pane, the film thins
-   toward every edge and is already transparent at the border box. */
-:root[data-theme='light'] .glass-tier::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  width: auto;
-  height: auto;
   border-radius: inherit;
   pointer-events: none;
   background:
-    radial-gradient(112% 88% at 28% 2%, var(--mist-light), transparent 60%),
-    linear-gradient(180deg, transparent 58%, rgba(226,235,247,.12)),
-    radial-gradient(122% 118% at 50% 44%, var(--mist-fill) 36%, rgba(247,251,255,.12) 86%, transparent 100%);
-  /* Per-axis feather instead of one radial: a wide card keeps its middle but
-     every edge still dissolves by ~8% of its own side, at any aspect ratio. */
-  /* Fixed-width feather (~26px) rather than a percentage: the rim dissolves at
-     every card size while the surface behind the content keeps full strength. */
+    linear-gradient(155deg, var(--home-surface-sheen), transparent 62%),
+    linear-gradient(180deg, var(--home-surface-film), var(--home-surface-tail));
   -webkit-mask-image:
-    linear-gradient(90deg, transparent, #000 26px, #000 calc(100% - 26px), transparent),
-    linear-gradient(180deg, transparent, #000 26px, #000 calc(100% - 26px), transparent);
+    linear-gradient(90deg, transparent, #000 var(--home-surface-feather), #000 calc(100% - var(--home-surface-feather)), transparent),
+    linear-gradient(180deg, transparent, #000 var(--home-surface-feather), #000 calc(100% - var(--home-surface-feather)), transparent);
   mask-image:
-    linear-gradient(90deg, transparent, #000 26px, #000 calc(100% - 26px), transparent),
-    linear-gradient(180deg, transparent, #000 26px, #000 calc(100% - 26px), transparent);
+    linear-gradient(90deg, transparent, #000 var(--home-surface-feather), #000 calc(100% - var(--home-surface-feather)), transparent),
+    linear-gradient(180deg, transparent, #000 var(--home-surface-feather), #000 calc(100% - var(--home-surface-feather)), transparent);
   -webkit-mask-composite: source-in;
   mask-composite: intersect;
 }
+/* Keep the admin-only effect opt-in; the default material never adds a hotspot.
+   The existing WebGL refraction pass remains dark-only and uses .focus-card. */
 :root[data-theme='light'] .glass-tier.fx-spotlight::after { background: none; }
-@media (hover: hover) {
-  :root[data-theme='light'] .glass-tier:hover {
-    --mist-fill: rgba(250,252,255,.50);
-    --mist-light: rgba(255,255,255,.52);
-    border-color: rgba(74,96,122,.08);
-    box-shadow: 0 2px 10px -6px rgba(44,64,92,.10);
-  }
+.focus-card:focus-within, .home-section:focus-within {
+  border-color: var(--home-surface-edge-focus);
 }
-:root[data-theme='light'] .glass-tier:focus-within {
-  border-color: rgba(74,96,122,.22);
-  box-shadow: 0 2px 10px -6px rgba(44,64,92,.10);
-}
-/* Without backdrop blur or masks, keep a readable static pane instead. */
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  :root[data-theme='light'] .glass-tier { background: rgba(247,250,254,.78); }
-  :root[data-theme='light'] .glass-tier::before { display: none; }
-}
-@supports not ((mask-image: radial-gradient(#000,#000)) or (-webkit-mask-image: radial-gradient(#000,#000))) {
-  :root[data-theme='light'] .glass-tier::before {
-    background:
-      radial-gradient(112% 88% at 28% 2%, var(--mist-light), transparent 60%),
-      linear-gradient(180deg, transparent 58%, rgba(226,235,247,.16)),
-      radial-gradient(112% 108% at 50% 44%, var(--mist-fill) 34%, rgba(247,251,255,.12) 80%, transparent 96%);
-  }
-}
-
-:root[data-theme='light'] .workspace-context-switch {
-  border-color: rgba(74,96,122,.14);
-  background: rgba(255,255,255,.55);
-  box-shadow: 0 1px 2px rgba(40,64,90,.05);
-  backdrop-filter: blur(10px) saturate(1.05);
-}
-:root[data-theme='light'] .workspace-context-switch :deep(.el-radio-button.is-active .el-radio-button__original-radio:not(:disabled) + .el-radio-button__inner) {
-  background: rgba(70,83,223,.10);
-}
-:root[data-theme='light'] .capture-entry {
-  border-color: rgba(74,96,122,.14);
-  background: rgba(255,255,255,.50);
-}
-:root[data-theme='light'] .capture-entry:hover {
-  border-color: rgba(74,96,122,.22);
-  background: rgba(255,255,255,.72);
+/* A readable static material where filtering or feather compositing is absent. */
+@supports not (((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) and ((mask-composite: intersect) or (-webkit-mask-composite: source-in))) {
+  .focus-card, .home-section { background: var(--home-surface-fallback); backdrop-filter: none; }
+  .focus-card::before, .home-section::before { display: none; }
 }
 
 @media (min-width: 701px) {

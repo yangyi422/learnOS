@@ -10,7 +10,9 @@ import App from './App.vue'
 import router from './router'
 import { initializeTheme } from './theme'
 import { initializeHomeAppearance } from './home-appearance'
+import { initializeShell } from './shell'
 
+initializeShell()
 initializeTheme()
 initializeHomeAppearance()
 createApp(App).use(router).use(ElementPlus).mount('#app')

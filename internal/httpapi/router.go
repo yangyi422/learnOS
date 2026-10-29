@@ -42,6 +42,17 @@ func NewRouter(cfg config.Config, handler *Handler, webFS fs.FS, userServices ..
 		userService = userServices[0]
 	}
 
+	// Quick capture: the only endpoint a scoped API token can reach. The token is
+	// narrowed to `capture:inbox`, while the web UI keeps using its session cookie.
+	if userService != nil {
+		capture := router.Group("/api/v1/capture")
+		capture.Use(
+			middleware.TokenOrSession(userService.AuthenticateSession, handler.AuthenticateAPIToken),
+			middleware.RequireScope("capture:inbox"),
+		)
+		capture.POST("/inbox", handler.CaptureInboxItem)
+	}
+
 	api := router.Group("/api/v1")
 	if cfg.Development() {
 		api.Use(middleware.DevelopmentPrincipal())
@@ -54,6 +65,11 @@ func NewRouter(cfg config.Config, handler *Handler, webFS fs.FS, userServices ..
 	}
 	{
 		api.POST("/auth/logout", handler.Logout)
+		// Capture credentials: minted and revoked only from an authenticated
+		// session, so the browser stays the root of trust.
+		api.GET("/api-tokens", handler.ListAPITokens)
+		api.POST("/api-tokens", handler.CreateAPIToken)
+		api.DELETE("/api-tokens/:id", handler.RevokeAPIToken)
 		api.GET("/auth/me", handler.CurrentUser)
 		api.GET("/users", middleware.RequireAdmin(), handler.ListUsers)
 		api.POST("/users", middleware.RequireAdmin(), handler.CreateUser)
@@ -77,6 +93,9 @@ func NewRouter(cfg config.Config, handler *Handler, webFS fs.FS, userServices ..
 		api.GET("/workspace/daily-focus", handler.GetDailyFocus)
 		api.PUT("/workspace/daily-focus/:date/:context", handler.PutDailyFocus)
 		api.GET("/workspace/recent", handler.GetWorkspaceRecent)
+		// Tool state: one opaque document per user and tool (see ToolStateService).
+		api.GET("/library-tools/:key/state", handler.GetToolState)
+		api.PUT("/library-tools/:key/state", handler.SaveToolState)
 		api.GET("/inbox", handler.ListInbox)
 		api.POST("/inbox", handler.CreateInboxItem)
 		api.PATCH("/inbox/:id", handler.UpdateInboxItem)

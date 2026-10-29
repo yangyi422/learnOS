@@ -51,7 +51,7 @@ func NewDeepSeekProvider(client *http.Client, baseURL, apiKey, model string, tim
 	if len(challengeGenerationTimeout) > 2 && challengeGenerationTimeout[2] > 0 {
 		domainSkeletonTimeout = challengeGenerationTimeout[2]
 	}
-	domainStarterTimeout := 60 * time.Second
+	domainStarterTimeout := 120 * time.Second
 	if len(challengeGenerationTimeout) > 3 && challengeGenerationTimeout[3] > 0 {
 		domainStarterTimeout = challengeGenerationTimeout[3]
 	}

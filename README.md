@@ -52,6 +52,20 @@ npm run dev
 
 开发环境的 Vite 与 Go 服务分别只监听 `127.0.0.1:5173` 和 `127.0.0.1:8080`，并跳过登录认证，便于本机预览与自动化检查。配置为 `APP_ENV=development` 时，`APP_ADDR` 若不是 `127.0.0.1` 会拒绝启动。生产及其他环境使用数据库会话认证。
 
+### AI 前端视觉开发
+
+默认按 [AGENTS.md 的视觉流程](AGENTS.md#日常-ai-前端视觉流程默认执行)执行，现有风格与全局/局部边界见 [design.md](design.md)，验证命令与证据说明见 [本地开发说明](docs/LOCAL_DEV_NOTES.md#视觉工作流的日常命令)。
+
+最简单的需求：**「优化［页面］的［问题］，参考［可选链接/图片］，保持当前风格，按项目视觉流程直接做。」** 无外部参考时沿用已验收界面，不必重复说明 Skill 或审批流程。
+
+```bash
+cd web
+npm run build:check  # 隔离检查构建，不覆盖 Go 嵌入资源
+npm run test:ui     # 复用首页截图/材质检查；不等于全站或审美验收
+```
+
+非首页及共享组件修改需追加对应页面/核心回归。Agent 先看同条件基线与修改后截图，再在原范围内最多自动修正两轮，最后报告验证与剩余差异。
+
 ## Docker 运行
 
 ```bash
@@ -124,7 +138,7 @@ AI_PROVIDER=mock
 AI_TIMEOUT_SECONDS=45
 AI_CHALLENGE_GENERATION_TIMEOUT_SECONDS=60
 AI_DOMAIN_SKELETON_TIMEOUT_SECONDS=120
-AI_DOMAIN_STARTER_BLUEPRINT_TIMEOUT_SECONDS=60
+AI_DOMAIN_STARTER_BLUEPRINT_TIMEOUT_SECONDS=120
 AI_DOMAIN_INITIAL_WORLD_TIMEOUT_SECONDS=180
 ```
 

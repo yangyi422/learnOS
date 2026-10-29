@@ -44,6 +44,12 @@
   var STATUSES = ['unset', 'main', 'bench', 'skip'];
   var STATUS_LABEL = { unset: '未规划', main: '主力', bench: '板凳', skip: '不挖角' };
   var STORAGE_KEY = 'fefw-planner-reproduction:v1';
+  // Account-backed storage. The document lives in LifeOS (SQLite, per user) so
+  // the plan survives a cleared browser and is shared by web and desktop; the
+  // localStorage copy stays as an offline cache and a migration source.
+  var TOOL_KEY = 'fefw-planner';
+  var STATE_URL = '/api/v1/library-tools/' + TOOL_KEY + '/state';
+  var sync = { mode: 'local', revision: 0, timer: null, busy: false, conflict: false };
 
   var root = document.documentElement;
   var $ = function (sel) { return document.querySelector(sel); };
@@ -67,6 +73,7 @@
   var lastFocus = null;
   var toastTimer = null;
   var saveTimer = null;
+  var syncText = '仅保存在本机';
   var memoRosterTimer = null;
 
   /* ── helpers ─────────────────────────────────────────────── */
@@ -237,6 +244,110 @@
         saveStateEl.classList.remove('saving');
       }
     }, 160);
+    schedulePush();
+  }
+
+  /* ── account sync ────────────────────────────────────────── */
+  // mode: 'server' = logged in and account storage in use,
+  //       'local'  = not logged in / unreachable, localStorage only.
+
+  function syncClock() {
+    return pad(new Date().getHours()) + ':' + pad(new Date().getMinutes());
+  }
+
+  function setSyncStatus(text) {
+    syncText = text;
+    var el = document.getElementById('syncStatus');
+    if (el) el.textContent = text;
+  }
+
+  function schedulePush() {
+    if (sync.mode !== 'server' || sync.conflict) return;
+    clearTimeout(sync.timer);
+    sync.timer = setTimeout(pushState, 900);
+  }
+
+  function pushState(forceRevision) {
+    if (sync.mode !== 'server' || sync.conflict) return;
+    if (sync.busy) { schedulePush(); return; }
+    sync.busy = true;
+    var revision = typeof forceRevision === 'number' ? forceRevision : sync.revision;
+    fetch(STATE_URL, {
+      method: 'PUT',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ state: state, revision: revision })
+    }).then(function (res) {
+      if (res.status === 401) {
+        sync.mode = 'local';
+        setSyncStatus('未登录 · 仅保存在本机');
+        return null;
+      }
+      if (res.status === 409) {
+        sync.conflict = true;
+        setSyncStatus('账号存档已在别处更新 · 请载入账号版本');
+        toast('规划已在别处更新，请载入账号版本或导出本机备份');
+        if (view === 'overview') renderOverview();
+        return null;
+      }
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    }).then(function (body) {
+      if (!body || !body.data) return;
+      sync.revision = body.data.revision || sync.revision;
+      setSyncStatus('已保存到账号 · ' + syncClock());
+    }).catch(function () {
+      setSyncStatus('同步失败 · 已保存在本机');
+    })['finally'](function () {
+      sync.busy = false;
+    });
+  }
+
+  function adoptServerState(stateDoc, revision) {
+    var clean = sanitizeState(stateDoc, defaultState());
+    if (!clean) { toast('账号存档无法读取'); return false; }
+    state = clean;
+    sync.revision = revision || 0;
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+    searchEl.value = state.search;
+    fameFilterEl.value = state.fameFilter;
+    if (hideSkipEl) hideSkipEl.checked = state.hideSkip;
+    renderRouteHead();
+    renderToolbar();
+    renderRoster();
+    renderRail();
+    if (view === 'overview') renderOverview();
+    return true;
+  }
+
+  function loadAccountState() {
+    fetch(STATE_URL, { credentials: 'same-origin' }).then(function (res) {
+      if (res.status === 401) {
+        sync.mode = 'local';
+        setSyncStatus('未登录 · 仅保存在本机');
+        return null;
+      }
+      if (res.status === 404) {
+        sync.mode = 'server';
+        sync.revision = 0;
+        var hasLocal = Object.keys(state.plans || {}).length > 0;
+        setSyncStatus(hasLocal ? '本机有规划 · 可上传到账号' : '账号暂无存档 · 编辑后自动保存到账号');
+        if (view === 'overview') renderOverview();
+        return null;
+      }
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    }).then(function (body) {
+      if (!body || !body.data) return;
+      sync.mode = 'server';
+      if (adoptServerState(body.data.state, body.data.revision)) {
+        setSyncStatus('已载入账号存档 · ' + syncClock());
+        if (view === 'overview') renderOverview();
+      }
+    }).catch(function () {
+      sync.mode = 'local';
+      setSyncStatus('无法连接账号存档 · 仅保存在本机');
+    });
   }
 
   function pad(n) { return (n < 10 ? '0' : '') + n; }
@@ -723,7 +834,12 @@
       '<button class="btn ghost" type="button" data-action="import">导入 JSON</button>' +
       '<button class="btn ghost quiet" type="button" data-action="reset">清空规划</button>' +
       '</div>' +
-      '<p class="note-line">规划自动保存在本机浏览器（localStorage），换设备请导出 JSON。<br>' +
+      '<p class="note-line" id="syncStatus">' + esc(syncText) + '</p>' +
+      '<div class="savegrid">' +
+      '<button class="btn ghost" type="button" data-action="sync-upload">上传本机到账号</button>' +
+      '<button class="btn ghost" type="button" data-action="sync-reload">载入账号版本</button>' +
+      '</div>' +
+      '<p class="note-line">规划随账号保存（Web 与桌面端共用同一份），本机同时保留离线缓存。<br>' +
       '原页面另支持 <b>B 站云存档</b> 与 <b>二维码备份</b>：云存档需要 B 站登录与平台后端，二维码需要额外的扫码解码模块，这两项未包含在本复刻中。</p>' +
       '</div>';
 
@@ -806,6 +922,7 @@
       state = clean;
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
       saveTextEl.textContent = '已导入备份';
+      schedulePush();
       drawerEl.classList.remove('open');
       drawerEl.setAttribute('aria-hidden', 'true');
       backdropEl.classList.remove('show');
@@ -826,12 +943,28 @@
     state = defaultState();
     try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
     saveTextEl.textContent = '已清空规划';
+    schedulePush();
     switchView('route');
     renderToolbar();
     renderRouteHead();
     renderRoster();
     renderRail();
     toast('已清空全部规划');
+  }
+
+  function uploadLocal() {
+    if (sync.mode !== 'server') { toast('先登录 LifeOS 再上传'); return; }
+    if (sync.revision > 0 && !window.confirm('账号里已有规划，上传会覆盖它。确定继续？')) return;
+    sync.conflict = false;
+    pushState(0);
+    toast('正在上传本机规划');
+  }
+
+  function reloadAccount() {
+    sync.conflict = false;
+    if (sync.mode !== 'server') sync.mode = 'server';
+    loadAccountState();
+    toast('正在载入账号存档');
   }
 
   /* ── events ──────────────────────────────────────────────── */
@@ -987,6 +1120,8 @@
     if (action === 'export') exportJSON();
     else if (action === 'import') $('#importFile').click();
     else if (action === 'reset') resetAll();
+    else if (action === 'sync-upload') uploadLocal();
+    else if (action === 'sync-reload') reloadAccount();
   });
 
   $('#importFile').addEventListener('change', function (e) {
@@ -1005,6 +1140,8 @@
       if (backLink) backLink.hidden = false;
     }
   } catch (e) {}
+
+  loadAccountState();
 
   var deep = readHash();
   if (deep && deep.route) state.activeRoute = deep.route;

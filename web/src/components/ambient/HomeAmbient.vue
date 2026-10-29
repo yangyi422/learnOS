@@ -212,9 +212,9 @@ watch(light, (next) => { renderer?.setLight(next) })
 /* Route-local tokens: other workspaces retain their existing ambient. The same
    centers/radii are read by WebGL; reduced motion uses this static CSS field. */
 .home-ambient-host.is-home {
-  /* Mid-scale mist: a deeper cool base plus three distinct soft zones. Full-width
-     ramps of this size read as a flat wall, so the zones stay under 70% wide. */
-  --home-environment: linear-gradient(180deg, #edf2fb, #e7eef9 50%, #edf2fb);
+  /* Keep the existing asymmetric mist, but lift its base instead of whitening
+     individual cards. The atmosphere is shared; no panel gets a private light. */
+  --home-environment: linear-gradient(180deg, #f2f6fc, #eaf1fb 50%, #f5f7fb);
   --home-ground-axis: vertical;
   --home-entry-center: 32% 20%;
   --home-entry-size: 62% 46%;
@@ -222,9 +222,9 @@ watch(light, (next) => { renderer?.setLight(next) })
   --home-reflection-size: 52% 46%;
   --home-floor-center: 34% 112%;
   --home-floor-size: 66% 52%;
-  --home-light-entry: rgba(255,255,255,.95);
-  --home-light-reflection: rgba(176,198,228,.22);
-  --home-light-floor: rgba(178,200,230,.16);
+  --home-light-entry: rgba(255,255,255,.70);
+  --home-light-reflection: rgba(181,202,231,.12);
+  --home-light-floor: rgba(211,223,240,.12);
   background: var(--home-environment);
 }
 :root[data-theme='dark'] .home-ambient-host.is-home {

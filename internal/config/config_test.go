@@ -23,6 +23,10 @@ func TestLoadDefaultsToMockProvider(t *testing.T) {
 	if cfg.AIProvider != "mock" || cfg.AITimeoutSeconds != 45 || cfg.ChallengeGenerationTimeoutSeconds != 60 || cfg.CurriculumDraftTimeoutSeconds != 60 || cfg.DomainInitialWorldTimeoutSeconds != 180 {
 		t.Fatalf("unexpected AI defaults: %+v", cfg)
 	}
+	// The starter blueprint (Stage 2) shares one 120s budget with unit expansion.
+	if cfg.DomainStarterBlueprintTimeoutSeconds != 120 {
+		t.Fatalf("unexpected starter blueprint timeout default: %+v", cfg)
+	}
 	if cfg.Address != "127.0.0.1:8080" || !cfg.Development() {
 		t.Fatalf("unexpected development defaults: %+v", cfg)
 	}

@@ -1,0 +1,32 @@
+{
+  "main": "index.html",
+  "logo": "logo.png",
+  "preload": "preload.js",
+  "pluginSetting": {
+    "single": true,
+    "height": 220
+  },
+  "features": [
+    {
+      "code": "lifeos-capture",
+      "explain": "把想法、待办或链接送进 LifeOS 收集箱",
+      "cmds": [
+        "LifeOS 收集",
+        "快速记录",
+        "LifeOS Capture"
+      ]
+    },
+    {
+      "code": "lifeos-capture-text",
+      "explain": "把这段文字直接存进 LifeOS 收集箱",
+      "cmds": [
+        {
+          "type": "over",
+          "label": "保存到 LifeOS 收集箱",
+          "minLength": 2,
+          "maxLength": 10000
+        }
+      ]
+    }
+  ]
+}
