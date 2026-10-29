@@ -2144,7 +2144,7 @@ window.FEFW_DATA = {
   },
   {
    "id": "816461",
-   "name": "茉莉",
+   "name": "嘉丝敏",
    "jp": "ジャスミン",
    "image": "portraits/816461.webp",
    "routes": {

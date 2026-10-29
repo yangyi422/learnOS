@@ -112,7 +112,7 @@ Cards 详情独立阅读，可返回保留搜索条件的画廊；Wiki 保留 28
 
 角色详情面板调整：「职业路线」与「交涉条件」上移，其次「四线招募情报」「四线规划」「备注」；去掉固定的「基本职」行；每个职业阶段把**转职条件直接显示在下拉框右侧**；新增「得意技能」行与适配高亮——职业转职条件里出现角色任一得意技能（如剑术/枪术/白魔术）即视为适配，下拉项标 `★`，选中后该阶段描边并提示命中的技能。
 
-数据来源与位置：`web/public/library-tools/fefw-planner/data-proficiencies.js`，内容来自 [fire-emblem-fw.site 角色一览](https://fire-emblem-fw.site/characters.html)（2026-10-29 抓取核对），wiki「嘉丝敏」与本复刻「茉莉」为同一角色（ジャスミン），已对齐；当前 50/50 角色均有数据，若后续新增角色缺项会显示「未收录」而不是报错。
+数据来源与位置：`web/public/library-tools/fefw-planner/data-proficiencies.js`，内容来自 [fire-emblem-fw.site 角色一览](https://fire-emblem-fw.site/characters.html)（2026-10-29 抓取核对），角色译名统一以 wiki 为准（原「茉莉」已更名为「嘉丝敏」）；当前 50/50 角色均有数据，若后续新增角色缺项会显示「未收录」而不是报错。
 
 ## 工具分区与静态工具入口（2026-10-26）
 
