@@ -30,6 +30,30 @@
   };
   function tierLabel(tier) { return TIER_LABEL[tier] || tier; }
 
+  // 得意技能：判断转职条件是否命中角色专长，命中即高亮该职业。
+  var PROFICIENCIES = window.FEFW_PROFICIENCIES || {};
+  var PROF_NAMES = ['剑术', '枪术', '斧术', '箭术', '格斗术', '黑魔术', '白魔术', '指挥术', '步兵术', '马术', '重装术', '飞行术'];
+
+  function charProf(c) { return (c && PROFICIENCIES[c.name]) || []; }
+
+  /** 转职条件里出现的所有武器/兵种熟练，例：任选其一 剑术 D 斧术 D → [剑术, 斧术]。 */
+  function classProfReq(cls) {
+    if (!cls || !cls.examSummary) return [];
+    var found = [];
+    PROF_NAMES.forEach(function (name) {
+      if (cls.examSummary.indexOf(name) >= 0) found.push(name);
+    });
+    return found;
+  }
+
+  /** 命中的得意技能列表；非空即视为适配。 */
+  function classFit(cls, c) {
+    var own = charProf(c);
+    if (!own.length) return [];
+    return classProfReq(cls).filter(function (name) { return own.indexOf(name) >= 0; });
+  }
+
+
   function chapterLabel(chapter) {
     if (!chapter) return '';
     return /^第/.test(chapter) ? chapter : '第' + chapter;
@@ -529,14 +553,17 @@
 
   /* ── drawer ──────────────────────────────────────────────── */
 
-  function classOptionsForTier(tier, selectedId) {
+  function classOptionsForTier(tier, selectedId, ownerChar) {
     var list = CLASSES.filter(function (c) { return c.tier === tier; }).slice().sort(function (a, b) {
       return (a.nameZh || a.name).localeCompare(b.nameZh || b.name, 'zh');
     });
     var html = '<option value="">未选择</option>';
     list.forEach(function (c) {
-      html += '<option value="' + esc(c.id) + '"' + (c.id === selectedId ? ' selected' : '') + '>' +
-        esc(c.nameZh || c.name) + (c.gender ? '（' + esc(c.gender) + '）' : '') + '</option>';
+      var fit = ownerChar ? classFit(c, ownerChar) : [];
+      html += '<option value="' + esc(c.id) + '"' + (c.id === selectedId ? ' selected' : '') +
+        (fit.length ? ' data-fit="1"' : '') + '>' +
+        esc(c.nameZh || c.name) + (c.gender ? '（' + esc(c.gender) + '）' : '') +
+        (fit.length ? ' ★' + fit.join('/') : '') + '</option>';
     });
     return html;
   }
@@ -619,6 +646,40 @@
     });
     html += '</div>';
 
+    var path = plan.classPath;
+    var own = charProf(c);
+    html += '<div class="dsection"><h3>职业路线</h3>';
+    html += '<p class="prof-line"><span class="prof-label">得意技能</span>' +
+      (own.length ? own.map(function (n) { return '<span class="prof-chip">' + esc(n) + '</span>'; }).join('') : '<span class="prof-none">未收录（可在 data-proficiencies.js 补充）</span>') +
+      '<span class="prof-hint">带 ★ 的职业与得意技能匹配</span></p>';
+    html += '<div class="classpath">';
+    TIER_ORDER.forEach(function (tier) {
+      if (tier === '基本職') return;
+      var selected = path[tier] || '';
+      var cls = selected ? CLASS_BY_ID[selected] : null;
+      var fit = cls ? classFit(cls, c) : [];
+      html += '<div class="stage' + (fit.length ? ' fit' : '') + '">' +
+        '<div class="stage-head"><span class="stage-name">' + esc(tierLabel(tier)) + '</span>' +
+        '<select class="class-select" data-act="stage" data-tier="' + esc(tier) + '" aria-label="' + esc(tierLabel(tier)) + '职业选择">' +
+        classOptionsForTier(tier, selected, c) + '</select>' +
+        stageReqHTML(cls) +
+        '</div>' +
+        (fit.length ? '<p class="stage-fit">得意技能适配：' + esc(fit.join('、')) + '</p>' : '') +
+        '</div>';
+    });
+    html += '</div>';
+    var growth = growthText(cumulativeGrowth(path));
+    if (growth) html += '<p class="class-summary"><b>路线累计成长</b> ' + esc(growth) + '</p>';
+    if (Object.keys(path).length) {
+      html += '<button type="button" class="path-clear" data-act="clear-path">清空整条职业路线</button>';
+    }
+    html += '</div>';
+
+    var neg = entry.negotiation || c.negotiation || '';
+    html += '<div class="dsection"><h3>交涉条件</h3>';
+    html += '<p class="quote">' + (neg ? esc(neg) : '无需额外交涉材料，按剧情或对话条件加入。') + '</p>';
+    html += '</div>';
+
     html += '<div class="dsection"><h3>四线招募情报</h3><div class="routetable">';
     ROUTES.forEach(function (r) {
       var e = c.routes[r.id];
@@ -674,39 +735,6 @@
       html += '</div>';
     });
     html += '</div></div>';
-
-    var neg = entry.negotiation || c.negotiation || '';
-    html += '<div class="dsection"><h3>交涉条件</h3>';
-    html += '<p class="quote">' + (neg ? esc(neg) : '无需额外交涉材料，按剧情或对话条件加入。') + '</p>';
-    html += '</div>';
-
-    var path = plan.classPath;
-    html += '<div class="dsection"><h3>职业路线</h3><div class="classpath">';
-    TIER_ORDER.forEach(function (tier) {
-      if (tier === '基本職') {
-        html += '<div class="stage">' +
-          '<div class="stage-head"><span class="stage-name">' + esc(tierLabel(tier)) + '</span>' +
-          '<span class="stage-fixed">' + esc(BASE_CLASS ? (BASE_CLASS.nameZh || BASE_CLASS.name) : '平民') + '<i>固定</i></span></div>' +
-          '<p class="stage-req">所有角色从平民开始，不能更改</p>' +
-          '</div>';
-        return;
-      }
-      var selected = path[tier] || '';
-      var cls = selected ? CLASS_BY_ID[selected] : null;
-      html += '<div class="stage">' +
-        '<div class="stage-head"><span class="stage-name">' + esc(tierLabel(tier)) + '</span>' +
-        '<select class="class-select" data-act="stage" data-tier="' + esc(tier) + '" aria-label="' + esc(tierLabel(tier)) + '职业选择">' +
-        classOptionsForTier(tier, selected) + '</select></div>' +
-        stageReqHTML(cls) +
-        '</div>';
-    });
-    html += '</div>';
-    var growth = growthText(cumulativeGrowth(path));
-    if (growth) html += '<p class="class-summary"><b>路线累计成长</b> ' + esc(growth) + '</p>';
-    if (Object.keys(path).length) {
-      html += '<button type="button" class="path-clear" data-act="clear-path">清空整条职业路线</button>';
-    }
-    html += '</div>';
 
     html += '<div class="dsection"><h3>备注</h3>' +
       '<textarea class="memo" rows="3" placeholder="记录挖角时机、需要准备的资金或素材…">' + esc(plan.note) + '</textarea>' +
