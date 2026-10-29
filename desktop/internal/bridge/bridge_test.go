@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 // newTestBridge builds a bridge pointed at the given upstream without touching
@@ -171,5 +172,49 @@ func TestLoadConfigUsesEmbeddedDefaultAndEnvOverride(t *testing.T) {
 	cfg, err = LoadConfig(embedded)
 	if err != nil || cfg.APIBase != "https://other.example" {
 		t.Fatalf("env override: %+v %v", cfg, err)
+	}
+}
+
+// A stable loopback origin is what keeps the page's localStorage (tool plans,
+// theme, workspace scene) alive across launches; a random port silently orphans it.
+func TestStartKeepsAStableOriginAcrossLaunches(t *testing.T) {
+	dist := fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("ok")}}
+	cfg := Config{APIBase: "http://127.0.0.1:8080"}
+
+	first, err := Start(cfg, dist)
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	firstURL := first.URL()
+	first.Close()
+
+	second, err := Start(cfg, dist)
+	if err != nil {
+		t.Fatalf("restart: %v", err)
+	}
+	defer second.Close()
+	if second.URL() != firstURL {
+		t.Fatalf("origin changed between launches: %s → %s", firstURL, second.URL())
+	}
+	origin := strings.TrimSuffix(firstURL, "/")
+	if !strings.HasSuffix(origin, ":"+defaultPort) {
+		t.Fatalf("expected the preferred port %s, got %s", defaultPort, origin)
+	}
+}
+
+func TestStartFallsBackWhenPreferredPortIsBusy(t *testing.T) {
+	busy, err := net.Listen("tcp", "127.0.0.1:"+defaultPort)
+	if err != nil {
+		t.Skipf("port %s already in use: %v", defaultPort, err)
+	}
+	defer busy.Close()
+
+	server, err := Start(Config{APIBase: "http://127.0.0.1:8080"}, fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("ok")}})
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer server.Close()
+	if strings.HasSuffix(strings.TrimSuffix(server.URL(), "/"), ":"+defaultPort) {
+		t.Fatalf("expected an ephemeral port while %s was busy, got %s", defaultPort, server.URL())
 	}
 }

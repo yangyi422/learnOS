@@ -101,6 +101,16 @@ wails3 build GOOS=windows GOARCH=amd64
 - 只构建 Windows 目标，没有引入 macOS / Linux / iOS / Android 的构建配置。
 - 不覆盖 Web 端：`internal/webassets/dist` 保持不变，Web 构建与部署流程未改。
 
+## 回环端口的稳定性（localStorage 归属）
+
+浏览器存储按 **origin（scheme + host + port）** 隔离。桌面端页面、接口与 Cookie 都挂在 `http://127.0.0.1:<port>` 上，因此端口必须稳定，否则每次启动都会拿到一个"全新且为空"的存储空间——挖角手帐的规划缓存、主题偏好、工作区场景都会表现为"重启就丢"。
+
+- 默认固定端口 **38080**（`desktop/internal/bridge/bridge.go` 的 `defaultPort`）；
+- 被占用时自动退回随机端口，并在日志里明确写出「local browser storage will not persist across this launch」；
+- 可用 `LIFEOS_BRIDGE_PORT` 指定其他端口（同样要求长期不变）。
+
+注意：这只保住**本机缓存**。真正的持久化是服务端 `tool_states`（挖角手帐）与 `inbox_items`（采集）；当桌面端连到的服务端还是旧版本（没有对应接口）时，页面只能退回 localStorage，此时换机器或清缓存就会丢。
+
 ## 站内链接与外部浏览器
 
 WebView2 没有标签页：页面里 `target="_blank"` 的链接会被交给操作系统，弹出系统浏览器、离开应用。桌面端因此把入口 URL 标成 `http://127.0.0.1:<port>/?shell=desktop`，前端 `web/src/shell.ts` 记住这个标记（sessionStorage，跨整页跳转保留），并把 `/library-tools/...` 这类工具入口改为**同窗口打开**；网页端行为不变（仍是新标签页）。工具页自带「返回资料库」，所以返回路径是完整的。

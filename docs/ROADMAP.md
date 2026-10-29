@@ -1,5 +1,12 @@
 # LearnOS Roadmap
 
+## 桌面端回环端口固定（2026-10-29）
+
+- [x] 问题：桥接用 `127.0.0.1:0` 随机端口，origin 每次启动都变，而 localStorage 按 origin 隔离 → 挖角手帐规划、主题、工作区场景"重启即丢"
+- [x] 改为优先固定端口 `38080`（`LIFEOS_BRIDGE_PORT` 可改），被占用时退回随机端口并在日志中说明该次启动不保留本地存储
+- [x] 新增两项 bridge 测试：连续两次 Start 得到同一 origin；端口被占时确实退回临时端口
+- [x] 文档写明"本机缓存 vs 服务端持久化"的区别：真正落库依赖服务端 `tool_states` / `inbox_items`，旧服务端只能退回 localStorage
+
 ## uTools 匹配指令：搜索结果直接采集（2026-10-29）
 
 - [x] `plugin.json` 新增 `lifeos-capture-text` 功能：`over`（选中文本）+ `regex`（搜索框任意 ≥2 字符）两条匹配指令，候选文案「保存到 LifeOS 收集箱」

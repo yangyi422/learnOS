@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"path"
 	"strings"
 	"time"
@@ -45,7 +46,28 @@ type Bridge struct {
 	proxy      *httputil.ReverseProxy
 }
 
-// Start serves dist on 127.0.0.1:<random port> and proxies /api/v1/* to the
+// defaultPort keeps the loopback origin stable across launches. localStorage is
+// scoped per origin (scheme + host + port), so a random port would give every
+// launch a fresh, empty store: the library tools' plans, the theme choice and the
+// workspace scene would all appear to "disappear" on restart.
+const defaultPort = "38080"
+
+// listenLoopback prefers a fixed port and falls back to an ephemeral one when it
+// is taken (another LifeOS instance, or an unrelated process).
+func listenLoopback() (net.Listener, error) {
+	preferred := strings.TrimSpace(os.Getenv("LIFEOS_BRIDGE_PORT"))
+	if preferred == "" {
+		preferred = defaultPort
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:"+preferred)
+	if err == nil {
+		return listener, nil
+	}
+	log.Printf("bridge port %s unavailable (%v); falling back to an ephemeral port — local browser storage will not persist across this launch", preferred, err)
+	return net.Listen("tcp", "127.0.0.1:0")
+}
+
+// Start serves dist on 127.0.0.1:<port> and proxies /api/v1/* to the
 // configured upstream. Serving the page and the API from one loopback origin
 // keeps relative URLs, HttpOnly cookies, SameSite=Lax, the 401 redirect and
 // history routing working exactly as they do in a browser tab.
@@ -55,7 +77,7 @@ func Start(cfg Config, dist fs.FS) (*Bridge, error) {
 		return nil, fmt.Errorf("parse api base: %w", err)
 	}
 
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	listener, err := listenLoopback()
 	if err != nil {
 		return nil, fmt.Errorf("listen on loopback: %w", err)
 	}
@@ -75,7 +97,7 @@ func Start(cfg Config, dist fs.FS) (*Bridge, error) {
 // StartError shows a readable page in the window when configuration is
 // unusable, instead of exiting silently behind a GUI subsystem binary.
 func StartError(cause error) (*Bridge, error) {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	listener, err := listenLoopback()
 	if err != nil {
 		return nil, err
 	}
