@@ -1,5 +1,5 @@
 <template>
-  <div v-if="authorized" class="fx-pilot" data-testid="fx-pilot-bar">
+  <div v-if="authorized && labToolsVisible()" class="fx-pilot" data-testid="fx-pilot-bar">
     <button
       type="button"
       class="fx-pilot__toggle"
@@ -95,6 +95,7 @@ import {
   usePilot,
   type PilotPage,
 } from '@/effects/pilot'
+import { labToolsVisible } from '@/lab-visibility'
 
 const props = defineProps<{ page: PilotPage }>()
 

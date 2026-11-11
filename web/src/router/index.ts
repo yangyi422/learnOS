@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import DashboardView from '@/views/DashboardView.vue'
-import CoursesView from '@/views/CoursesView.vue'
 import SettingsView from '@/views/SettingsView.vue'
 import LearningView from '@/views/LearningView.vue'
 import CourseArchiveView from '@/views/CourseArchiveView.vue'
@@ -49,11 +48,8 @@ const router = createRouter({
     { path: '/life/reviews', component: MonthlyReviewView, meta: { title: '月度回顾' } },
     { path: '/life/finance', component: FinanceView, meta: { title: '财务档案' } },
     { path: '/inbox', component: InboxView, meta: { title: '收集箱' } },
-    {
-      path: '/courses',
-      component: CoursesView,
-      meta: { title: '课程档案' },
-    },
+    // 课程档案已并入「学习」页的列表视图，旧地址保留为跳转
+    { path: '/courses', redirect: { path: '/learn', query: { view: 'list' } } },
     { path: '/domains/new', component: DomainInitializationView, meta: { title: '创建学习领域' } },
     {
       path: '/courses/:id/learn',

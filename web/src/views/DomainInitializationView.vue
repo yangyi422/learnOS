@@ -9,7 +9,7 @@
       <p class="muted">请选择已有学习领域，或返回课程档案创建其他领域。</p>
       <div class="actions">
         <el-button type="primary" @click="enterExistingCourse">进入课程</el-button>
-        <el-button @click="router.push('/courses')">返回课程档案</el-button>
+        <el-button @click="router.push('/learn?view=list')">返回课程档案</el-button>
       </div>
     </el-card>
     <el-alert v-if="error" :title="error" type="error" show-icon :closable="false" />

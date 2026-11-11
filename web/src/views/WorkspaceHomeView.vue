@@ -13,7 +13,7 @@
         </div>
       </template>
     </PageHeader>
-    <Teleport to="#home-header-actions">
+    <Teleport to="#home-header-actions" defer>
       <form class="home-search" role="search" @submit.prevent="openSearchResult(searchResults[0])" @focusout="leaveSearch" @keydown.esc.prevent="searchFocused = false">
         <WorkspaceIcon name="search" />
         <input v-model="homeSearch" type="search" aria-label="搜索当前工作区" placeholder="搜索工作区" aria-controls="home-search-results" :aria-expanded="searchFocused && !!homeSearch.trim()" autocomplete="off" @focus="searchFocused = true" @input="searchFocused = true">
@@ -26,7 +26,7 @@
       </form>
       <el-button class="home-capture-button" @click="captureOpen = true"><WorkspaceIcon name="inbox" />快速记录</el-button>
     </Teleport>
-    <Teleport to="#home-inbox-count"><span v-if="home?.inbox && !home.errors.inbox" :aria-label="home.inbox.count + ' 条待整理'">{{ home.inbox.count }}</span></Teleport>
+    <Teleport to="#home-inbox-count" defer><span v-if="home?.inbox && !home.errors.inbox" :aria-label="home.inbox.count + ' 条待整理'">{{ home.inbox.count }}</span></Teleport>
 
     <p v-if="loadError && home" class="workspace-home__refresh-error" role="status">
       {{ isSwitching ? '该场景暂时无法加载。' : '工作区更新失败，仍显示上次内容。' }}{{ loadError }}
@@ -769,7 +769,7 @@ onBeforeUnmount(() => {
 }
 .workspace-home :deep(.page-header) { margin-bottom: 40px; }
 .workspace-home :deep(.page-header h1) { font-family: var(--font-ui); font-size: var(--font-home-display); font-weight: 500; line-height: 1.4; letter-spacing: -.02em; color: var(--home-ink); }
-.workspace-home :deep(.page-header__description) { margin-top: 12px; font-size: 15px; color: var(--home-muted); }
+.workspace-home :deep(.page-header__description) { margin-top: 12px; font-size: var(--font-body); color: var(--home-muted); }
 .workspace-home__grid { position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.3fr) minmax(0,1fr); align-items: start; gap: var(--home-grid-gap, 24px); }
 .home-left-lane, .home-focus-lane, .home-right-lane { display: flex; flex-direction: column; gap: 22px; min-width: 0; grid-row: 1; }
 .home-left-lane { grid-column: 1; }
@@ -787,7 +787,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--home-surface-edge);
   border-radius: var(--home-surface-radius);
   background: none;
-  box-shadow: var(--home-surface-shadow);
+  box-shadow: var(--home-surface-rim), var(--home-surface-shadow);
   backdrop-filter: var(--home-surface-filter);
   transition: border-color var(--motion-base) var(--motion-ease-standard), box-shadow var(--motion-base) var(--motion-ease-standard);
 }
@@ -811,7 +811,7 @@ onBeforeUnmount(() => {
 @media (hover: hover) {
   .focus-card:hover, .home-section:hover {
     border-color: var(--home-surface-edge-hover);
-    box-shadow: var(--home-surface-shadow-hover);
+    box-shadow: var(--home-surface-rim-hover), var(--home-surface-shadow-hover);
   }
 }
 .projects-section, .today-section { flex: none; }

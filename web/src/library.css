@@ -34,7 +34,8 @@
   border-color: var(--color-primary);
 }
 .library-collection-card h2 {
-  font-size: 21px;
+  font-size: var(--font-card-title);
+  font-weight: 600;
   margin: 12px 0;
 }
 .library-collection-card p {

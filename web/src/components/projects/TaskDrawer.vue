@@ -228,7 +228,7 @@ onUnmounted(() => window.removeEventListener('resize', onResize))
 .task-drawer .el-drawer__body { display: flex; min-height: 0; padding: 0; overflow: hidden; }
 .task-drawer__workspace { display: flex; width: 100%; min-height: 0; flex-direction: column; }
 .task-drawer__header { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 22px 14px; border-bottom: 1px solid var(--border-subtle); }
-.task-drawer__header h2 { margin: 0; color: var(--text-primary); font-size: 17px; font-weight: 680; line-height: 1.4; }
+.task-drawer__header h2 { margin: 0; color: var(--text-primary); font-size: var(--font-section-title); font-weight: 600; line-height: 1.4; }
 .task-drawer__close { display: grid; width: 32px; height: 32px; flex: none; place-items: center; padding: 0; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--text-secondary); cursor: pointer; transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease; }
 .task-drawer__close:hover { border-color: var(--border-default); background: var(--drawer-control); color: var(--text-primary); }
 .task-drawer__close svg { width: 16px; height: 16px; }

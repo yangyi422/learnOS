@@ -48,7 +48,7 @@ defineExpose({ load, openById })
 <style scoped>
 .records-panel { max-width: 860px; padding: 16px 0; }
 header { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
-h3 { margin: 0; font-size: 17px; } header p { margin: 6px 0 12px; color: var(--text-secondary); font-size: 13px; }
+h3 { margin: 0; font-size: var(--font-card-title); font-weight: 600; } header p { margin: 6px 0 12px; color: var(--text-secondary); font-size: 13px; }
 nav { display: flex; gap: 20px; border-bottom: 1px solid var(--border-subtle); }
 nav button { border: 0; padding: 10px 0; color: var(--text-secondary); background: none; cursor: pointer; } nav button.active { color: var(--color-primary); border-bottom: 2px solid var(--color-primary); }
 .record-row { padding: 16px 0; border-bottom: 1px solid var(--border-subtle); }

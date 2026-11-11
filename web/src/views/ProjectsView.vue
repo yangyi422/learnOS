@@ -425,7 +425,7 @@ watch(() => route.query.task, async value => {
 .project-list-view__heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
 .project-list-card { display: flex; justify-content: space-between; gap: 18px; padding: 20px; margin-bottom: 12px; border: 1px solid var(--border-default); border-left: 3px solid var(--project-accent); border-radius: var(--radius-card); background: var(--bg-surface); }
 .project-list-card__title { display: flex; align-items: center; gap: 10px; }
-.project-list-card__title h3 { margin: 0; font-size: 17px; }
+.project-list-card__title h3 { margin: 0; font-size: var(--font-card-title); font-weight: 600; }
 .project-list-card__main p { margin: 10px 0; color: var(--text-secondary); font-size: 13px; }
 .project-list-card__main small { display: block; margin-top: 10px; color: var(--text-tertiary); }
 .project-list-card__actions { display: flex; align-items: start; justify-content: flex-end; flex-wrap: wrap; }

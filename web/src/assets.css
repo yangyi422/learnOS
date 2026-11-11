@@ -1,7 +1,7 @@
 .asset-archive { min-width: 0; font-variant-numeric: tabular-nums; }
 .asset-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
 .asset-heading h2, .asset-heading h3 { margin: 0 0 8px; }
-.asset-archive h3 { font-size: 17px; font-weight: 600; }
+.asset-archive h3 { font-size: var(--font-card-title); font-weight: 600; }
 .asset-body { min-height: 200px; margin-top: 22px; }
 .asset-totals > div { min-width: 0; padding: 22px; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 9px; }
 .asset-composition { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; padding: 12px 0; }

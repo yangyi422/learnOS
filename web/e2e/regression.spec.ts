@@ -623,17 +623,32 @@ test('切换领域后旧推荐响应不会覆盖新领域结果', async ({ page 
   await expect(page.locator('.discovery-card', { hasText: explorationDirection.title })).toHaveCount(0)
 })
 
-test('课程卡片分别展示生成、覆盖和掌握进度', async ({ page }) => {
+test('学习页在卡片与列表之间切换，/courses 跳转到列表视图', async ({ page }) => {
   await installAPIMocks(page)
-  await page.goto('/courses')
+  await page.goto('/learn')
 
   const card = page.locator('.domain-tile', { hasText: courses[0].name })
   await expect(card).toContainText('课程生成度')
   await expect(card).toContainText('学习覆盖度')
   await expect(card).toContainText('理解掌握度')
-  await page.getByRole('button', { name: '课程档案' }).click()
-  await expect(page).toHaveURL(/\/courses$/)
-  await expect(page.getByRole('heading', { name: '你的知识世界' })).toBeVisible()
+
+  // 列表视图：一行一个领域，展示覆盖/掌握与返回入口
+  await page.locator('.dashboard-view-switch').getByText('列表', { exact: true }).click()
+  await expect(page).toHaveURL(/view=list/)
+  const row = page.locator('.course-list__row', { hasText: courses[0].name })
+  await expect(row).toBeVisible()
+  await expect(row.locator('.course-list__bars .bar')).toHaveCount(2)
+  await expect(row).toContainText(/\d+% \/ \d+%/)
+  await expect(row.getByRole('button', { name: '继续' })).toBeVisible()
+
+  // 旧地址仍然可用，落在列表视图
+  await page.goto('/courses')
+  await expect(page).toHaveURL(/\/learn\?view=list$/)
+  await expect(page.locator('.course-list__row').first()).toBeVisible()
+
+  // 切回卡片视图
+  await page.locator('.dashboard-view-switch').getByText('卡片', { exact: true }).click()
+  await expect(page.locator('.domain-tile').first()).toBeVisible()
 })
 
 test('深色主题下首页和课程档案保持基础可读性', async ({ page }, testInfo) => {
@@ -647,7 +662,7 @@ test('深色主题下首页和课程档案保持基础可读性', async ({ page 
   await expect(page.locator('.learning-section')).toContainText(currentLesson.lesson.title)
   if (process.env.CAPTURE_VISUALS) await page.screenshot({ path: testInfo.outputPath('dashboard-dark.png'), fullPage: true })
   await page.goto('/courses')
-  await expect(page.locator('.domain-tile').first()).toBeVisible()
+  await expect(page.locator('.course-list__row').first()).toBeVisible()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   if (process.env.CAPTURE_VISUALS) await page.screenshot({ path: testInfo.outputPath('courses-dark.png'), fullPage: true })
   await page.goto('/courses/1/learn')

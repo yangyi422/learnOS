@@ -1,5 +1,50 @@
 # LearnOS Roadmap
 
+## 页面风格统一 B 层：边缘与模糊（2026-11-06）
+
+- [x] 修复生产构建 `backdrop-filter` 失效：配方前缀顺序改为「前缀在前、标准在后」，产物 CSS 已确认两条并存，静态托管实测 `blur(8px) saturate(1.03)`
+- [x] **部署恢复（2026-11-11）**：本机确认不安装 WSL2，Docker Desktop 因此不可用；改用原生 `bin\learnos.exe` + SQLite（`scripts/run-local.ps1`），8080 已更新为最新前端产物（`index-C2GAIdlo.js`）。云端 Linux 的 `docker compose` 路径保留在 `deploy/deploy.sh`
+
+- [x] 业务卡片从"三色边框（白顶/白左/深右）"改为单色淡边 + `--material-surface-rim` 上沿接光，取值与首页雾面一致
+- [x] 背景模糊对齐首页卡片：浅色 `blur(8px) saturate(1.03)`、深色 `blur(10px) saturate(1.1)`（原 20px/18px）
+- [x] 删除废弃令牌 `--material-surface-edge-top/left` 与 `--glass-card-edge-top/left`
+- [x] 影响面确认：阅读面板同用 `--material-surface-edge`，边缘一并变淡但填充仍不透明，实测可辨识
+- [x] 验证：浅/深实测边缘与模糊取值；`ui-foundation`+`home-material` 16 项、`regression`+`workspace` 110 项 E2E 全通过；首页材质未变
+- [ ] 待做：P2（wide 宽度浮动、三个未归属材质的卡片类）与 A 层（业务卡是否加羽化/落影）
+
+## 页面风格统一 C 层：标题尺度（2026-11-06）
+
+- [x] 区块标题统一 18px / 600：`SectionHeader` 默认字重 700→600；删除 `.coverage-content > .section-header h2{21px}`、`.dashboard-section .section-header h2{18px}` 两处页面级覆盖
+- [x] 内容小节标题（课程档案 coverage、反馈区、节点详情、扩充草案）20px → `--font-section-title`(18)
+- [x] 卡片标题（探索卡、项目卡 17；资料专题卡 21）→ `--font-card-title`(16/600)；资料档案、记录面板三级标题 17 → 16/600；下一课/挑战框 h3 18 → 16/600
+- [x] 抽屉标题 17/680 → 18/600
+- [x] 描述文字统一 `--font-body`(16)：首页 15px 覆盖移除
+- [x] 主按钮统一 `--control-height`(36)：学习页「打开知识结构」40px → 36
+- [x] 验证：1440 实测区块标题 学习/课程档案均为 18px/600、按钮 36、描述 16；typecheck、79 单测、75 项 E2E（ui-foundation 5 视口×16 路由、regression 含四视口溢出与深浅玻璃、dashboard、records、learning-conversation、library）全通过；本地 8080 已部署
+- [ ] 待做：P0 材质统一（边框语义 / 模糊 8 vs 20 / 阴影 / 羽化）与 P2 结构项（wide 宽度浮动、`life-goal-card`、`finance-panel`、`learning-main` 未纳入材质配方）
+
+## 页面风格盘点（2026-11-06）
+
+- [x] 新增 [docs/PAGE_STYLE_AUDIT.md](PAGE_STYLE_AUDIT.md)：17 条路由的实测矩阵（h1/描述/内边距/表面/区块标题/按钮高）+ 结构层的三套表面配方对照
+- [x] 关键发现：首页雾面（边框 .07 + 白 rim + 落影 + blur 8px）与业务表面（白顶线 .55 + 深右边 .20 + blur 20px）**边框语义相反**；区块标题存在 14/600、18/700、21/700 三种；首页描述 15px、其他 16px；内容上边距 48 vs 32
+- [x] 三个卡片类未纳入统一材质：`life-goal-card`、`finance-panel`、`learning-main`
+- [x] 给出三档统一方案（A 完整雾面 / B 边缘+模糊 / C 层级尺度）与建议顺序 C→B→A，以及统一后的验收清单
+
+## 页面冗余清理：P0 实验入口收口 + P1 学习页合并（2026-11-06）
+
+- [x] P0：「实验」悬浮条与账号菜单「视觉实验室」在生产构建默认隐藏，仅 `import.meta.env.DEV` 或 `?fx=1`（记 localStorage）可见；权限仍由 admin 角色决定。新增 `web/src/lab-visibility.ts`
+- [x] P1：`/learn` 增加「卡片 / 列表」视图切换（常驻，query 驱动），列表视图取代原 `/courses`；`/courses` 改为重定向 `/learn?view=list`，删除 `CoursesView.vue`（44 行）
+- [x] 入口收敛：学习页去掉「课程档案」按钮；领域初始化完成后的「返回课程档案」指向列表视图
+- [x] 测试更新：regression 的课程卡片用例改写为「卡片↔列表切换 + /courses 重定向」；深色主题用例改断言列表行；ui-foundation 16 条路由基线、四个视口横向溢出、dashboard 用例全部通过
+- [x] 生产构建实测：`/courses → /learn?view=list`、切换器渲染、切回卡片无 query，页面零错误
+
+## 首页设计规范文档化（2026-11-06）
+
+- [x] 新增 [docs/HOME_DESIGN.md](HOME_DESIGN.md)：首页设计理念、三栏结构与层级手段、柔雾玻璃材质全量取值（浅/深）、边界"靠光与影"规则、状态与反馈、动效与键盘、响应式断点、无障碍、验收命令与已知边界
+- [x] 文档数值逐项对照代码核对：网格 1fr/1.3fr/1fr、栏距 22px、宽度 1680/2000/2480、断点 700/1099/2200/3200、标签 14px·600·.04em、标题 44px·500·-.02em
+- [x] 修正 `design.md` §3 的过期取值（边界 .025→.07），新增「卡片边界：靠光与影，不靠描边」修订段并回链 HOME_DESIGN.md
+- [x] 修正文档中曾写错的断点：过渡档是 701–1099px 两栏、≤700px 单栏（`order` 指定顺序），不是 820px
+
 ## 挖角手帐：面板重排与得意技能适配（2026-10-29）
 
 - [x] 角色详情重排：职业路线与交涉条件上移，招募情报与四线规划下移；移除固定的「基本职」行

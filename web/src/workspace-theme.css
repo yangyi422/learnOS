@@ -589,11 +589,15 @@ body { font-size: var(--font-body); line-height: 1.6; letter-spacing: normal; co
   --material-mist-film: rgba(250,252,255,.30);
   --material-mist-tail: rgba(244,249,255,.14);
   --material-mist-sheen: rgba(255,255,255,.12);
-  --material-mist-edge: rgba(74,96,122,.025);
-  --material-mist-edge-hover: rgba(74,96,122,.065);
-  --material-mist-edge-focus: rgba(74,96,122,.20);
-  --material-mist-shadow: 0 3px 16px -12px rgba(40,64,90,.08);
-  --material-mist-shadow-hover: 0 5px 18px -13px rgba(40,64,90,.12);
+  --material-mist-edge: rgba(74,96,122,.07);
+  --material-mist-edge-hover: rgba(74,96,122,.10);
+  --material-mist-edge-focus: rgba(74,96,122,.30);
+  /* 玻璃边缘：上沿接光的高光 + 极淡内圈，比加粗描边更接近真实玻璃 */
+  --material-mist-rim: inset 0 1px 0 rgba(255,255,255,.72), inset 0 0 0 1px rgba(255,255,255,.34);
+  --material-mist-rim-hover: inset 0 1px 0 rgba(255,255,255,.86), inset 0 0 0 1px rgba(255,255,255,.44);
+  /* 玻璃靠“落影 + 上沿接光”立起来，而不是靠描边 */
+  --material-mist-shadow: 0 10px 26px -18px rgba(40,64,90,.22), 0 2px 6px -4px rgba(40,64,90,.10);
+  --material-mist-shadow-hover: 0 14px 32px -18px rgba(40,64,90,.28), 0 3px 8px -4px rgba(40,64,90,.12);
   --material-mist-filter: blur(8px) saturate(1.03);
   --material-mist-feather: 22px;
   --material-mist-fallback: rgba(246,250,254,.88);
@@ -604,6 +608,8 @@ body { font-size: var(--font-body); line-height: 1.6; letter-spacing: normal; co
   --home-surface-edge: var(--material-mist-edge);
   --home-surface-edge-hover: var(--material-mist-edge-hover);
   --home-surface-edge-focus: var(--material-mist-edge-focus);
+  --home-surface-rim: var(--material-mist-rim);
+  --home-surface-rim-hover: var(--material-mist-rim-hover);
   --home-surface-shadow: var(--material-mist-shadow);
   --home-surface-shadow-hover: var(--material-mist-shadow-hover);
   --home-surface-filter: var(--material-mist-filter);
@@ -634,6 +640,8 @@ body { font-size: var(--font-body); line-height: 1.6; letter-spacing: normal; co
   --home-surface-sheen: rgba(193,172,232,.055);
   --home-surface-edge: rgba(167,142,225,.10);
   --home-surface-edge-hover: rgba(167,142,225,.18);
+  --home-surface-rim: inset 0 1px 0 rgba(214,198,255,.14), inset 0 0 0 1px rgba(214,198,255,.06);
+  --home-surface-rim-hover: inset 0 1px 0 rgba(214,198,255,.20), inset 0 0 0 1px rgba(214,198,255,.10);
   --home-surface-edge-focus: rgba(167,142,225,.35);
   --home-surface-shadow: 0 8px 24px -20px rgba(0,0,0,.32);
   --home-surface-shadow-hover: 0 10px 26px -20px rgba(0,0,0,.38);
