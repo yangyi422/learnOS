@@ -66,7 +66,19 @@ npm run test:ui     # 复用首页截图/材质检查；不等于全站或审美
 
 非首页及共享组件修改需追加对应页面/核心回归。Agent 先看同条件基线与修改后截图，再在原范围内最多自动修正两轮，最后报告验证与剩余差异。
 
-## Docker 运行
+## 运行
+
+### 本机 Windows（原生，不装 WSL2 / Docker）
+
+```powershell
+cp .env.example .env          # 可选：填 APP_USERNAME / APP_PASSWORD_HASH / AI_*
+. .\scripts\dev-env.ps1       # Go 1.27 + zig cgo + npm
+.\scripts\run-local.ps1       # 编译并前台启动，默认 http://127.0.0.1:8080
+```
+
+产物是 `bin\learnos.exe` + SQLite 文件（开发 `data\dev`，生产 `data\prod`），前端为编译进二进制的嵌入资源。
+
+### 容器 / 云服务器（Docker）
 
 ```bash
 cp .env.example .env
@@ -82,7 +94,7 @@ docker compose up -d --build app
 
 ### 本地与云部署脚本
 
-- Windows 本机（Docker 位于 WSL2）：`. .\scripts\dev-env.ps1`，然后 `.\scripts\deploy-local.ps1 -SyncChangedFiles`（未提交改动）或 `-Pull`（已提交推送）；
+- Windows 本机（原生）：`. .\scripts\dev-env.ps1`，然后 `.\scripts\run-local.ps1`（前台）或 `-Detached`（后台 + 自检）；
 - 云服务器 Linux：`bash deploy/deploy.sh --pull`；
 - 本地验证：`.\scripts\verify-local.ps1 [-E2E]`。
 

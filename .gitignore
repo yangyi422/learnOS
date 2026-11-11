@@ -22,6 +22,8 @@ data/*
 *.db-wal
 learnos
 server
+bin/
+.data/
 
 # Personal uploaded images and complete backup bundles
 backups/

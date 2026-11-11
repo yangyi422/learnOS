@@ -53,4 +53,5 @@
 ## 部署偏好
 
 - 用户已授权：后续修改完成并通过必要检查后，直接部署到当前运行环境，无需再次询问；明确要求仅预览、不部署时遵循当次指令。
-- 当前环境使用 `docker compose up -d --build app`，部署后检查容器健康状态、`/health` 和首页资源版本，再汇报结果。
+- 当前运行环境是本机 Windows 原生：`. .\scripts\dev-env.ps1` 后执行 `.\scripts\run-local.ps1 -Detached`（已在运行则先 `Stop-Process -Id (Get-Content .tmp\run-local.pid)`），部署后检查 `/health`、首页引用的 `assets/index-*.js` 与实际资源版本，再汇报结果。
+- 本机不安装 WSL2、不使用 Docker；`docker compose` 仅用于云端 Linux 主机（`deploy/deploy.sh`）。

@@ -6,12 +6,12 @@
 
 | 项 | 本机事实 / 使用方式 |
 | --- | --- |
-| 正常运行环境 | WSL2 `Ubuntu-24.04`，部署副本 `/home/hp/projects/learnos-starter`；当前本机入口 `http://127.0.0.1:8080`，应以 `/health` 与实际资源为准 |
-| Docker | 在 WSL 内执行；不要另起一套实例替代正常服务 |
+| 正常运行环境 | 本机 Windows 原生 `bin\learnos.exe`（`scripts\run-local.ps1`），数据为 `data\prod\learnos.db`；入口 `http://127.0.0.1:8080`，应以 `/health` 与实际资源为准 |
+| Docker / WSL2 | 本机不安装 WSL2、不使用 Docker（Docker Desktop 依赖 WSL2 或 Hyper-V）；容器定义只服务云端 Linux |
 | 前端 | Vue 3 / Element Plus / Vite，沿用当前 lockfile，不额外装框架 |
 | Playwright 默认 | 自动启动 `127.0.0.1:4173` 的临时 Vite（可复用同地址已运行服务），不是已部署版本；测试完成后由 Playwright 回收其启动的服务 |
 | 浏览器 | 配置优先读取 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`，Windows 有标准路径系统 Chrome 时自动复用，否则使用 Playwright 已安装的 Chromium；不静默下载浏览器 |
-| Go | Windows PATH 曾为 Go 1.19，无法编译当前 go.mod；Go 任务先查版本，使用符合要求的 SDK / WSL / 现有 Docker。纯前端验证不需要 Go |
+| Go | PATH 上的 Go 1.19 无法编译当前 go.mod；用 `scripts\dev-env.ps1`（选 `D:\Project\Business\go1.27.0` 并设 zig cc）。纯前端验证不需要 Go |
 | 执行权限 | 按当前会话实际工具/权限执行，优先可用的 bash 执行器；不要照搬历史“必须 PowerShell/自动提权”的结论，不为权限错误换壳绕过限制 |
 | 嵌入资源 | Vite 默认构建会写 `internal/webassets/dist`；检查使用 `build:check`，保护已有嵌入产物与未提交修改 |
 

@@ -94,4 +94,4 @@ Write-Host ("  go   = " + $goExe + " (" + $goVersion + ")")
 Write-Host ("  cc   = " + $cc)
 Write-Host ("  node = " + (& node -v 2>$null))
 Write-Host ("  e2e  = " + $(if ($env:PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) { $env:PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH } else { 'not found (set PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH)' }))
-Write-Host 'Next: .\scripts\verify-local.ps1  |  .\scripts\deploy-local.ps1'
+Write-Host 'Next: .\scripts\verify-local.ps1  |  .\scripts\run-local.ps1'

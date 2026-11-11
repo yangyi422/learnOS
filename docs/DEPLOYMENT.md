@@ -4,34 +4,45 @@
 
 ## 1. 运行环境对照
 
-| 环境 | Docker 位置 | 使用脚本 |
+| 环境 | 运行方式 | 使用脚本 |
 | --- | --- | --- |
-| 本机 Windows | **WSL2 Ubuntu-24.04** 内的 Docker（Windows 侧没有 Docker） | `scripts\deploy-local.ps1`（内部调用 `deploy/deploy.sh`） |
+| 本机 Windows | **原生 `bin\learnos.exe` + SQLite 文件**（不安装 WSL2，不使用 Docker） | `scripts\run-local.ps1` |
 | 云服务器 Linux | 宿主机 Docker + compose 插件 | `deploy/deploy.sh`（POSIX，原生执行） |
 
-> **Windows 是否要装 Docker Desktop？** 不需要，也不会影响云端。镜像和 `docker-compose.yml` 都是 Linux 容器定义；Docker Desktop 只不过是在 Windows 上再提供一套 Linux 容器运行时（虚拟机），与云端 `docker compose` 的行为一致。保持当前 WSL Docker 即可；脚本本身也是 Linux 通用脚本，云端可直接复用。
+> **本机为什么不再走 WSL2 + Docker？** 本机已决定不安装 WSL2，而 Docker Desktop 的两种后端（WSL2、Hyper-V）都要求它或 Hyper-V，因此本机改为原生二进制：一个 `bin\learnos.exe` + 一个 `data\<env>\learnos.db`，前端是编译进二进制的嵌入资源。`Dockerfile` 与 `docker-compose.yml` 保留给云端 Linux，云端行为不变。
 
 ## 2. 前置条件
 
+### 2.1 本机 Windows（原生）
+
+- Go 1.26+：`scripts\dev-env.ps1` 会优先使用 `D:\Project\Business\go1.27.0\bin\go.exe`，可用 `LEARNOS_GO` 覆盖；
+- cgo 需要的 C 编译器：gcc，或 zig（`python -m pip install ziglang`，脚本自动识别）；
+- Node ≥ 22 与既有的 `web/node_modules`（仅在需要重建前端时用到）；
+- 可选 `.env`（与容器共用同一份，参考 `.env.example`）：`APP_USERNAME`、`APP_PASSWORD_HASH`、`APP_PORT`、`AI_*` 等；`APP_ADDR`、`APP_DATA_DIR`、`BACKUP_DIR`、`DATA_HOST_DIR` 这类容器路径由脚本接管，不会被带进原生运行。
+
+### 2.2 云服务器 Linux（Docker）
+
 - Docker + `docker compose` 插件；
-- 仓库根目录存在 `.env`（参考 `.env.example`，至少配置 `APP_ENV`、`APP_USERNAME`、`APP_PASSWORD_HASH`；Windows 本地沿用部署目录已有的 `.env`）；
+- 仓库根目录存在 `.env`（参考 `.env.example`，至少配置 `APP_ENV`、`APP_USERNAME`、`APP_PASSWORD_HASH`）；
 - 数据与备份使用宿主机目录挂载：`DATA_HOST_DIR`、`BACKUP_HOST_DIR`（默认 `./data/prod`、`./backups`）；
 - 推荐安装 `curl` 与 `sqlite3`，用于部署后验证（缺少时脚本会跳过对应检查）。
 
 ## 3. 一键部署
 
-### 3.1 Windows（经 WSL2）
+### 3.1 本机 Windows（原生运行）
 
 ```powershell
-. .\scripts\dev-env.ps1            # 配置 Go/zig/npm/Chrome 等本机环境
-.\scripts\deploy-local.ps1 -SyncChangedFiles   # 未提交改动：先同步到 WSL 部署目录再构建
-# 或（推荐，已提交并推送后）
-.\scripts\deploy-local.ps1 -Pull
+. .\scripts\dev-env.ps1                      # 首次或换终端：Go / zig cgo / npm / Chrome
+.\scripts\run-local.ps1                      # 缺失时先构建前端，再编译并前台启动
+.\scripts\run-local.ps1 -Detached            # 后台启动，自检 health / 首页资源 / 未登录 401
+.\scripts\run-local.ps1 -Environment production -Port 8080 -RebuildWeb
 ```
 
-- 默认 WSL 发行版 `Ubuntu-24.04`、部署目录 `/home/hp/projects/learnos-starter`，可用 `-Distro` / `-DeployPath` 覆盖。
-- `-SyncChangedFiles` 只复制 `git status` 列出的文件（跳过 `.env`、`data/`、`backups/`、`node_modules`），并自动处理 Windows→Linux 的 CRLF 与 fileMode 差异。
-- 部署结束会输出访问地址（默认 `http://127.0.0.1:8080`）。
+- 产物固定为 `bin\learnos.exe`（已忽略），数据落在 `data\dev` 或 `data\prod`，备份落在 `backups\`；
+- 端口优先级：`-Port` > `.env` 的 `APP_PORT` > 8080；默认只绑定 `127.0.0.1`，需要局域网访问时加 `-BindHost 0.0.0.0`；
+- `-Detached` 把输出写到 `.tmp\run-local.log`、pid 写到 `.tmp\run-local.pid`，60 秒内轮询 `/health`，然后打印首页引用的 `assets/index-*.js` 与生产环境未登录接口的 401。它启动的子进程随父 shell 一起结束，需要常驻请在自己的终端窗口里前台运行，或交给计划任务；
+- 生产运行必须先在 `.env` 配置 `APP_USERNAME` 与 `APP_PASSWORD_HASH`，否则所有接口都会认证失败（脚本会给出告警）；
+- 执行策略拒绝未签名脚本（报“未对文件进行数字签名”）时，改用 `scripts\run-local.cmd`，参数与 `run-local.ps1` 完全一致，例如 `scripts\run-local.cmd -NoBuild -Port 8080 -DataDir .data\prod`；它只对子进程加 `-ExecutionPolicy Bypass`，不修改本机策略。
 
 ### 3.2 云服务器（Linux）
 
@@ -50,9 +61,17 @@ bash deploy/deploy.sh --pull --with-caddy
 bash deploy/deploy.sh --no-verify && curl -fsS http://127.0.0.1:8888/health
 ```
 
-## 4. 部署脚本做了什么
+## 4. 脚本做了什么
 
-`deploy/deploy.sh`：
+### 4.1 `scripts\run-local.ps1`（本机原生）
+
+1. 读取 `.env`（没有就跳过），只导出应用需要的键，并丢弃容器专用键；
+2. 解析环境（`APP_ENV` / `-Environment`）、端口（`APP_PORT` / `-Port`）与数据目录（`data\dev`、`data\prod` 或 `-DataDir`）；
+3. 前端产物缺失或加 `-RebuildWeb` 时执行 `npm run build`，写入 `internal/webassets/dist`；
+4. 用 cgo（gcc 或 zig cc）编译 `./cmd/server` 到 `bin\learnos.exe`；
+5. 前台运行，或按 `-Detached` 后台运行并完成 health、首页资源、未登录 401 的自检。
+
+### 4.2 `deploy/deploy.sh`（云端/容器）：
 
 1. 校验 Docker、compose 插件与 `.env`；
 2. 可选 `--pull`（要求工作区干净）；
@@ -63,7 +82,7 @@ bash deploy/deploy.sh --no-verify && curl -fsS http://127.0.0.1:8888/health
 
 部署成功时退出码为 0，任何一步失败返回非 0，可直接接 CI。
 
-## 4.1 GitHub Actions 生产部署（push main 自动触发）
+## 4.3 GitHub Actions 生产部署（push main 自动触发）
 
 `.github/workflows/deploy.yml`：
 
@@ -91,17 +110,19 @@ bash deploy/deploy.sh --no-verify && curl -fsS http://127.0.0.1:8888/health
 
 ## 6. 回滚
 
-1. 停止应用：`docker compose down`（数据卷为宿主机目录，不会被删除）；
-2. 恢复迁移前备份：部署目录 `backups/` 下最新 ZIP（完整备份，迁移前自动生成），取其数据库覆盖 `data/prod/learnos.db`；
-3. 代码回退：`git checkout <上一个可用提交>`，再执行 `bash deploy/deploy.sh --no-verify` 重建镜像；
+1. 停止应用：本机 `Stop-Process -Id (Get-Content .tmp\run-local.pid)`（前台运行时直接 Ctrl+C），云端 `docker compose down`；数据是普通目录，停止不会删除数据；
+2. 恢复迁移前备份：本机 `backups\`、云端部署目录 `backups/` 下最新 ZIP（完整备份，迁移前自动生成），取其数据库覆盖 `data\prod\learnos.db`；
+3. 代码回退：`git checkout <上一个可用提交>`，本机再执行 `.\scripts\run-local.ps1`，云端执行 `bash deploy/deploy.sh --no-verify` 重建镜像；
 4. 通过 `/health` 与首页登录确认。
 
 ## 7. 常见问题
 
 | 现象 | 原因 / 处理 |
 | --- | --- |
-| `docker: command not found`（Windows） | 必须通过 WSL 执行；使用 `scripts\deploy-local.ps1` |
-| WSL 内构建后 git 显示大量文件被修改 | Windows 侧同步带入 CRLF/fileMode；脚本已 `sed` 去 CRLF 并设置 `core.fileMode false` |
+| 本机出现 `docker: command not found` | 预期：本机不安装 WSL2/Docker，使用 `scripts\run-local.ps1`；Docker 只在云端使用 |
+| `run-local.ps1` 无法加载，提示“未对文件进行数字签名” | 该窗口的执行策略拒绝未签名脚本；用 `scripts\run-local.cmd`（参数相同），或在该窗口先执行 `Set-ExecutionPolicy -Scope Process Bypass -Force` |
+| 在 DeepSeek Harness 会话里启动时报 `mkdir …\data\prod: Access is denied` | 会话沙箱不放行仓库内 `data\` 的写入；临时验证加 `-DataDir .tmp\data-probe`，真实运行请在自己的终端里执行 |
+| 进程被回收、服务随即停止 | `-Detached` 的子进程随父 shell 结束；需要常驻请在自己的终端前台运行或注册计划任务 |
 | 端口占用 / 容器起不来 | 检查 `.env` 的 `APP_BIND_HOST`、`APP_PORT`；`docker compose ps` 与 `docker compose logs app` |
 | 首次构建慢 | 容器内 `npm ci` 与 Go 模块下载；后续有构建缓存 |
 | 数据库迁移 | 启动时自动执行；迁移前会生成 `backups/learnos-<时间戳>.zip`，请勿删除 |
@@ -115,6 +136,7 @@ bash deploy/deploy.sh --no-verify && curl -fsS http://127.0.0.1:8888/health
 | 文件 | 作用 |
 | --- | --- |
 | `scripts/dev-env.ps1` | Windows 本机环境（Go 1.27、zig cgo、缓存、npm、Chrome） |
+| `scripts/run-local.ps1` | 本机原生入口：构建并运行 `bin\learnos.exe`（自检 health/首页资源/401） |
 | `scripts/verify-local.ps1` | 本地验证（Go/前端/可选 E2E） |
-| `scripts/deploy-local.ps1` | Windows → WSL 部署入口（可选同步未提交文件） |
-| `deploy/deploy.sh` | Linux/云端通用部署脚本（本地 WSL 也复用它） |
+| `scripts/deploy-local.ps1` | 备用：Windows → WSL 部署入口（本机不再有 WSL 时不可用） |
+| `deploy/deploy.sh` | 云端 Linux 部署脚本 |
