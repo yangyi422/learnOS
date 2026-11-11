@@ -128,7 +128,9 @@
   --radius-control: var(--radius-field);  /* deprecated name; kept for consumers */
   --radius-button: var(--radius-pill);    /* deprecated name; kept for consumers */
   --sidebar-width: 224px;
-  --width-standard: 1248px; --width-wide: 1360px; --width-reading: 760px; --width-lesson: 800px;
+  --width-standard: 1360px; --width-wide: 1360px; --width-board: 1248px; --width-reading: 760px; --width-lesson: 800px;
+  /* 首页与业务页同一帧：切换路由时宽度不再变化。 */
+  --home-max-width: var(--width-wide);
   --page-width-standard: var(--width-standard);
   --content-width-reading: var(--width-reading);
   --page-reading-width: var(--width-reading);
@@ -141,8 +143,8 @@
      --font-page-title so no marketing-size heading leaks into task surfaces. */
   --font-home-display: 44px;
   --card-padding: 28px; --control-height: 36px; --duration-fast: 150ms;
-  /* Home/topbar horizontal gutter: scales with the 4K tiers below. */
-  --home-gutter: 36px;
+  /* 顶栏与页面同一侧向内距，切换路由时内容不再左右跳。 */
+  --home-gutter: 32px;
   --el-font-family: var(--font-ui);
   --el-component-size: var(--control-height);
   --el-border-radius-base: var(--radius-control);
@@ -405,24 +407,26 @@ body { font-size: var(--font-body); line-height: 1.6; letter-spacing: normal; co
    gutters so content is not stranded in a 1680px strip on a 2560/3840 viewport. */
 @media (min-width: 2200px) {
   :root {
-    --width-standard: 1440px;
+    --width-standard: 1600px;
     --width-wide: 1600px;
+    --width-board: 1600px;
     --page-gutter: 40px;
     --card-padding: 32px;
-    --home-max-width: 2000px;
+    --home-max-width: var(--width-wide);
     --home-grid-gap: 28px;
     --home-gutter: 40px;
   }
 }
 @media (min-width: 3200px) {
   :root {
-    --width-standard: 1640px;
+    --width-standard: 1840px;
     --width-wide: 1840px;
+    --width-board: 1840px;
     --width-reading: 880px;
     --width-lesson: 920px;
     --page-gutter: 56px;
     --card-padding: 36px;
-    --home-max-width: 2480px;
+    --home-max-width: var(--width-wide);
     --home-grid-gap: 32px;
     --home-gutter: 56px;
   }

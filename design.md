@@ -149,9 +149,9 @@ CSS `HomeLightField` 与现有 WebGL Ambient 从同一宿主读取中心、半�
 
 Business-page `PageHeader` (Phase 2A, 2026-10-29): `h1` stays `--font-page-title` 28px and uses weight **500** with `letter-spacing: -.02em` — page authority comes from size, not from 700. The workspace home keeps its own 44px `--font-home-display` display title. `PageHeader` description keeps its current size (`--font-body`) and now uses `--color-text-secondary`, so the lede sits one step behind the title. Line-height, spacing, actions layout and breadcrumbs are unchanged; SectionHeader and eyebrow stay open for Phase 2B.
 
-间距以 4px 为基准，常用 8 / 12 / 16 / 20 / 24 / 28 / 32 / 40 / 48px。通用卡片圆角 16px，表单控件 9px，主要按钮和状态胶囊保持圆润。标准页面宽度遵循现有 PageShell，常规上限 1248px；阅读面板上限 760px，宽看板与图谱按业务扩展，不强行压缩。
+间距以 4px 为基准，常用 8 / 12 / 16 / 20 / 24 / 28 / 32 / 40 / 48px。通用卡片圆角 16px，表单控件 9px，主要按钮和状态胶囊保持圆润。页面宽度遵循 PageShell：`standard` 与 `wide` 取同一个上限 `--width-wide`（2026-11-11 起，避免切换路由时页面伸缩），阅读面板上限 760px；项目看板单独用 `--width-board`（1248px）保持四列可读，是唯一的按业务收窄例外。首页内容宽度、上下内边距与侧向 gutter 与业务页一致（`--home-max-width: var(--width-wide)`、`--page-padding-top/bottom`、`--page-gutter`）。
 
-**大尺寸屏幕（4K 级）适配**：3840px 视口若沿用 1248/1680px 上限，内容会缩在左上角。因此按视口加两级尺度步进，**1920px 及以下完全不变**（已用构建产物逐像素比对确认）：≥2200px 时标准页宽 1440、页面边距 40、卡片内边距 32、首页上限 2000、首页栏距 28；≥3200px 时标准页宽 1640、阅读 880、课件 920、边距 56、卡片内边距 36、首页上限 2480、栏距 32。字体与控件高度不随视口放大——物理字号交给操作系统缩放，避免与 150%/200% 缩放叠加后过大。
+**大尺寸屏幕（4K 级）适配**：3840px 视口若沿用 1248/1680px 上限，内容会缩在左上角。因此按视口加两级尺度步进，**1920px 及以下完全不变**（已用构建产物逐像素比对确认）：≥2200px 时页宽 1600、页面边距 40、卡片内边距 32、首页栏距 28；≥3200px 时页宽 1840、阅读 880、课件 920、边距 56、卡片内边距 36、首页栏距 32（首页上限与页宽同一 token）。字体与控件高度不随视口放大——物理字号交给操作系统缩放，避免与 150%/200% 缩放叠加后过大。
 
 首页桌面保留三栏关系：左侧今日计划与项目，中间今日焦点与继续上次，右侧快速记录、最近活动与全局学习。手机按今日焦点、今日计划、项目、快速记录、最近内容、继续学习组织。展示真实数据、加载、错误、空状态，不用虚构示例填补正式页面。
 

@@ -1,5 +1,13 @@
 # LearnOS Roadmap
 
+## 页面帧与内边距全站统一（2026-11-11）
+
+- [x] `standard` 与 `wide` 取同一上限 `--width-wide`（1360 / 1600 / 1840），`--home-max-width: var(--width-wide)`，首页不再独立成帧
+- [x] 看板改用 `--width-board`（1248）显式声明，是唯一按业务收窄的例外
+- [x] 首页上下内边距并入 32 / 48，`--home-gutter` 与 `--page-gutter` 同值（32 / 40 / 56）
+- [x] 验证：1440/1920 逐路由测量一致；导航逐帧采样无中间态；`ui-foundation`+`regression`+`workspace`+`projects` 134 项、`test:ui` 13 项通过
+- [x] 文档：design.md 页面帧与 4K 档、HOME_DESIGN.md 首页宽度表同步
+
 ## 看板宽度收窄（2026-11-11）
 
 - [x] 项目页从 `variant="wide"`（1440 实测 1361）改为 `variant="standard"`：看板 1248，四列各 300px

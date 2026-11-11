@@ -1,5 +1,5 @@
 <template>
-  <PageShell class="projects-page" variant="standard">
+  <PageShell class="projects-page" variant="standard" data-width="board">
     <PageHeader title="项目">
       <template #actions>
         <span v-if="view === 'today'" class="projects-muted">全部活动项目</span><el-select v-else :disabled="busy" :model-value="projectKey" class="projects-switcher" aria-label="切换项目" @change="selectProject(String($event))">

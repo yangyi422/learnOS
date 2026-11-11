@@ -198,6 +198,19 @@ backdrop-filter: var(--material-surface-filter);
 
 验证：`measure-bg-header.cjs` 实测 5 条路由 × 浅深两主题，环境底计算值、画布底色、顶栏 `background-color`（浅 `rgba(242,246,252,.12)` / 深 `rgba(10,6,27,.72)`）、`border-bottom-color`（透明）、高度 76px 完全一致；`ui-foundation` + `regression` 40 项、`home-material` 8 项（断言已改写为「离开首页后顶栏膜色与光场必须与首页完全一致」，比原来更强）全部通过；截图见 `.tmp/style-unified`（1440/390 × 浅/深 × 首页 + 6 条业务路由）。
 
+## 十、已实施：页面帧与内边距全站统一（2026-11-11）
+
+用户反馈「工作台切换到其他页时有个收缩动画」。逐帧采样证明不是动画：切换后第一帧宽度就从 1353 变成 1248，运行中的动画只有 background-color / opacity。真正原因是三处历史差异：
+
+| 项 | 改前 | 改后 |
+|---|---|---|
+| 页面帧 | 首页 `--home-max-width` 1680/2000/2480；学习等 wide 用 `--width-wide` 1360；多数业务页 standard 1248 | `standard` = `wide` = `--width-wide`（1360 / 2200px 档 1600 / 3200px 档 1840），`--home-max-width: var(--width-wide)`；首页不再有独立帧 |
+| 看板 | standard 1248（2026-11-11 上午已收窄） | 保持 1248，改用 `--width-board` 显式声明，作为唯一按业务收窄的例外 |
+| 上下内边距 | 首页 48 / 28，其它页 32 / 48 | 全部 `--page-padding-top` 32 / `--page-padding-bottom` 48 |
+| 侧向 gutter | 首页 36，其它页 32 | 统一 32（`--home-gutter` 与 `--page-gutter` 同值） |
+
+验证：1440 与 1920 视口下逐路由测量 —— 首页 / 学习 / 生活 / 设置全部 `1360`、`left` 相同、`padding` 均为 `32px 32px 48px`；看板 1248。导航逐帧采样（16ms 间隔）从首页切到生活 / 学习，只出现一个帧值 `1360@273/32px 32px 48px`，没有中间态；切到项目为单一帧值 `1248@329`（刻意收窄）。E2E `ui-foundation` + `regression` + `workspace` + `projects` 共 134 项、`test:ui` 13 项通过；`ui-foundation` 的页宽断言改为读取 `--width-standard` token，看板单独断言 `--width-board` 并排除在同帧基线外。
+
 ### 两次踩到的坑（2026-11-11 同日修正）
 
 1. 先用 `html { scrollbar-gutter: stable }` 固定宽页宽度：宽度确实不再浮动，但 `position: fixed` 的抽屉/浮层会以「视口减 gutter」为基准，任务抽屉整体内移 15px（`projects.spec` 的 1280/1600 用例当场失败）。改为 `--width-wide` token，撤掉全局 gutter；首页原有的 `html:has(.workspace-home)` gutter 规则保持不变。

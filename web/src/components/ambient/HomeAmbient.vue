@@ -208,7 +208,7 @@ watch(light, (next) => { renderer?.setLight(next) })
 </script>
 
 <style scoped>
-.home-ambient-host { position: absolute; inset: 0; }
+.home-ambient-host { position: absolute; inset: 0; background: var(--home-environment); }
 /* 光场 token 已统一到 workspace-theme.css（全站同一套光色/中心/半径）；
    本组件只负责宿主与 WebGL 画布，不再定义路由局部光场。 */
 .home-ambient-canvas {

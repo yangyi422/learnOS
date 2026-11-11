@@ -47,10 +47,16 @@ for (const width of [1920, 1440, 1280, 1024, 390]) {
       expect(metrics.overlap, url).toBe(false)
       for (const button of metrics.buttons) expect(button.height, url).toBe(width <= 820 && !button.text ? 44 : 36)
       expect(Math.abs(metrics.left - metrics.headingLeft), url).toBeLessThan(1)
-      if (metrics.variant.endsWith('standard')) expect(metrics.width).toBeLessThanOrEqual(1248)
+      const standardCap = await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--width-standard')))
+      if (metrics.variant.endsWith('standard')) expect(metrics.width, url).toBeLessThanOrEqual(standardCap + 0.5)
       else expect(metrics.width).toBeLessThanOrEqual(width)
-      // Home has its own approved full-width composition and horizontal frame.
-      if (url !== '/') {
+      // The board keeps its own narrower frame (--width-board), so it is checked separately.
+      if (url === '/projects') {
+        const boardCap = await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--width-board')))
+        expect(metrics.width, url).toBeLessThanOrEqual(Math.min(width, boardCap) + 0.5)
+      }
+      // Home is anchored to the same frame as every other route now.
+      if (url !== '/projects') {
         if (baselines.has(metrics.variant)) expect(Math.abs(metrics.left - baselines.get(metrics.variant)!), url).toBeLessThan(1)
         else baselines.set(metrics.variant, metrics.left)
       }
