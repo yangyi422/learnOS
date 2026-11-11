@@ -128,7 +128,7 @@
   --radius-control: var(--radius-field);  /* deprecated name; kept for consumers */
   --radius-button: var(--radius-pill);    /* deprecated name; kept for consumers */
   --sidebar-width: 224px;
-  --width-standard: 1248px; --width-reading: 760px; --width-lesson: 800px;
+  --width-standard: 1248px; --width-wide: 1360px; --width-reading: 760px; --width-lesson: 800px;
   --page-width-standard: var(--width-standard);
   --content-width-reading: var(--width-reading);
   --page-reading-width: var(--width-reading);
@@ -262,9 +262,8 @@ body { font-size: var(--font-body); line-height: 1.6; letter-spacing: normal; co
 .workspace-topbar__spacer { flex: 1; }
 .mobile-menu-button { display: none; width: 36px; height: 36px; place-items: center; padding: 0; border: 1px solid var(--border-default); border-radius: 9px; background: var(--bg-surface); color: var(--text-primary); cursor: pointer; }
 .mobile-menu-button svg { width: 20px; height: 20px; }
-/* 宽页（wide/reading/lesson）用满可用宽度，滚动条出现与否会改变页面宽度；
-   在根元素保留稳定 gutter，宽度不再随页面长短浮动（1440 实测固定 1361）。 */
-@media (min-width: 821px) { html { scrollbar-gutter: stable; } }
+/* 宽页宽度由 --width-wide 决定（见 PageShell），不再依赖根元素 gutter：
+   html 上的 gutter 会让 position: fixed 的抽屉/浮层整体偏移一个滚动条宽度。 */
 .main-content { min-width: 0; scrollbar-gutter: stable; padding: var(--page-padding-top) var(--page-gutter) var(--page-padding-bottom); }
 .page-stack { width: 100%; min-width: 0; }
 .eyebrow { color: var(--text-secondary); font-size: var(--font-meta); letter-spacing: normal; }
@@ -407,6 +406,7 @@ body { font-size: var(--font-body); line-height: 1.6; letter-spacing: normal; co
 @media (min-width: 2200px) {
   :root {
     --width-standard: 1440px;
+    --width-wide: 1600px;
     --page-gutter: 40px;
     --card-padding: 32px;
     --home-max-width: 2000px;
@@ -417,6 +417,7 @@ body { font-size: var(--font-body); line-height: 1.6; letter-spacing: normal; co
 @media (min-width: 3200px) {
   :root {
     --width-standard: 1640px;
+    --width-wide: 1840px;
     --width-reading: 880px;
     --width-lesson: 920px;
     --page-gutter: 56px;

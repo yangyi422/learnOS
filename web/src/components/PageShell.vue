@@ -27,7 +27,10 @@ withDefaults(defineProps<{
   max-width: var(--page-width-standard);
   margin-inline: auto;
 }
-.page-shell--wide, .page-shell--reading, .page-shell--lesson { max-width: none; }
+.page-shell--wide { max-width: var(--width-wide); }
+/* 首页是已验收的全宽构图，宽度由 --home-max-width 与自身网格决定。 */
+.page-shell--wide.workspace-home { max-width: none; }
+.page-shell--reading, .page-shell--lesson { max-width: none; }
 /* Reading limits belong to article columns, never the directory/header. */
 .page-shell--reading { --page-reading-width: var(--width-reading); }
 .page-shell--lesson { --page-reading-width: var(--width-lesson); }

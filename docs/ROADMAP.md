@@ -1,5 +1,11 @@
 # LearnOS Roadmap
 
+## 看板宽度收窄（2026-11-11）
+
+- [x] 项目页从 `variant="wide"`（1440 实测 1361）改为 `variant="standard"`：看板 1248，四列各 300px
+- [x] 390px 仍由 `.kanban-scroll` 本地横向滚动（grid min-width 1020），页面级无横向溢出；深浅两主题一致
+- [x] 验证：`ui-foundation` + `regression` + `projects` 共 56 项、`test:ui` 13 项全部通过；截图 `.tmp/projects-width`
+
 ## 背景与顶栏全站统一（2026-11-11）
 
 - [x] 光场与环境底提升为根级唯一基准：`--home-environment` 与三个光区的中心/半径/光色（含深色、≤700px 变体）从 `HomeAmbient.vue` 的 `.is-home` 局部块上移到 `workspace-theme.css`
@@ -14,7 +20,7 @@
 - [x] 业务卡落影与首页同值（`--material-surface-shadow`），补齐"靠光与影立起"，不再只有内阴影
 - [x] 业务卡 22px 四边羽化：膜层下移到 `::before` 并 `mask-composite: intersect`，描边/落影留在本体；补 `@supports` 实底降级与"悬停不盖膜"读法
 - [x] 材质归属修正：`learning-main` 与 `finance-content` 已由 reading 配方覆盖，`finance-panel` 类已不存在，`life-goal-card` 补进 surface 配方
-- [x] 宽页宽度固定：根元素 `scrollbar-gutter: stable`（≥821px），1440 实测 1361 不再随滚动条浮动
+- [x] 宽页宽度固定：改为 `--width-wide` token（默认 1360 / 2200px 档 1600 / 3200px 档 1840），首页 `.workspace-home` 例外保留全宽；曾用全局 `scrollbar-gutter: stable`，因抽屉 fixed 定位内移 15px 已撤回
 - [x] 验证：typecheck、79 单测、`vite build`；`ui-foundation`（5 视口 × 16 路由）+ `regression`（四视口溢出、深浅玻璃）40 项 E2E 通过；截图对比 `.tmp/style-before` ↔ `.tmp/style-after`
 - [ ] 保留硬边：`.task-card`、`.knowledge-map-canvas`、`.finance-totals > button`、`.library-page-link`（伪元素占用 / 绝对定位锚点），如需羽化要单独设计
 - [ ] 待做：若后续要像素级基线，需按同一浏览器/字体/DPR 条件补最小断言；目前仍是截图式对比

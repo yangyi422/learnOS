@@ -176,7 +176,7 @@ backdrop-filter: var(--material-surface-filter);
 | 降级 | 首页有 `@supports` 实底分支 | 业务卡补齐同一降级：不支持滤镜/蒙版合成时用 `--material-surface-fallback` 实底并隐藏膜层 |
 | 不参与羽化 | — | `.task-card`（自带 `::before` 高光线）、`.knowledge-map-canvas`（内部绝对定位图例）、`.finance-totals > button`、`.library-page-link` 保留硬边，避免伪元素冲突与定位漂移 |
 | 材质归属修正 | 盘点称 `life-goal-card` / `finance-panel` / `learning-main` 未纳入材质 | 实测：`learning-main`（即 `editorial-flow`）与 `.finance-content` 已在 reading 配方内；`finance-panel` 类已不存在（现为 `finance-section` / `finance-rank-row` / `finance-import`）；本次把 `life-goal-card` 补进 surface 配方 |
-| 宽页宽度 | wide `max-width: none`，1440 实测 1353–1361（随滚动条出现与否） | 根元素 `scrollbar-gutter: stable`（≥821px），滚动条不再改变可用宽度；1440 实测固定 1361 |
+| 宽页宽度 | wide `max-width: none`，1440 实测 1353–1361（随滚动条出现与否） | 新增 `--width-wide`（默认 1360，2200px/3200px 档 1600/1840），`page-shell--wide` 用它；首页 `.workspace-home` 例外保留全宽构图 |
 
 验证：`npm run typecheck`、79 项单测、`vite build` 通过；E2E `ui-foundation`（5 视口 × 16 路由）+ `regression`（含四视口横向溢出、深浅共享玻璃）共 40 项通过。截图对比在 `.tmp/style-before` 与 `.tmp/style-after`（1440/390 × 浅/深 × /learn /projects /library /discover /life /settings，含 `metrics.json` 的宽度与计算样式记录）。
 
@@ -197,4 +197,9 @@ backdrop-filter: var(--material-surface-filter);
 实现：把 `HomeAmbient.vue` 里 `.home-ambient-host.is-home` 的整套光场 token（含深色与 ≤700px 变体）上移到 `workspace-theme.css` 根级，删除组件内局部定义与 `.app-shell--home` 对画布/环境/顶栏膜的覆盖，把「顶栏底边透明 + 无阴影」从首页局部规则放宽到 `.app-shell` 全局。卡片材质（`--home-surface-*` 的膜层羽化）仍只属于首页，未扩散。
 
 验证：`measure-bg-header.cjs` 实测 5 条路由 × 浅深两主题，环境底计算值、画布底色、顶栏 `background-color`（浅 `rgba(242,246,252,.12)` / 深 `rgba(10,6,27,.72)`）、`border-bottom-color`（透明）、高度 76px 完全一致；`ui-foundation` + `regression` 40 项、`home-material` 8 项（断言已改写为「离开首页后顶栏膜色与光场必须与首页完全一致」，比原来更强）全部通过；截图见 `.tmp/style-unified`（1440/390 × 浅/深 × 首页 + 6 条业务路由）。
+
+### 两次踩到的坑（2026-11-11 同日修正）
+
+1. 先用 `html { scrollbar-gutter: stable }` 固定宽页宽度：宽度确实不再浮动，但 `position: fixed` 的抽屉/浮层会以「视口减 gutter」为基准，任务抽屉整体内移 15px（`projects.spec` 的 1280/1600 用例当场失败）。改为 `--width-wide` token，撤掉全局 gutter；首页原有的 `html:has(.workspace-home)` gutter 规则保持不变。
+2. 项目看板原本用 `variant="wide"`（1440 实测 1361，四列各 328px），用户反馈过宽；改为 `variant="standard"`（1248，四列各 300px），390px 下仍由 `.kanban-scroll` 本地横向滚动，页面级无横向溢出。
 
