@@ -1,5 +1,15 @@
 # LearnOS Roadmap
 
+## 页面风格统一 A 层：材质收口（2026-11-11）
+
+- [x] 业务卡落影与首页同值（`--material-surface-shadow`），补齐"靠光与影立起"，不再只有内阴影
+- [x] 业务卡 22px 四边羽化：膜层下移到 `::before` 并 `mask-composite: intersect`，描边/落影留在本体；补 `@supports` 实底降级与"悬停不盖膜"读法
+- [x] 材质归属修正：`learning-main` 与 `finance-content` 已由 reading 配方覆盖，`finance-panel` 类已不存在，`life-goal-card` 补进 surface 配方
+- [x] 宽页宽度固定：根元素 `scrollbar-gutter: stable`（≥821px），1440 实测 1361 不再随滚动条浮动
+- [x] 验证：typecheck、79 单测、`vite build`；`ui-foundation`（5 视口 × 16 路由）+ `regression`（四视口溢出、深浅玻璃）40 项 E2E 通过；截图对比 `.tmp/style-before` ↔ `.tmp/style-after`
+- [ ] 保留硬边：`.task-card`、`.knowledge-map-canvas`、`.finance-totals > button`、`.library-page-link`（伪元素占用 / 绝对定位锚点），如需羽化要单独设计
+- [ ] 待做：若后续要像素级基线，需按同一浏览器/字体/DPR 条件补最小断言；目前仍是截图式对比
+
 ## 页面风格统一 B 层：边缘与模糊（2026-11-06）
 
 - [x] 修复生产构建 `backdrop-filter` 失效：配方前缀顺序改为「前缀在前、标准在后」，产物 CSS 已确认两条并存，静态托管实测 `blur(8px) saturate(1.03)`

@@ -262,6 +262,9 @@ body { font-size: var(--font-body); line-height: 1.6; letter-spacing: normal; co
 .workspace-topbar__spacer { flex: 1; }
 .mobile-menu-button { display: none; width: 36px; height: 36px; place-items: center; padding: 0; border: 1px solid var(--border-default); border-radius: 9px; background: var(--bg-surface); color: var(--text-primary); cursor: pointer; }
 .mobile-menu-button svg { width: 20px; height: 20px; }
+/* 宽页（wide/reading/lesson）用满可用宽度，滚动条出现与否会改变页面宽度；
+   在根元素保留稳定 gutter，宽度不再随页面长短浮动（1440 实测固定 1361）。 */
+@media (min-width: 821px) { html { scrollbar-gutter: stable; } }
 .main-content { min-width: 0; scrollbar-gutter: stable; padding: var(--page-padding-top) var(--page-gutter) var(--page-padding-bottom); }
 .page-stack { width: 100%; min-width: 0; }
 .eyebrow { color: var(--text-secondary); font-size: var(--font-meta); letter-spacing: normal; }

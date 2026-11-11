@@ -165,3 +165,20 @@ backdrop-filter: var(--material-surface-filter);
 ```
 
 核对方式：`npm run build:check` 后在产物 CSS 里确认两条都在，再用静态托管 + Playwright 读 `getComputedStyle(el).backdropFilter`。
+
+## 八、已实施：A 层（材质收口：落影 + 羽化）2026-11-11
+
+| 项 | 改前 | 改后 |
+|---|---|---|
+| 业务卡落影 | 只有 `--material-surface-inset`（内阴影），几乎不"浮起来" | 新增 `--material-surface-shadow`：浅 `0 10px 26px -18px rgba(40,64,90,.22), 0 2px 6px -4px rgba(40,64,90,.10)`、深 `0 8px 24px -20px rgba(0,0,0,.32)`，与首页 `--material-mist-shadow` 同值 |
+| 羽化 | 只有首页卡片有 22px 四边羽化 | 业务卡改为"膜层在内容之下 + 22px 四边羽化"：元素本体 `background: none`，`::before` 承载 `--material-surface-film` 并用 `mask-composite: intersect` 做双轴羽化；描边与落影留在本体，所以内容永远清晰、边缘靠光与影过渡 |
+| 悬停 | 换成实底 hover 色，会把膜层盖住 | 羽化卡悬停改为 `background-color: transparent` + `--material-surface-shadow-hover`，与首页同一读法 |
+| 降级 | 首页有 `@supports` 实底分支 | 业务卡补齐同一降级：不支持滤镜/蒙版合成时用 `--material-surface-fallback` 实底并隐藏膜层 |
+| 不参与羽化 | — | `.task-card`（自带 `::before` 高光线）、`.knowledge-map-canvas`（内部绝对定位图例）、`.finance-totals > button`、`.library-page-link` 保留硬边，避免伪元素冲突与定位漂移 |
+| 材质归属修正 | 盘点称 `life-goal-card` / `finance-panel` / `learning-main` 未纳入材质 | 实测：`learning-main`（即 `editorial-flow`）与 `.finance-content` 已在 reading 配方内；`finance-panel` 类已不存在（现为 `finance-section` / `finance-rank-row` / `finance-import`）；本次把 `life-goal-card` 补进 surface 配方 |
+| 宽页宽度 | wide `max-width: none`，1440 实测 1353–1361（随滚动条出现与否） | 根元素 `scrollbar-gutter: stable`（≥821px），滚动条不再改变可用宽度；1440 实测固定 1361 |
+
+验证：`npm run typecheck`、79 项单测、`vite build` 通过；E2E `ui-foundation`（5 视口 × 16 路由）+ `regression`（含四视口横向溢出、深浅共享玻璃）共 40 项通过。截图对比在 `.tmp/style-before` 与 `.tmp/style-after`（1440/390 × 浅/深 × /learn /projects /library /discover /life /settings，含 `metrics.json` 的宽度与计算样式记录）。
+
+仍未处理：三条"保留硬边"的卡片若也要羽化，需先解决伪元素占用与图例锚点问题；截图基线仍是对比式（无像素断言），未改基线文件。
+
