@@ -209,54 +209,8 @@ watch(light, (next) => { renderer?.setLight(next) })
 
 <style scoped>
 .home-ambient-host { position: absolute; inset: 0; }
-/* Route-local tokens: other workspaces retain their existing ambient. The same
-   centers/radii are read by WebGL; reduced motion uses this static CSS field. */
-.home-ambient-host.is-home {
-  /* Keep the existing asymmetric mist, but lift its base instead of whitening
-     individual cards. The atmosphere is shared; no panel gets a private light. */
-  --home-environment: linear-gradient(180deg, #f2f6fc, #eaf1fb 50%, #f5f7fb);
-  --home-ground-axis: vertical;
-  --home-entry-center: 32% 20%;
-  --home-entry-size: 62% 46%;
-  --home-reflection-center: 86% 46%;
-  --home-reflection-size: 52% 46%;
-  --home-floor-center: 34% 112%;
-  --home-floor-size: 66% 52%;
-  --home-light-entry: rgba(255,255,255,.70);
-  --home-light-reflection: rgba(181,202,231,.12);
-  --home-light-floor: rgba(211,223,240,.12);
-  background: var(--home-environment);
-}
-:root[data-theme='dark'] .home-ambient-host.is-home {
-  --home-environment: #09051b;
-  --home-entry-center: 14% 90%;
-  --home-entry-size: 70% 60%;
-  --home-reflection-center: 96% 100%;
-  --home-reflection-size: 62% 58%;
-  --home-floor-center: 52% 78%;
-  --home-floor-size: 40% 16%;
-  --home-light-entry: rgba(112,66,186,.02);
-  --home-light-reflection: rgba(92,62,154,.02);
-  --home-light-floor: rgba(133,98,255,.28);
-}
-:root[data-theme='dark'][data-home-accent='custom'] .home-ambient-host.is-home {
-  --home-light-entry: inherit;
-  --home-light-reflection: inherit;
-  --home-light-floor: inherit;
-}
-@media (max-width: 700px) {
-  .home-ambient-host.is-home { --home-floor-center: 46% 112%; --home-floor-size: 130% 58%; }
-  :root[data-theme='light'] .home-ambient-host.is-home {
-    --home-entry-center: 50% 10%;
-    --home-entry-size: 128% 42%;
-    --home-reflection-center: 104% 54%;
-    --home-reflection-size: 84% 46%;
-  }
-  :root[data-theme='dark'] .home-ambient-host.is-home {
-    --home-floor-center: 50% 78%;
-    --home-floor-size: 72% 18%;
-  }
-}
+/* 光场 token 已统一到 workspace-theme.css（全站同一套光色/中心/半径）；
+   本组件只负责宿主与 WebGL 画布，不再定义路由局部光场。 */
 .home-ambient-canvas {
   position: absolute;
   inset: 0;

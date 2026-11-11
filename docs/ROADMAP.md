@@ -1,5 +1,14 @@
 # LearnOS Roadmap
 
+## 背景与顶栏全站统一（2026-11-11）
+
+- [x] 光场与环境底提升为根级唯一基准：`--home-environment` 与三个光区的中心/半径/光色（含深色、≤700px 变体）从 `HomeAmbient.vue` 的 `.is-home` 局部块上移到 `workspace-theme.css`
+- [x] 删除 `.app-shell--home` 对画布/环境/顶栏膜的覆盖，首页不再有独立背景
+- [x] 顶栏统一：浅 `rgba(242,246,252,.12)` / 深 `rgba(10,6,27,.72)`，底边透明且无阴影，光场起点回到视口顶端
+- [x] 卡片材质（`--home-surface-*`）仍限首页，不随背景扩散
+- [x] 验证：`measure-bg-header.cjs` 5 路由 × 浅深实测一致；`ui-foundation`+`regression` 40 项、`home-material` 8 项通过；截图 `.tmp/style-unified`
+- [ ] 待做：首页 `.main-content` 上下内边距仍为 48/28（其它页 32/48），属 P1 间距项，未纳入本次
+
 ## 页面风格统一 A 层：材质收口（2026-11-11）
 
 - [x] 业务卡落影与首页同值（`--material-surface-shadow`），补齐"靠光与影立起"，不再只有内阴影

@@ -454,14 +454,19 @@ body { font-size: var(--font-body); line-height: 1.6; letter-spacing: normal; co
   --home-panel-inset: inset 0 1px 0 rgba(255,255,255,.55), inset 1px 0 0 rgba(255,255,255,.24), inset -1px -1px 0 rgba(64,99,145,.08), 0 18px 36px -22px rgba(36,66,106,.28);
   --home-panel-hover-shadow: inset 0 1px 0 rgba(255,255,255,.32), inset -1px -1px 0 rgba(64,99,145,.09), 0 16px 34px -20px rgba(36,66,106,.26);
   --home-canvas: #f2f6fc;
-  --home-environment:
-    radial-gradient(120% 72% at 10% -12%, #dbe9fb 0%, rgba(219,233,251,0) 58%),
-    radial-gradient(95% 65% at 92% 22%, #e3e2fa 0%, rgba(227,226,250,0) 62%),
-    linear-gradient(180deg, #f2f6fc 0%, #eef2fb 46%, #f7f1eb 80%, #f3e6dd 100%);
-  --home-light-entry: rgba(118,168,232,.22);
-  --home-light-reflection: rgba(148,138,226,.14);
-  --home-light-floor: rgba(232,186,160,.15);
-  --home-bar: rgba(245,250,255,.58);
+  /* 全站同一套光场与顶栏（原首页局部，2026-11-11 起为唯一基准）*/
+  --home-environment: linear-gradient(180deg, #f2f6fc, #eaf1fb 50%, #f5f7fb);
+  --home-ground-axis: vertical;
+  --home-entry-center: 32% 20%;
+  --home-entry-size: 62% 46%;
+  --home-reflection-center: 86% 46%;
+  --home-reflection-size: 52% 46%;
+  --home-floor-center: 34% 112%;
+  --home-floor-size: 66% 52%;
+  --home-light-entry: rgba(255,255,255,.70);
+  --home-light-reflection: rgba(181,202,231,.12);
+  --home-light-floor: rgba(211,223,240,.12);
+  --home-bar: rgba(242,246,252,.12);
   --home-ink: #172840;
   --home-secondary: #384f69;
   --home-muted: #4d617a;
@@ -487,11 +492,17 @@ body { font-size: var(--font-body); line-height: 1.6; letter-spacing: normal; co
   --home-primary-shadow: none;
   --home-panel-inset: inset 0 1px 0 rgba(224,207,255,.12), inset 1px 0 0 rgba(224,207,255,.06), inset -1px -1px 0 rgba(0,0,0,.20), 0 16px 34px -24px rgba(0,0,0,.5);
   --home-environment: #09051b;
-  --home-light-entry: rgba(112,66,186,.30);
-  --home-light-reflection: rgba(92,62,154,.19);
-  --home-light-floor: rgba(102,62,159,.12);
+  --home-entry-center: 14% 90%;
+  --home-entry-size: 70% 60%;
+  --home-reflection-center: 96% 100%;
+  --home-reflection-size: 62% 58%;
+  --home-floor-center: 52% 78%;
+  --home-floor-size: 40% 16%;
+  --home-light-entry: rgba(112,66,186,.02);
+  --home-light-reflection: rgba(92,62,154,.02);
+  --home-light-floor: rgba(133,98,255,.28);
   --home-canvas: #09051b;
-  --home-bar: rgba(10,6,27,.92);
+  --home-bar: rgba(10,6,27,.72);
   --home-ink: #f2edf9;
   --home-secondary: #d1c5e3;
   --home-muted: #bcb0d1;
@@ -631,13 +642,8 @@ body { font-size: var(--font-body); line-height: 1.6; letter-spacing: normal; co
   --home-control-filter: var(--home-surface-filter);
   --home-control-selected: var(--home-tint);
 }
-:root[data-theme='light'] .app-shell--home {
-  --home-canvas: #eef4fc;
-  --home-environment: #eef4fc;
-  --home-bar: rgba(242,246,252,.12);
-}
+/* 首页不再覆写画布与光场：画布、光场、顶栏膜已全站统一（见本文件上半段的 --home-* 基准）。 */
 :root[data-theme='dark'] .app-shell--home {
-  --home-bar: rgba(10,6,27,.72);
   --home-surface-film: rgba(22,15,43,.46);
   --home-surface-tail: rgba(16,10,35,.30);
   --home-surface-sheen: rgba(193,172,232,.055);
@@ -656,9 +662,14 @@ body { font-size: var(--font-body); line-height: 1.6; letter-spacing: normal; co
   --home-control-edge-hover: rgba(167,142,225,.24);
   --home-control-shadow: 0 2px 8px -7px rgba(0,0,0,.20);
 }
-/* Only the existing light layer extends behind the sticky navigation. */
-:root[data-theme='light'] .app-shell--home .home-ambient { inset-block-start: 0; }
-:root[data-theme] .app-shell--home .home-topbar {
+@media (max-width: 700px) {
+  :root { --home-floor-center: 46% 112%; --home-floor-size: 130% 58%; }
+  :root[data-theme='light'] { --home-entry-center: 50% 10%; --home-entry-size: 128% 42%; --home-reflection-center: 104% 54%; --home-reflection-size: 84% 46%; }
+  :root[data-theme='dark'] { --home-floor-center: 50% 78%; --home-floor-size: 72% 18%; }
+}
+/* 全站统一顶栏：光场从视口顶端开始，导航底边透明且无阴影。 */
+:root[data-theme='light'] .app-shell .home-ambient { inset-block-start: 0; }
+:root[data-theme] .app-shell .home-topbar {
   border-bottom-color: transparent;
   box-shadow: none;
 }

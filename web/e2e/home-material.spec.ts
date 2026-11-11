@@ -56,9 +56,16 @@ for (const theme of ['light', 'dark'] as const) {
       // The global accessibility floor uses !important 0.01ms, not literal 0s.
       expect(await page.locator('.focus-card').evaluate(el => parseFloat(getComputedStyle(el).transitionDuration))).toBeLessThanOrEqual(0.0001)
       await expect(page.locator('.home-ambient-canvas')).toHaveCount(0)
+      // 背景与顶栏是全站唯一基准：离开首页后必须与首页完全一致。
+      const homeBar = await page.locator('.home-topbar').evaluate(el => getComputedStyle(el).backgroundColor)
+      const homeAmbient = await page.locator('.home-ambient').evaluate(el => getComputedStyle(el).backgroundImage)
+      expect(homeBar).toBe(theme === 'light' ? 'rgba(242, 246, 252, 0.12)' : 'rgba(10, 6, 27, 0.72)')
       await page.locator('.home-topnav a[href="/projects"]').evaluate(el => (el as HTMLAnchorElement).click())
       await expect(page).toHaveURL(/\/projects$/)
-      await expect(page.locator('.home-topbar')).toHaveCSS('background-color', theme === 'light' ? 'rgba(245, 250, 255, 0.58)' : 'rgba(10, 6, 27, 0.92)')
+      await expect(page.locator('.home-topbar')).toHaveCSS('background-color', homeBar)
+      await expect(page.locator('.home-topbar')).toHaveCSS('border-bottom-color', 'rgba(0, 0, 0, 0)')
+      expect(await page.locator('.home-ambient').evaluate(el => getComputedStyle(el).backgroundImage)).toBe(homeAmbient)
+      // 卡片材质仍只属于首页：surface 配方不泄漏。
       expect(await page.locator('.app-shell').evaluate(el => getComputedStyle(el).getPropertyValue('--home-surface-film').trim())).toBe('')
     })
   }
