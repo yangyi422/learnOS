@@ -113,7 +113,7 @@
   transition: border-color var(--motion-base) var(--motion-ease-standard), background-color var(--motion-base) var(--motion-ease-standard), box-shadow var(--motion-base) var(--motion-ease-standard);
 }
 /* Recipe: reading — one stable pane for long text instead of glass in glass. */
-.app-shell .page-shell :is(.inbox-list,.finance-content,.library-reader,.editorial-flow) {
+.app-shell .page-shell :is(.inbox-list,.finance-content,.library-reader,.editorial-flow,.life-note-editor) {
   padding: 24px;
   border: 1px solid var(--material-surface-edge);
   border-radius: var(--radius-surface);
@@ -203,7 +203,7 @@
 .el-popper, .el-message-box { --el-bg-color-overlay: var(--color-surface); background: var(--color-surface); }
 .el-button--primary.is-plain:not(:hover) { --el-button-text-color: var(--color-link); }
 @media (max-width: 700px) {
-  .app-shell .page-shell :is(.inbox-list,.finance-content,.library-reader,.editorial-flow) { padding: 16px; }
+  .app-shell .page-shell :is(.inbox-list,.finance-content,.library-reader,.editorial-flow,.life-note-editor) { padding: 16px; }
   .app-shell .review-sections > section { padding: 18px; }
 }
 @media (prefers-reduced-motion: reduce) {

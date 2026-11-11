@@ -1,5 +1,13 @@
 # LearnOS Roadmap
 
+## 生活笔记：长篇书写（2026-11-11）
+
+- [x] 生活页新增「生活笔记」标签（`/life?view=notes`），左侧笔记列表 + 右侧长篇编辑区
+- [x] 复用 `records` 表与 `/api/v1/records`：无迁移、无新接口，`content` 上限 10000 字
+- [x] 编辑区加入 glass-system 的 reading 配方（`.life-note-editor`），正文铺满面板、底部操作贴底、高度按视口计算
+- [x] 交互：未保存切换确认、`Ctrl/Cmd+S` 保存、字数与上限提示、空状态用 `EmptyState`
+- [ ] 待定：笔记目前与通用「记录」共用一张表，会同时出现在项目页/收集箱侧记录列表；若要完全分开需新增 notes 表 + 接口 + 迁移
+
 ## 页面帧与内边距全站统一（2026-11-11）
 
 - [x] `standard` 与 `wide` 取同一上限 `--width-wide`（1360 / 1600 / 1840），`--home-max-width: var(--width-wide)`，首页不再独立成帧
