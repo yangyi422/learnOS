@@ -26,7 +26,7 @@ func projectTestService(t *testing.T) *ProjectService {
 	return NewProjectService(repository.NewProjectRepository(db))
 }
 
-// 空字符串日期不是有效日期：创建时应存 nil，读回也不得出现 0001-01-01。
+// 空字符串到期日不是有效日期：创建时应存 nil，读回也不得出现 0001-01-01。
 func TestCreateTaskTreatsEmptyDatesAsUnset(t *testing.T) {
 	svc := projectTestService(t)
 	ctx := context.Background()
@@ -34,12 +34,12 @@ func TestCreateTaskTreatsEmptyDatesAsUnset(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	task, err := svc.CreateTaskWithInput(ctx, 1, ProjectTaskInput{ProjectID: project.ID, Title: "空日期", DueDate: ptr(""), PlanDate: ptr("   ")})
+	task, err := svc.CreateTaskWithInput(ctx, 1, ProjectTaskInput{ProjectID: project.ID, Title: "空日期", DueDate: ptr("")})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	if task.DueDate != nil || task.PlanDate != nil {
-		t.Fatalf("empty dates should be nil, got due=%v plan=%v", task.DueDate, task.PlanDate)
+		t.Fatalf("empty due date should be nil, got due=%v plan=%v", task.DueDate, task.PlanDate)
 	}
 	reloaded, err := svc.projects.GetTask(ctx, 1, task.ID)
 	if err != nil {
@@ -52,6 +52,10 @@ func TestCreateTaskTreatsEmptyDatesAsUnset(t *testing.T) {
 	scheduled, err := svc.CreateTaskWithInput(ctx, 1, ProjectTaskInput{ProjectID: project.ID, Title: "今天", DueDate: &today, PlanDate: &today})
 	if err != nil || scheduled.DueDate == nil || *scheduled.DueDate != today || scheduled.PlanDate == nil || *scheduled.PlanDate != today {
 		t.Fatalf("explicit dates must be kept: %+v %v", scheduled, err)
+	}
+	// plan_date 不接受空字符串：清空必须显式传 null（前端发送的是 null）。
+	if _, err := svc.CreateTaskWithInput(ctx, 1, ProjectTaskInput{ProjectID: project.ID, Title: "非法", PlanDate: ptr("")}); !errors.Is(err, ErrInvalidProjectInput) {
+		t.Fatalf("empty plan date should be rejected, got %v", err)
 	}
 }
 
