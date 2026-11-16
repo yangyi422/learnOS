@@ -14,3 +14,7 @@ go run ./cmd/media-agent sync jellyfin --dry-run
 Calibre 若返回 HTTP 401，可设置 `CALIBRE_USERNAME`，并在登录钥匙串中录入服务名为 `lifeos-media-agent-calibre-password` 的通用密码。代理根据服务器的认证挑战选择 HTTP Basic 或 Digest（MD5、qop=auth）。
 
 从本目录执行 `./scripts/go.sh test ./...`、`./scripts/go.sh vet ./...`、`./scripts/go.sh build ./...`。启动脚本支持 `MEDIA_AGENT_GO`、仓库忽略目录 `.tmp/lifeos-toolchain/go/bin/go` 和常用系统安装目录。
+
+Set `LIFEOS_URL` in the environment before running `doctor`, `sync` or `service install`. The Agent accepts HTTPS and HTTP via `localhost`, `127.0.0.1` or `[::1]`. See `.env.example` for example values. The Agent reads the process environment; it does not automatically load dotenv files. The LaunchAgent captures the value at installation, so rerun `service install` when the endpoint changes.
+
+Set `JELLYFIN_INCLUDE_R18=true` to include the Jellyfin library named R18. The default allowlist remains unchanged. Reinstall the LaunchAgent with this setting to apply it to scheduled runs.

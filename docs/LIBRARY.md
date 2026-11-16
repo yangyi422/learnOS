@@ -125,3 +125,5 @@ Cards 详情独立阅读，可返回保留搜索条件的画廊；Wiki 保留 28
 资料库入口新增媒体中心，查询通过 Agent 同步的电子书、电影与电视剧。封面复用资料库私有图片存储，图片清理同时检查媒体记录。已完成隔离数据库的 12 条本地同步与 Chrome 浏览验收，详见 [Agent 集成记录](../tools/lifeos-media-agent/docs/INTEGRATION.md)。
 
 管理员可从系统设置的 Agent 访问令牌区域签发或撤销 media:sync 令牌。创建响应仅返回一次完整令牌。
+
+媒体中心增加 R18 显示开关。Agent 同步 Jellyfin 库名；旧记录在下一次新版 Agent 同步后完成分类。

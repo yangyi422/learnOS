@@ -3,6 +3,7 @@ package model
 import "time"
 
 type MediaItem struct {
+	Library     string    `json:"library"`
 	ID          uint      `json:"id" gorm:"primaryKey"`
 	UserID      uint      `json:"-" gorm:"not null;uniqueIndex:media_origin"`
 	Source      string    `json:"Source" gorm:"not null;uniqueIndex:media_origin"`

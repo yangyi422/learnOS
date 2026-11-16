@@ -19,12 +19,15 @@ func (r *MediaRepository) Upsert(ctx context.Context, items []model.MediaItem) e
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		return tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "user_id"}, {Name: "source"}, {Name: "source_id"}, {Name: "external_id"}},
-			DoUpdates: clause.AssignmentColumns([]string{"type", "title", "description", "authors", "genres", "tags", "year", "cover_id", "updated_at"}),
+			DoUpdates: clause.AssignmentColumns([]string{"type", "title", "description", "authors", "genres", "tags", "year", "cover_id", "library", "updated_at"}),
 		}).Create(&items).Error
 	})
 }
-func (r *MediaRepository) List(ctx context.Context, user uint, kind, source, search string, page int) ([]model.MediaItem, int64, error) {
+func (r *MediaRepository) List(ctx context.Context, user uint, kind, source, search string, page int, showR18 bool) ([]model.MediaItem, int64, error) {
 	q := r.db.WithContext(ctx).Model(&model.MediaItem{}).Where("user_id = ?", user)
+	if !showR18 {
+		q = q.Where("source <> ? OR library IN ?", "jellyfin", []string{"电影", "电视剧"})
+	}
 	if kind != "" {
 		q = q.Where("type = ?", kind)
 	}

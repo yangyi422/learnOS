@@ -54,3 +54,29 @@ func TestMediaAPIUpsertPreservesPersonalFields(t *testing.T) {
 		t.Fatalf("unexpected media: %+v", items)
 	}
 }
+
+func TestMediaVisibilityBeforePagination(t *testing.T) {
+	f := newCaptureAPIFixture(t)
+	if err := f.db.AutoMigrate(&model.MediaItem{}); err != nil {
+		t.Fatal(err)
+	}
+	repo := repository.NewMediaRepository(f.db)
+	items := []model.MediaItem{
+		{UserID: 1, Source: "calibre", ExternalID: "book", Type: "book"},
+		{UserID: 1, Source: "jellyfin", ExternalID: "movie", Type: "movie", Library: "电影"},
+		{UserID: 1, Source: "jellyfin", ExternalID: "restricted", Type: "movie", Library: "R18"},
+		{UserID: 1, Source: "jellyfin", ExternalID: "legacy", Type: "movie"},
+	}
+	if err := repo.Upsert(t.Context(), items); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		show bool
+		want int
+	}{{false, 2}, {true, 4}} {
+		rows, total, err := repo.List(t.Context(), 1, "", "", "", 1, test.show)
+		if err != nil || len(rows) != test.want || total != int64(test.want) {
+			t.Fatalf("show=%v: rows=%d total=%d err=%v", test.show, len(rows), total, err)
+		}
+	}
+}

@@ -99,7 +99,11 @@ func scan(ctx context.Context, name string, emit func(source.Item) error) error 
 		if err != nil {
 			return err
 		}
-		return client.Jellyfin(ctx, []string{"电影", "电视剧"}, emit)
+		libraries := []string{"电影", "电视剧"}
+		if os.Getenv("JELLYFIN_INCLUDE_R18") == "true" {
+			libraries = append(libraries, "R18")
+		}
+		return client.Jellyfin(ctx, libraries, emit)
 	default:
 		return fmt.Errorf("unknown source")
 	}

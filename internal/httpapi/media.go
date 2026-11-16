@@ -19,6 +19,7 @@ func (h *Handler) mediaUpsert(c *gin.Context) {
 		return
 	}
 	var input []struct {
+		Library                                                string `json:"library"`
 		Source, SourceID, ExternalID, Type, Title, Description string
 		Authors, Genres, Tags                                  []string
 		CoverID                                                string `json:"cover_id"`
@@ -41,7 +42,7 @@ func (h *Handler) mediaUpsert(c *gin.Context) {
 				return
 			}
 		}
-		items[i] = model.MediaItem{CoverID: v.CoverID, Source: v.Source, SourceID: v.SourceID, ExternalID: v.ExternalID, Type: v.Type, Title: v.Title, Description: v.Description, Authors: v.Authors, Genres: v.Genres, Tags: v.Tags, Year: v.Year}
+		items[i] = model.MediaItem{Library: v.Library, CoverID: v.CoverID, Source: v.Source, SourceID: v.SourceID, ExternalID: v.ExternalID, Type: v.Type, Title: v.Title, Description: v.Description, Authors: v.Authors, Genres: v.Genres, Tags: v.Tags, Year: v.Year}
 	}
 	err := h.media.Upsert(c.Request.Context(), user, items)
 	if errors.Is(err, service.ErrMediaInput) {
@@ -66,7 +67,7 @@ func (h *Handler) mediaList(c *gin.Context) {
 		mediaError(c, 400, "搜索参数无效")
 		return
 	}
-	items, total, err := h.media.List(c.Request.Context(), user, c.Query("type"), c.Query("source"), search, page)
+	items, total, err := h.media.List(c.Request.Context(), user, c.Query("type"), c.Query("source"), search, page, c.Query("show_r18") == "true")
 	if err != nil {
 		mediaError(c, 500, "媒体读取失败")
 		return

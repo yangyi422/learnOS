@@ -1042,3 +1042,5 @@ Phase 6 不实现探索雷达、问题池、Agent 导航、知识来源可信度
 Media Agent 生产准备已补齐封面与分页回归、LaunchAgent 管理命令。真实凭证、HTTPS 地址和首次写入批准仍待提供。见 [生产验收记录](../tools/lifeos-media-agent/docs/PRODUCTION_ACCEPTANCE.md)。
 
 系统设置新增 Agent 访问令牌区域，沿用现有签发和撤销接口。
+
+媒体中心默认隐藏 R18 和待分类 Jellyfin 内容，支持手动显示。

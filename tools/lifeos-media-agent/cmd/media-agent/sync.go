@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -32,9 +31,9 @@ func synchronize(ctx context.Context, name string, limit int) (failure error) {
 	if name != "all" && name != "calibre" && name != "jellyfin" {
 		return fmt.Errorf("unknown source")
 	}
-	base, err := url.Parse(os.Getenv("LIFEOS_URL"))
-	if err != nil || base.User != nil || base.Host == "" || (base.Scheme != "https" && !(base.Scheme == "http" && (base.Hostname() == "127.0.0.1" || base.Hostname() == "::1"))) {
-		return fmt.Errorf("LIFEOS_URL requires HTTPS or a loopback HTTP development endpoint")
+	base, err := lifeOSURL()
+	if err != nil {
+		return err
 	}
 	token, err := keychain(ctx, "lifeos-media-agent-lifeos-token")
 	if err != nil {

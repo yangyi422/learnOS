@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -88,14 +87,11 @@ func doctor(ctx context.Context) error {
 		db.Close()
 	}
 	report("sqlite", err)
-	if os.Getenv("LIFEOS_URL") == "" {
-		report("configuration", fmt.Errorf("LIFEOS_URL is missing"))
-	} else {
-		report("configuration", nil)
-	}
+	_, configErr := lifeOSURL()
+	report("configuration", configErr)
 	token, err := keychain(ctx, "lifeos-media-agent-lifeos-token")
 	report("LifeOS token in Keychain", err)
-	if err == nil {
+	if err == nil && configErr == nil {
 		report("LifeOS API", probeLifeOS(ctx, token))
 	}
 	_, err = keychain(ctx, "lifeos-media-agent-jellyfin-api-key")
@@ -107,9 +103,9 @@ func doctor(ctx context.Context) error {
 }
 
 func probeLifeOS(ctx context.Context, token string) error {
-	base, err := url.Parse(os.Getenv("LIFEOS_URL"))
-	if err != nil || base.User != nil || base.Host == "" || (base.Scheme != "https" && !(base.Scheme == "http" && (base.Hostname() == "127.0.0.1" || base.Hostname() == "::1"))) {
-		return fmt.Errorf("LifeOS URL must use HTTPS or loopback HTTP")
+	base, err := lifeOSURL()
+	if err != nil {
+		return err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base.JoinPath("api/v1/library/media-agent/status").String(), nil)
 	if err != nil {

@@ -5,7 +5,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -37,7 +36,7 @@ func xmlText(value string) string {
 }
 func launchPlist(binary, log string) string {
 	var env strings.Builder
-	for _, key := range []string{"LIFEOS_URL", "CALIBRE_OPDS_URL", "CALIBRE_ALL_BOOKS_HREF", "JELLYFIN_URL"} {
+	for _, key := range []string{"LIFEOS_URL", "CALIBRE_OPDS_URL", "CALIBRE_ALL_BOOKS_HREF", "JELLYFIN_URL", "JELLYFIN_INCLUDE_R18"} {
 		if value := os.Getenv(key); value != "" {
 			fmt.Fprintf(&env, "<key>%s</key><string>%s</string>", key, xmlText(value))
 		}
@@ -61,9 +60,8 @@ func serviceCommand(ctx context.Context, action string) error {
 	}
 	switch action {
 	case "install":
-		base, err := url.Parse(os.Getenv("LIFEOS_URL"))
-		if err != nil || base.Scheme != "https" || base.Hostname() == "" || base.User != nil || base.RawQuery != "" || base.Fragment != "" {
-			return fmt.Errorf("set LIFEOS_URL to the confirmed HTTPS endpoint before installing")
+		if _, err := lifeOSURL(); err != nil {
+			return err
 		}
 		binary, err := os.Executable()
 		if err != nil {

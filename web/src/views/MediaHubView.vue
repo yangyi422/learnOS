@@ -14,6 +14,7 @@
         <el-option label="Jellyfin" value="jellyfin" />
       </el-select>
       <el-button native-type="submit">搜索</el-button>
+      <el-checkbox v-model="showR18" @change="selected = null; load(1)">显示 R18 与待分类的 Jellyfin 内容</el-checkbox>
     </form>
     <el-alert v-if="error" type="error" :title="error" :closable="false" />
     <p v-if="loading" role="status">正在读取媒体…</p>
@@ -73,6 +74,7 @@ const selected = ref<MediaItem | null>(null)
 const query = ref('')
 const kind = ref('all')
 const source = ref('all')
+const showR18 = ref(false)
 const page = ref(1)
 const total = ref(0)
 const error = ref('')
@@ -83,8 +85,9 @@ async function load(next: number) {
   const current = ++request
   error.value = ''
   loading.value = true
+  items.value = []
   try {
-    const params = new URLSearchParams({ q: query.value, type: kind.value === "all" ? "" : kind.value, source: source.value === "all" ? "" : source.value, page: String(next) })
+    const params = new URLSearchParams({ q: query.value, type: kind.value === "all" ? "" : kind.value, source: source.value === "all" ? "" : source.value, page: String(next), show_r18: String(showR18.value) })
     const response = await fetch('/api/v1/library/media?' + params)
     if (!response.ok) throw new Error()
     const { data } = await response.json()

@@ -18,6 +18,7 @@ type Format struct {
 }
 
 type Item struct {
+	Library                                                string `json:"library,omitempty"`
 	Source, SourceID, ExternalID, Type, Title, Description string
 	Authors, Genres, Tags                                  []string
 	Formats                                                []Format
@@ -208,7 +209,7 @@ func (c Client) Jellyfin(ctx context.Context, include []string, emit func(Item) 
 	allowed := map[string]string{}
 	for _, f := range folders {
 		names = append(names, f.Name)
-		if f.Name != "R18" && f.ItemID != "" {
+		if f.ItemID != "" {
 			switch f.CollectionType {
 			case "movies":
 				allowed[f.Name] = f.ItemID
@@ -218,7 +219,7 @@ func (c Client) Jellyfin(ctx context.Context, include []string, emit func(Item) 
 		}
 	}
 	for _, name := range include {
-		if allowed[name] == "" || name == "R18" {
+		if allowed[name] == "" {
 			return fmt.Errorf("library %q unavailable, discovered %q", name, names)
 		}
 	}
@@ -247,7 +248,7 @@ func (c Client) Jellyfin(ctx context.Context, include []string, emit func(Item) 
 					return fmt.Errorf("invalid or repeated Jellyfin item")
 				}
 				seen[entry.ID] = true
-				item := Item{Source: "jellyfin", SourceID: c.Base.Host, ExternalID: entry.ID, Type: strings.ToLower(entry.Type), Title: entry.Name, Description: entry.Overview, Genres: entry.Genres, Year: entry.ProductionYear, Rating: entry.CommunityRating}
+				item := Item{Library: name, Source: "jellyfin", SourceID: c.Base.Host, ExternalID: entry.ID, Type: strings.ToLower(entry.Type), Title: entry.Name, Description: entry.Overview, Genres: entry.Genres, Year: entry.ProductionYear, Rating: entry.CommunityRating}
 				if entry.ImageTags["Primary"] != "" && !strings.ContainsAny(entry.ID, "/\\.") {
 					item.Cover = c.Base.JoinPath("Items", entry.ID, "Images", "Primary")
 					item.Cover.RawQuery = "maxWidth=600"

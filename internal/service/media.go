@@ -28,6 +28,6 @@ func (s *MediaService) Upsert(ctx context.Context, user uint, items []model.Medi
 	}
 	return s.repo.Upsert(ctx, items)
 }
-func (s *MediaService) List(ctx context.Context, user uint, kind, source, search string, page int) ([]model.MediaItem, int64, error) {
-	return s.repo.List(ctx, user, kind, source, search, page)
+func (s *MediaService) List(ctx context.Context, user uint, kind, source, search string, page int, showR18 bool) ([]model.MediaItem, int64, error) {
+	return s.repo.List(ctx, user, kind, source, search, page, showR18)
 }
