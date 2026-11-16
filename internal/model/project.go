@@ -1,6 +1,7 @@
 package model
 
 import (
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -45,17 +46,28 @@ type ProjectTask struct {
 	UpdatedAt         time.Time  `json:"updated_at"`
 }
 
-// SQLite's date scanner may return an RFC3339 timestamp for a DATE column.
-// Keep due_date and plan_date as calendar dates after every database read.
+// SQLite's date scanner may return an RFC3339 timestamp or a zero date for a
+// DATE column. Keep due_date and plan_date as calendar dates after every read,
+// and treat an empty or zero value as "not set" so clients never receive
+// 0001-01-01 (a stored empty string) or its 1901-01-01 client fallback.
 func (task *ProjectTask) AfterFind(_ *gorm.DB) error {
 	for _, value := range []**string{&task.DueDate, &task.PlanDate} {
-		if *value == nil {
-			continue
-		}
-		if parsed, err := time.Parse(time.RFC3339Nano, **value); err == nil {
-			date := parsed.Format("2006-01-02")
-			*value = &date
-		}
+		*value = normalizeTaskDate(*value)
 	}
 	return nil
+}
+
+func normalizeTaskDate(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	raw := strings.TrimSpace(*value)
+	if raw == "" || strings.HasPrefix(raw, "0001-01-01") || strings.HasPrefix(raw, "1901-01-01") {
+		return nil
+	}
+	if parsed, err := time.Parse(time.RFC3339Nano, raw); err == nil {
+		date := parsed.Format("2006-01-02")
+		return &date
+	}
+	return &raw
 }

@@ -16,6 +16,10 @@ describe('Today calendar grouping', () => {
     expect(localCalendarDate(new Date(2026, 9, 8, 0, 5))).toBe('2026-10-08')
     expect(taskDueDate('2026-10-08')).toBe('2026-10-08')
     expect(taskDueDate('2026-10-08T00:00:00Z')).toBe('2026-10-08')
+    // 空日期列的产物与日期面板的退化值都按“未设置”处理。
+    expect(taskDueDate('')).toBeNull()
+    expect(taskDueDate('0001-01-01')).toBeNull()
+    expect(taskDueDate('1901-01-01')).toBeNull()
     expect(groupTodayTasks({ date: '', due: [task(1, 'next', '2026-10-08')], doing: [], next: [] }, '2026-10-08')[1]?.tasks).toHaveLength(1)
   })
 })

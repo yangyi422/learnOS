@@ -107,6 +107,7 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from
 import { ElMessageBox } from 'element-plus'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import type { Project, ProjectTask, TaskInput, TaskPriority, TaskStatus } from '@/api/projects'
+import { localCalendarDate, taskDueDate } from '@/utils/projectTasks'
 
 const props = defineProps<{
   modelValue: boolean
@@ -142,13 +143,16 @@ const dirty = computed(() => props.modelValue && (editing.value || !props.task) 
 watch(() => props.modelValue, (open, wasOpen) => {
   if (open && !wasOpen && document.activeElement instanceof HTMLElement) returnFocus = document.activeElement
 }, { flush: 'sync' })
+function todayISO() { return localCalendarDate(new Date()) }
 function resetForm() {
+  // 新建任务默认把计划执行日期与到期日都放在今天，避免空值进入日期面板。
+  const fallbackDate = props.task ? '' : todayISO()
   form.title = props.task?.title ?? ''
   form.project_id = props.task?.project_id ?? props.defaultProjectId
   form.status = props.task?.status ?? props.defaultStatus
   form.priority = props.task?.priority || 'normal'
-  form.due_date = props.task?.due_date ?? ''
-  form.plan_date = props.task?.plan_date ?? null
+  form.due_date = props.task ? (taskDueDate(props.task.due_date) ?? '') : fallbackDate
+  form.plan_date = props.task ? taskDueDate(props.task.plan_date ?? null) : fallbackDate
   form.description = props.task?.description ?? ''
   initialSnapshot.value = snapshot()
   resizeDescription()
@@ -211,8 +215,8 @@ function submit() {
     project_id: form.project_id,
     status: form.status,
     priority: form.priority,
-    due_date: form.due_date,
-    plan_date: form.plan_date || null,
+    due_date: taskDueDate(form.due_date),
+    plan_date: taskDueDate(form.plan_date),
     description: form.description.trim(),
   })
 }

@@ -26,6 +26,35 @@ func projectTestService(t *testing.T) *ProjectService {
 	return NewProjectService(repository.NewProjectRepository(db))
 }
 
+// 空字符串日期不是有效日期：创建时应存 nil，读回也不得出现 0001-01-01。
+func TestCreateTaskTreatsEmptyDatesAsUnset(t *testing.T) {
+	svc := projectTestService(t)
+	ctx := context.Background()
+	project, err := svc.Create(ctx, 1, "日期验证")
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := svc.CreateTaskWithInput(ctx, 1, ProjectTaskInput{ProjectID: project.ID, Title: "空日期", DueDate: ptr(""), PlanDate: ptr("   ")})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if task.DueDate != nil || task.PlanDate != nil {
+		t.Fatalf("empty dates should be nil, got due=%v plan=%v", task.DueDate, task.PlanDate)
+	}
+	reloaded, err := svc.projects.GetTask(ctx, 1, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reloaded.DueDate != nil || reloaded.PlanDate != nil {
+		t.Fatalf("reloaded empty dates should stay nil, got due=%v plan=%v", reloaded.DueDate, reloaded.PlanDate)
+	}
+	today := "2026-11-16"
+	scheduled, err := svc.CreateTaskWithInput(ctx, 1, ProjectTaskInput{ProjectID: project.ID, Title: "今天", DueDate: &today, PlanDate: &today})
+	if err != nil || scheduled.DueDate == nil || *scheduled.DueDate != today || scheduled.PlanDate == nil || *scheduled.PlanDate != today {
+		t.Fatalf("explicit dates must be kept: %+v %v", scheduled, err)
+	}
+}
+
 func TestProjectKanbanWorkflowAndUserIsolation(t *testing.T) {
 	svc := projectTestService(t)
 	ctx := context.Background()

@@ -1,5 +1,13 @@
 # LearnOS Roadmap
 
+## 任务日期修复：空日期不再变成 1901-01-01（2026-11-16）
+
+- [x] 根因：`validDueDate("")` 放行空字符串 → DATE 列存 `""` → 读回 Go 零值 `0001-01-01` → 前端日期面板落到 1901 年
+- [x] 新建任务时「计划执行日期」「到期日」默认今天（本地日历日期），编辑既有任务保持原值
+- [x] 前端 `taskDueDate()` 把 `""` / `0001-01-01` / `1901-01-01` 统一视为未设置；提交时按此归一化
+- [x] 后端创建任务时空白日期转 `nil`；`ProjectTask.AfterFind` 把零日期读成 `nil`（历史脏数据一并修好）
+- [x] 测试：`TestTaskZeroDatesReadAsUnset`、`TestCreateTaskTreatsEmptyDatesAsUnset`；E2E `projects` + `regression` 48 项
+
 ## 生活笔记：长篇书写（2026-11-11）
 
 - [x] 生活页新增「生活笔记」标签（`/life?view=notes`），左侧笔记列表 + 右侧长篇编辑区

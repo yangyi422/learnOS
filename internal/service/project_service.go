@@ -227,7 +227,17 @@ func normalizeProjectTaskInput(input ProjectTaskInput) (ProjectTaskInput, error)
 	if !taskStatus(input.Status) || !priority(input.Priority) || !validDueDate(input.DueDate) || !validPlanDate(input.PlanDate) {
 		return input, ErrInvalidProjectInput
 	}
+	// 空字符串不是有效日期：存 nil，避免 DATE 列读回 0001-01-01。
+	input.DueDate = emptyDateToNil(input.DueDate)
+	input.PlanDate = emptyDateToNil(input.PlanDate)
 	return input, nil
+}
+
+func emptyDateToNil(value *string) *string {
+	if value == nil || strings.TrimSpace(*value) == "" {
+		return nil
+	}
+	return value
 }
 
 type TodayView struct {

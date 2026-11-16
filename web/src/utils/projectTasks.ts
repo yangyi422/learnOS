@@ -7,7 +7,10 @@ export function localCalendarDate(date: Date): string {
 // due_date is a calendar date, never a UTC instant. Accept legacy API values
 // with a time suffix without converting the stored calendar day.
 export function taskDueDate(value: string | null): string | null {
-  return value && /^\d{4}-\d{2}-\d{2}(?:$|T)/.test(value) ? value.slice(0, 10) : null
+  if (!value || !/^\d{4}-\d{2}-\d{2}(?:$|T)/.test(value)) return null
+  const date = value.slice(0, 10)
+  // 0001-01-01 是数据库空日期的产物、1901-01-01 是日期面板的退化显示，都按“未设置”处理。
+  return date.startsWith('0001-') || date.startsWith('1901-') ? null : date
 }
 
 export function groupTodayTasks(view: TodayView | null, date: string) {
