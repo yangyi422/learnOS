@@ -18,6 +18,7 @@ import (
 )
 
 type Handler struct {
+	media          *service.MediaService
 	recent         *service.WorkspaceRecentService
 	images         *service.LibraryImageService
 	library        *service.LibraryService

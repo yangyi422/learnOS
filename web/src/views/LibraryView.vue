@@ -9,7 +9,7 @@
       <RouterLink to="/explore">探索</RouterLink><span>/</span
       ><span>我的资料库</span>
     </nav></template><template #actions
-        ><el-button type="primary" @click="creating = true"
+        ><RouterLink to="/explore/library/media">媒体中心</RouterLink><el-button type="primary" @click="creating = true"
           >新建专题</el-button
         ></template
       ></PageHeader

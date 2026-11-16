@@ -2,7 +2,7 @@ package model
 
 import "time"
 
-const CurrentSchemaVersion = 33
+const CurrentSchemaVersion = 34
 
 // SystemMetadata is a singleton record describing the application schema that
 // last completed startup migration. It contains no user secrets.

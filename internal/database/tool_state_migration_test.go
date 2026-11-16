@@ -16,7 +16,7 @@ func TestToolStateMigrationCreatesTableIdempotently(t *testing.T) {
 		DatabasePath: filepath.Join(t.TempDir(), "tool-state.db"),
 		BackupDir:    t.TempDir(),
 	}
-	if model.CurrentSchemaVersion != 33 {
+	if model.CurrentSchemaVersion < 33 {
 		t.Fatalf("schema constant: %d", model.CurrentSchemaVersion)
 	}
 
@@ -29,7 +29,7 @@ func TestToolStateMigrationCreatesTableIdempotently(t *testing.T) {
 		if err := db.First(&metadata, 1).Error; err != nil {
 			t.Fatal(err)
 		}
-		if metadata.SchemaVersion != 33 {
+		if metadata.SchemaVersion != model.CurrentSchemaVersion {
 			t.Fatalf("schema version: %d", metadata.SchemaVersion)
 		}
 		if !db.Migrator().HasTable(&model.ToolState{}) {

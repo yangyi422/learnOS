@@ -48,6 +48,15 @@ func (r *LibraryImageRepository) References(ctx context.Context) ([]string, erro
 	for _, c := range collections {
 		texts = append(texts, c.CoverURL)
 	}
+	var covers []string
+	if r.db.Migrator().HasTable(&model.MediaItem{}) {
+		if err := r.db.WithContext(ctx).Model(&model.MediaItem{}).Where("cover_id <> ''").Distinct().Pluck("cover_id", &covers).Error; err != nil {
+			return nil, err
+		}
+	}
+	for _, id := range covers {
+		texts = append(texts, "/api/v1/library/images/"+id)
+	}
 	return texts, nil
 }
 func (r *LibraryImageRepository) Delete(ctx context.Context, user uint, id string) error {

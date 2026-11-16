@@ -94,7 +94,7 @@ func Open(cfg config.Config) (*gorm.DB, error) {
 		// Schema 32: per-user state documents for standalone library tools.
 		&model.ToolState{},
 		// Schema 33: scoped capture credentials (hashed, revocable, expiring).
-		&model.APIToken{},
+		&model.APIToken{}, &model.MediaItem{},
 	); err != nil {
 		if preMigrationBackup.Path != "" {
 			return nil, fmt.Errorf("migrate database: %w (pre-migration backup: %s)", err, preMigrationBackup.Path)

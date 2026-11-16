@@ -83,6 +83,7 @@ const router = createRouter({
       path: '/exploration/questions',
       redirect: '/explore',
     },
+    { path: '/explore/library/media', component: () => import('../views/MediaHubView.vue'), meta: { title: '媒体中心' } },
     { path: '/explore/library', component: LibraryView, meta: { title: '我的资料库' } },
  { path: '/explore/library/:collection', component: LibraryCollectionView, meta: { title: '资料专题' } },
  { path: '/explore/library/:collection/pages/:page', component: LibraryCollectionView, meta: { title: '资料页面' } },

@@ -5,7 +5,7 @@ import { expect, test, type Page } from "@playwright/test";
 const USER = { id: 1, username: "probe", display_name: "Probe", role: "admin", status: "active", created_at: "2026-10-01T00:00:00Z" };
 
 async function mockSettings(page: Page, tokens: any[]) {
-  const state = { tokens: tokens.map(t => ({ ...t })), created: 0 };
+  const state = { tokens: tokens.map(t => ({ ...t })), created: 0, lastInput: null as Record<string, unknown> | null };
   await page.route("**/api/v1/auth/me", route => route.fulfill({ json: { data: USER } }));
   await page.route("**/api/v1/system/diagnostics", route =>
     route.fulfill({
@@ -34,13 +34,16 @@ async function mockSettings(page: Page, tokens: any[]) {
   await page.route("**/api/v1/api-tokens", async route => {
     if (route.request().method() === "POST") {
       state.created += 1;
+      const input = route.request().postDataJSON();
+      state.lastInput = input;
       const created = {
-        id: 10 + state.created, name: "uTools 采集", prefix: "los_pat_ab12",
+        id: 10 + state.created, name: input.name, scopes: [input.scope ?? "capture:inbox"], prefix: "los_pat_ab12",
         created_at: "2026-10-29T06:00:00Z", last_used_at: null,
         expires_at: "2027-01-27T06:00:00Z", revoked_at: null, expired: false,
         token: "los_pat_ab12cd34ef56",
       };
-      state.tokens.unshift({ ...created });
+      const { token, ...metadata } = created;
+      state.tokens.unshift(metadata);
       return route.fulfill({ status: 201, json: { data: created } });
     }
     return route.fulfill({ json: { data: state.tokens } });
@@ -76,4 +79,21 @@ test("设置页生成凭证时只显示一次明文，撤销后状态更新", as
   await page.locator(".el-message-box__btns").getByRole("button", { name: "撤销" }).click();
   await expect.poll(() => state.tokens[0].revoked_at).not.toBeNull();
   await expect(page.locator(".token-list")).toContainText("已撤销");
+});
+
+test("Agent 令牌使用专用权限，刷新后仅显示前缀并可撤销", async ({ page }) => {
+  const state = await mockSettings(page, []);
+  await page.goto("/settings");
+  const panel = page.locator('[aria-labelledby="media-token-title"]');
+  await expect(panel.getByRole("textbox", { name: "Agent 令牌名称" })).toHaveValue("LifeOS Media Agent");
+  await panel.getByRole("button", { name: "创建令牌" }).click();
+  await expect(panel.locator(".media-token-secret")).toHaveText("los_pat_ab12cd34ef56");
+  expect(state.lastInput).toEqual({ name: "LifeOS Media Agent", expires_in_days: 90, scope: "media:sync" });
+  await expect(page.getByText("还没有采集凭证")).toBeVisible();
+  await page.reload();
+  await expect(panel.getByText("los_pat_ab12…")).toBeVisible();
+  await expect(panel.locator(".media-token-secret")).toHaveCount(0);
+  await panel.getByRole("button", { name: "撤销", exact: true }).click();
+  await page.locator(".el-message-box__btns").getByRole("button", { name: "撤销", exact: true }).click();
+  await expect(panel.getByText("已撤销")).toBeVisible();
 });

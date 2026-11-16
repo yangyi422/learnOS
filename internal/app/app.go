@@ -137,6 +137,7 @@ func New(cfg config.Config) (*App, error) {
 	}
 
 	handler := httpapi.NewHandler(courseService, knowledgeGraphService, cognitiveStateService, challengeService, misconceptionService, explorationService, curriculumService, groundingService, backupService, databaseHealthService, exportService, consistencyService, domainInitializationService, aiConfigurationService, nextLessonService, userService, projectService, inboxService, recordService, workspaceService, recentService, lifeService, financeService, assetService, reviewService, libraryService, imageService, dailyFocusService, toolStateService, apiTokenService)
+	handler.SetMedia(service.NewMediaService(repository.NewMediaRepository(db)))
 	router := httpapi.NewRouter(cfg, handler, dist, userService)
 
 	return &App{

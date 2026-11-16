@@ -1,6 +1,7 @@
 import { request } from './http'
 
 export interface APITokenView {
+  scopes?: string[]
   id: number
   name: string
   prefix: string
@@ -22,7 +23,7 @@ export async function listAPITokens(): Promise<APITokenView[]> {
   return (await request<Data<APITokenView[]>>('/api/v1/api-tokens')).data
 }
 
-export async function createAPIToken(input: { name: string; expires_in_days: number }): Promise<CreatedAPIToken> {
+export async function createAPIToken(input: { name: string; expires_in_days: number; scope?: 'media:sync' }): Promise<CreatedAPIToken> {
   return (await request<Data<CreatedAPIToken>>('/api/v1/api-tokens', { method: 'POST', body: JSON.stringify(input) })).data
 }
 

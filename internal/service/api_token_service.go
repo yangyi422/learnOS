@@ -38,6 +38,7 @@ func NewAPITokenService(tokens *repository.APITokenRepository, users *repository
 }
 
 type APITokenView struct {
+	Scopes     []string   `json:"scopes"`
 	ID         uint       `json:"id"`
 	Name       string     `json:"name"`
 	Prefix     string     `json:"prefix"`
@@ -57,6 +58,17 @@ type CreatedAPIToken struct {
 // Create mints a capture-only credential. expiresInDays is clamped to
 // [1, maxTokenDays], defaulting to defaultTokenDays when unset.
 func (s *APITokenService) Create(ctx context.Context, userID uint, name string, expiresInDays int) (*CreatedAPIToken, error) {
+	return s.create(ctx, userID, name, expiresInDays, model.TokenScopeCaptureInbox)
+}
+
+func (s *APITokenService) CreateMedia(ctx context.Context, userID uint, name string, expiresInDays int) (*CreatedAPIToken, error) {
+	if strings.TrimSpace(name) == "" {
+		name = "Media Agent"
+	}
+	return s.create(ctx, userID, name, expiresInDays, model.TokenScopeMediaSync)
+}
+
+func (s *APITokenService) create(ctx context.Context, userID uint, name string, expiresInDays int, scope string) (*CreatedAPIToken, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		name = "快速采集"
@@ -87,7 +99,7 @@ func (s *APITokenService) Create(ctx context.Context, userID uint, name string, 
 		Name:      name,
 		TokenHash: hex.EncodeToString(sum[:]),
 		Prefix:    prefix,
-		Scopes:    model.TokenScopeCaptureInbox,
+		Scopes:    scope,
 		ExpiresAt: time.Now().UTC().Add(time.Duration(expiresInDays) * 24 * time.Hour),
 	}
 	if err := s.tokens.Create(ctx, token); err != nil {
@@ -145,6 +157,7 @@ func (s *APITokenService) AuthenticateToken(ctx context.Context, raw string) (au
 
 func toAPITokenView(token model.APIToken) APITokenView {
 	return APITokenView{
+		Scopes:     token.ScopesList(),
 		ID:         token.ID,
 		Name:       token.Name,
 		Prefix:     token.Prefix,

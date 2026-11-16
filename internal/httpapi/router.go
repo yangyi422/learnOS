@@ -1,9 +1,11 @@
 package httpapi
 
 import (
+	"context"
 	"errors"
 	"io"
 	"io/fs"
+	"learnos/internal/auth"
 	"net/http"
 	"strings"
 
@@ -53,6 +55,17 @@ func NewRouter(cfg config.Config, handler *Handler, webFS fs.FS, userServices ..
 		capture.POST("/inbox", handler.CaptureInboxItem)
 	}
 
+	if handler.media != nil {
+		agent := router.Group("/api/v1/library/media-agent")
+		agent.Use(middleware.TokenOrSession(func(context.Context, string) (auth.Principal, error) {
+			return auth.Principal{}, errors.New("agent token required")
+		}, handler.AuthenticateAPIToken), middleware.RequireScope("media:sync"))
+		agent.GET("/status", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"data": gin.H{"ready": true}}) })
+		agent.POST("/items", handler.mediaUpsert)
+		if handler.images != nil {
+			agent.POST("/covers", handler.UploadLibraryImage)
+		}
+	}
 	api := router.Group("/api/v1")
 	if cfg.Development() {
 		api.Use(middleware.DevelopmentPrincipal())
@@ -64,6 +77,9 @@ func NewRouter(cfg config.Config, handler *Handler, webFS fs.FS, userServices ..
 		}
 	}
 	{
+		if handler.media != nil {
+			api.GET("/library/media", handler.mediaList)
+		}
 		api.POST("/auth/logout", handler.Logout)
 		// Capture credentials: minted and revoked only from an authenticated
 		// session, so the browser stays the root of trust.

@@ -9,6 +9,7 @@ import (
 // exist so a third-party client (the uTools quick-capture plugin) can add inbox
 // items without ever holding a session cookie or a password.
 const (
+	TokenScopeMediaSync    = "media:sync"
 	TokenScopeCaptureInbox = "capture:inbox"
 
 	// tokenPrefix is stored separately so the UI can identify a credential

@@ -136,9 +136,9 @@
         </div>
         <p class="settings-help">请立即粘贴到 uTools 插件设置中；关闭或刷新后无法再次查看。</p>
       </el-alert>
-      <el-empty v-if="tokens.length === 0" description="还没有采集凭证" :image-size="60" />
+      <el-empty v-if="captureTokens.length === 0" description="还没有采集凭证" :image-size="60" />
       <ul v-else class="token-list">
-        <li v-for="item in tokens" :key="item.id">
+        <li v-for="item in captureTokens" :key="item.id">
           <div>
             <strong>{{ item.name }}</strong>
             <code>{{ item.prefix }}…</code>
@@ -153,6 +153,8 @@
         </li>
       </ul>
     </el-card>
+
+    <MediaAgentTokens :tokens="mediaTokens" @changed="loadTokens" />
 
     <el-card shadow="never" aria-labelledby="data-safety-title">
       <template #header><span id="data-safety-title">数据安全</span></template>
@@ -222,6 +224,7 @@ import {
   requestBackupRestore, testAIConnection, updateAIConfiguration,
 } from '@/api/system'
 import type { AIConfiguration, AIConnectionTest, BackupInfo, ConsistencyIssue, ConsistencyReport, Diagnostics } from '@/api/system'
+import MediaAgentTokens from './MediaAgentTokens.vue'
 import { createAPIToken, listAPITokens, revokeAPIToken } from '@/api/apiTokens'
 import type { APITokenView } from '@/api/apiTokens'
 
@@ -240,6 +243,8 @@ const restoreLoading = ref(false)
 const aiSaving = ref(false)
 const aiTesting = ref(false)
 const tokens = ref<APITokenView[]>([])
+const captureTokens = computed(() => tokens.value.filter(token => !token.scopes || token.scopes.includes('capture:inbox')))
+const mediaTokens = computed(() => tokens.value.filter(token => token.scopes?.includes('media:sync')))
 const tokenName = ref('uTools 采集')
 const tokenDays = ref(90)
 const tokenCreating = ref(false)

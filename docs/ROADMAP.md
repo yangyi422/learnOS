@@ -1028,3 +1028,17 @@ Phase 6 不实现探索雷达、问题池、Agent 导航、知识来源可信度
 - 新增 `web/e2e/library.spec.ts` 用例「资料库首页提供挖角手帐工具入口」通过。
 - 用独立开发实例（8084 + 临时数据目录）验证 `/explore/library` 工具入口、`/library-tools/fefw-planner/planner.html?from=library` 页面和「返回资料库」按钮；桌面与移动端截图通过。
 - 已部署当前 8080 运行实例（2026-10-26 16:43）：容器 healthy，`/library-tools/fefw-planner/planner.html` 及样式、脚本、头像均返回 200，前端 bundle 含「万缕千丝 · 挖角手帐」。本次因 `web/public` 为未跟踪目录，使用完整工作区同步后执行 `deploy/deploy.sh`。
+
+## LifeOS Media Agent
+
+新增独立 NAS 只读扫描器，已确认本仓库为 LifeOS 源码，远端 HTTPS 地址及媒体契约待确认。见 [集成记录](../tools/lifeos-media-agent/docs/INTEGRATION.md)。
+
+## Media Hub 本地集成
+
+已接入 Agent SQLite 队列、资料库媒体元数据 API 和浏览入口。封面、部署及联调状态见 [Agent 集成记录](../tools/lifeos-media-agent/docs/INTEGRATION.md)。
+
+媒体中心本地链路已验证 12 条固定数据、11 张封面及重复同步。生产联调待执行。
+
+Media Agent 生产准备已补齐封面与分页回归、LaunchAgent 管理命令。真实凭证、HTTPS 地址和首次写入批准仍待提供。见 [生产验收记录](../tools/lifeos-media-agent/docs/PRODUCTION_ACCEPTANCE.md)。
+
+系统设置新增 Agent 访问令牌区域，沿用现有签发和撤销接口。

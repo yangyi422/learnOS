@@ -39,6 +39,7 @@ func (h *Handler) CreateAPIToken(c *gin.Context) {
 		return
 	}
 	var input struct {
+		Scope         string `json:"scope"`
 		Name          string `json:"name"`
 		ExpiresInDays int    `json:"expires_in_days"`
 	}
@@ -46,11 +47,19 @@ func (h *Handler) CreateAPIToken(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "TOKEN_INPUT_INVALID", "message": "请检查凭证名称。", "retryable": false}})
 		return
 	}
-	created, err := h.apiTokens.Create(c.Request.Context(), userID, input.Name, input.ExpiresInDays)
+	create := h.apiTokens.Create
+	if input.Scope == "media:sync" {
+		create = h.apiTokens.CreateMedia
+	} else if input.Scope != "" && input.Scope != "capture:inbox" {
+		mediaError(c, 400, "凭证范围无效")
+		return
+	}
+	created, err := create(c.Request.Context(), userID, input.Name, input.ExpiresInDays)
 	if err != nil {
 		apiTokenError(c, err)
 		return
 	}
+	c.Header("Cache-Control", "no-store")
 	c.JSON(http.StatusCreated, gin.H{"data": created})
 }
 
