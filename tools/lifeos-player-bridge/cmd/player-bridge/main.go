@@ -126,19 +126,19 @@ func run(ctx context.Context, configPath, rawURL string, info, fail logFunc) int
 	}
 	client := jellyfin.New(cfg.Jellyfin.BaseURL, strings.TrimSpace(credential.Secret), time.Duration(cfg.Jellyfin.TimeoutSeconds)*time.Second)
 
-	ancestors, err := client.Ancestors(ctx, request.ItemID, cfg.Jellyfin.UserID)
-	if err != nil {
-		fail("jellyfin", errorHint(err), credential.Secret)
+	// Jellyfin answers slowly when it is indexing (a 3s /System/Info is normal on a busy
+	// NAS), so both lookups run together; the library gate still decides what can launch.
+	ancestors, playback, ancestorsErr, playbackErr := fetchItem(ctx, client, request.ItemID, cfg.Jellyfin.UserID)
+	if ancestorsErr != nil {
+		fail("jellyfin", errorHint(ancestorsErr), credential.Secret)
 		return exitJellyfin
 	}
 	if !jellyfin.LibraryAllowed(ancestors, cfg.Jellyfin.AllowedLibraries) {
 		fail("library", "item is outside the allowed libraries")
 		return exitLibrary
 	}
-
-	playback, err := client.PlaybackInfo(ctx, request.ItemID, cfg.Jellyfin.UserID)
-	if err != nil {
-		fail("jellyfin", errorHint(err), credential.Secret)
+	if playbackErr != nil {
+		fail("jellyfin", errorHint(playbackErr), credential.Secret)
 		return exitJellyfin
 	}
 	source := playback.MediaSources[0]
@@ -277,6 +277,31 @@ func runVerify(configPath string, info, fail logFunc) int {
 	return code
 }
 
+// fetchItem asks Jellyfin for the library ancestry and the playback sources in
+// parallel; on a busy NAS the two round trips dominate the run time.
+func fetchItem(ctx context.Context, client *jellyfin.Client, itemID, userID string) ([]jellyfin.Ancestor, *jellyfin.PlaybackInfo, error, error) {
+	type ancestorsResult struct {
+		value []jellyfin.Ancestor
+		err   error
+	}
+	type playbackResult struct {
+		value *jellyfin.PlaybackInfo
+		err   error
+	}
+	ancestorsCh := make(chan ancestorsResult, 1)
+	playbackCh := make(chan playbackResult, 1)
+	go func() {
+		value, err := client.Ancestors(ctx, itemID, userID)
+		ancestorsCh <- ancestorsResult{value: value, err: err}
+	}()
+	go func() {
+		value, err := client.PlaybackInfo(ctx, itemID, userID)
+		playbackCh <- playbackResult{value: value, err: err}
+	}()
+	ancestorsOutcome := <-ancestorsCh
+	playbackOutcome := <-playbackCh
+	return ancestorsOutcome.value, playbackOutcome.value, ancestorsOutcome.err, playbackOutcome.err
+}
 // runResolve walks the same steps as a real playback but stops before launching the
 // player, so a failing item can be diagnosed without touching PotPlayer.
 func runResolve(ctx context.Context, configPath, itemID string) int {
@@ -296,9 +321,9 @@ func runResolve(ctx context.Context, configPath, itemID string) int {
 		return exitCredential
 	}
 	client := jellyfin.New(cfg.Jellyfin.BaseURL, strings.TrimSpace(credential.Secret), time.Duration(cfg.Jellyfin.TimeoutSeconds)*time.Second)
-	ancestors, err := client.Ancestors(ctx, request.ItemID, cfg.Jellyfin.UserID)
-	if err != nil {
-		fmt.Println("FAIL  jellyfin — " + errorHint(err))
+	ancestors, playback, ancestorsErr, playbackErr := fetchItem(ctx, client, request.ItemID, cfg.Jellyfin.UserID)
+	if ancestorsErr != nil {
+		fmt.Println("FAIL  jellyfin — " + errorHint(ancestorsErr))
 		return exitJellyfin
 	}
 	names := make([]string, 0, len(ancestors))
@@ -311,9 +336,8 @@ func runResolve(ctx context.Context, configPath, itemID string) int {
 		return exitLibrary
 	}
 	fmt.Println("OK    library")
-	playback, err := client.PlaybackInfo(ctx, request.ItemID, cfg.Jellyfin.UserID)
-	if err != nil {
-		fmt.Println("FAIL  jellyfin — " + errorHint(err))
+	if playbackErr != nil {
+		fmt.Println("FAIL  jellyfin — " + errorHint(playbackErr))
 		return exitJellyfin
 	}
 	source := playback.MediaSources[0]
