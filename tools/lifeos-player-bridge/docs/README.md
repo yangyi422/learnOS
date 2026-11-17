@@ -102,6 +102,33 @@ OK    Q:\Movies\Dune.mkv (26843545600 bytes)
 退化为 `media file is missing on the mapped drive`（退出码 8）说明前缀对了但文件不在，通常是
 target 少一层目录；`no path mapping matched`（退出码 7）说明 source 前缀与 Jellyfin 返回的容器路径不一致。
 
+## 电视剧单集播放
+
+单集复用同一套协议与路径映射，不需要任何额外参数：
+
+```
+lifeos-player://play?itemId=<Jellyfin EpisodeId>
+```
+
+唯一需要配的是库白名单：剧集的祖先库是 TV 库（`CollectionType: tvshows`），因此 `allowed_libraries` 必须包含它。
+`setup.ps1` 生成的配置默认就是 `movies` + `tvshows`；在旧配置上手写的人补一行即可：
+
+```yaml
+jellyfin:
+  allowed_libraries:
+    - movies
+    - tvshows
+```
+
+被拒绝时桥接会说明它属于哪个库，例如：
+
+```
+FAIL  library — item belongs to 电视剧[tvshows], allowed_libraries is movies
+```
+
+诊断单个剧集用：`player-bridge.exe -resolve <EpisodeId>`（走完整链路但不启动播放器），
+或 `player-bridge.exe -play <EpisodeId>` 直接播放。
+
 ## 浏览器确认框（能否去掉）
 
 点击播放时 Chrome/Edge 会弹「此站点正在尝试打开 player-bridge.exe」——这是**浏览器的安全边界**，

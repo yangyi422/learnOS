@@ -1,5 +1,14 @@
 # LearnOS Roadmap
 
+## 电视剧季 / 集与单集播放（2026-11-17）
+
+- [x] 数据：`media_items` 增量列 `series_external_id / season_external_id / season_number / episode_number / premiere_date / runtime_seconds / rating`（GORM AutoMigrate，无手工 SQL、无删数据）
+- [x] Agent：`JellyfinEpisodes` 扫 库 → 剧集 → 季（`/Shows/{id}/Seasons`）→ 集（`/Shows/{id}/Episodes`，分页、空季、缺名回退 `SxxExx`、封面缩略图）；沿用同一 SQLite 队列与 50 条批量提交，`JELLYFIN_INCLUDE_R18` 关闭时 R18 库不参与
+- [x] 后端：`GET /api/v1/library/media/series/:externalID`、`GET .../episodes?season=N`；季/集按编号排序，剧集不出现在扁平列表；R18 可见性沿用 `library IN (电影, 电视剧)`
+- [x] 前端：剧集卡片进入详情页 `媒体中心 → 电视剧 → 剧集`，海报 + 简介 + 季选择器 + 分集列表（SxxExx、缩略图、时长、简介、播放），移动端隐藏播放按钮
+- [x] 播放：复用 `lifeos-player://play?itemId=<EpisodeId>`，桥接侧只需 `allowed_libraries` 含 `tvshows`；被拒时错误信息写明条目所属库
+- [ ] **真实环境验收待做**：同步一部真实剧集、核对季/集数量、随机两集从页面播放并确认 PotPlayer 自动全屏、再次同步无重复、电影播放回归
+
 ## Windows 本地播放器桥接（Player Bridge，2026-11-17）
 
 - [x] P1 独立 Go 程序 `tools/lifeos-player-bridge`：`lifeos-player://play?itemId=` 解析（仅 play + 32 位 itemId）、配置校验、Jellyfin PlaybackInfo、Windows 凭据管理器读取、日志脱敏
@@ -564,6 +573,3 @@ Phase 6 不实现探索雷达、问题池、Agent 导航、知识来源可信度
 - [x] CurriculumBlueprint / BlueprintUnit / BlueprintLesson / BlueprintRelation 模型与 Nutrition v0 种子
 - [x] 课程覆盖度 API；Coverage 只描述学科蓝图与正式 Lesson 的映射，不读取个人认知状态
 - [x] CurriculumDraft ChangeSet、严格 AI 草稿协议与人工 Apply / Reject API
-- [x] Apply 事务、DAG 校验、旧 Lesson ID / CurrentLesson / 学习历史安全边界
-- [x] Course Archive 课程覆盖度与扩充草案审核界面
-- [x] 主线 CurrentLesson 显式切换、规则型下一课推荐和 Knowledge Structure 学习入口

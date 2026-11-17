@@ -37,7 +37,7 @@
         <p v-if="loading" class="media-muted" role="status">正在读取媒体…</p>
         <el-empty v-else-if="!error && !items.length" description="暂无媒体" />
         <div v-else-if="view === 'gallery'" class="media-grid">
-          <button v-for="item in sortedItems" :key="item.id" type="button" class="media-card" @click="selected = item">
+          <button v-for="item in sortedItems" :key="item.id" type="button" class="media-card" @click="openItem(item)">
             <img v-if="item.cover_id" class="media-cover" :src="mediaCoverURL(item.cover_id)" alt="" loading="lazy" />
             <span v-else class="media-cover media-cover--empty">无封面</span>
             <strong>{{ item.Title }}</strong>
@@ -47,7 +47,7 @@
         </div>
         <ul v-else class="media-list">
           <li v-for="item in sortedItems" :key="item.id">
-            <button type="button" class="media-list__row" @click="selected = item">
+            <button type="button" class="media-list__row" @click="openItem(item)">
               <img v-if="item.cover_id" class="media-list__cover" :src="mediaCoverURL(item.cover_id)" alt="" loading="lazy" />
               <span v-else class="media-list__cover media-cover--empty">无封面</span>
               <span class="media-list__text"><strong>{{ item.Title }}</strong><span class="media-card__meta">{{ mediaSubtitle(item) }}</span></span>
@@ -121,7 +121,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import PageHeader from "../components/PageHeader.vue";
 import PageShell from "../components/PageShell.vue";
@@ -139,6 +139,7 @@ import {
 import "@/library.css";
 
 const route = useRoute();
+const router = useRouter();
 const kind = computed<MediaCategoryKind | undefined>(() => mediaCategoryByRoute[String(route.params.kind ?? "")]);
 const label = computed(() => (kind.value ? mediaKindName(kind.value) : "媒体分类"));
 const reserved = computed(() => (kind.value ? isReservedMediaKind(kind.value) : false));
@@ -173,6 +174,15 @@ const origin = computed(() => (typeof window === "undefined" ? "" : window.locat
 const quietCommand = computed(
   () => `tools\\lifeos-player-bridge\\scripts\\allow-browser-launch.ps1 -Origin ${origin.value}`,
 );
+
+// 剧集需要季/集列表，所以卡片改为进入详情页；电影保持原来的详情弹窗。
+function openItem(item: MediaItem) {
+  if (item.Type === "series" && item.external_id) {
+    void router.push(`/explore/library/media/series/${item.external_id}`);
+    return;
+  }
+  selected.value = item;
+}
 
 async function copyQuietCommand() {
   try {

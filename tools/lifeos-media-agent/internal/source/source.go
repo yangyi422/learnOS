@@ -26,6 +26,14 @@ type Item struct {
 	Rating                                                 float64
 	Cover                                                  *url.URL                              `json:"-"`
 	ReadCover                                              func(context.Context) ([]byte, error) `json:"-"`
+
+	// Episode-only fields; empty for movies, series and books.
+	SeriesExternalID string `json:",omitempty"`
+	SeasonExternalID string `json:",omitempty"`
+	SeasonNumber     int    `json:",omitempty"`
+	EpisodeNumber    int    `json:",omitempty"`
+	PremiereDate     string `json:",omitempty"`
+	RuntimeSeconds   int    `json:",omitempty"`
 }
 
 type Client struct {
@@ -200,9 +208,22 @@ func (c Client) json(ctx context.Context, path string, query url.Values, dst any
 	return c.get(ctx, u, func(b []byte) error { return json.Unmarshal(b, dst) })
 }
 
-func (c Client) Jellyfin(ctx context.Context, include []string, emit func(Item) error) error {
-	var folders []struct{ Name, CollectionType, ItemID string }
+// virtualFolder is one Jellyfin library (Movies, TV Shows, and anything else).
+type virtualFolder struct {
+	Name, CollectionType, ItemID string
+}
+
+func (c Client) virtualFolders(ctx context.Context) ([]virtualFolder, error) {
+	var folders []virtualFolder
 	if err := c.json(ctx, "Library/VirtualFolders", nil, &folders); err != nil {
+		return nil, err
+	}
+	return folders, nil
+}
+
+func (c Client) Jellyfin(ctx context.Context, include []string, emit func(Item) error) error {
+	folders, err := c.virtualFolders(ctx)
+	if err != nil {
 		return err
 	}
 	var names []string
@@ -288,4 +309,158 @@ func (c Client) DownloadCover(ctx context.Context, target *url.URL) ([]byte, err
 		}
 	})
 	return data, err
+}
+// maxEpisodePages mirrors the item scan: refuse to loop forever on a broken server.
+const (
+	maxSeasonCount  = 200
+	maxEpisodePages = 1000
+)
+
+// JellyfinEpisodes walks every TV library, its series, the seasons of each series and
+// the episodes of each season. Only metadata is read; the video file is never fetched.
+func (c Client) JellyfinEpisodes(ctx context.Context, include []string, emit func(Item) error) error {
+	folders, err := c.virtualFolders(ctx)
+	if err != nil {
+		return err
+	}
+	allowed := map[string]string{}
+	for _, folder := range folders {
+		if folder.CollectionType == "tvshows" && folder.ItemID != "" {
+			allowed[folder.Name] = folder.ItemID
+		}
+	}
+	for _, name := range include {
+		parent, ok := allowed[name]
+		if !ok {
+			// A movies library (or an R18 library that was not requested) is not a
+			// series source; skipping is the documented behaviour, not an error.
+			continue
+		}
+		for start := 0; ; {
+			var page struct {
+				TotalRecordCount int
+				Items            []struct{ ID, Name string }
+			}
+			query := url.Values{"ParentId": {parent}, "Recursive": {"true"}, "IncludeItemTypes": {"Series"},
+				"Fields": {"ProductionYear"}, "Limit": {"100"}, "StartIndex": {fmt.Sprint(start)}, "EnableTotalRecordCount": {"true"}}
+			if err := c.json(ctx, "Items", query, &page); err != nil {
+				return err
+			}
+			if page.TotalRecordCount < 0 || len(page.Items) > 100 {
+				return fmt.Errorf("invalid Jellyfin series page")
+			}
+			for _, series := range page.Items {
+				if series.ID == "" || strings.ContainsAny(series.ID, "/\\.") {
+					return fmt.Errorf("invalid Jellyfin series id")
+				}
+				if err := c.seriesEpisodes(ctx, name, series.ID, series.Name, emit); err != nil {
+					return err
+				}
+			}
+			start += len(page.Items)
+			if len(page.Items) == 0 || start >= page.TotalRecordCount {
+				break
+			}
+			if start > 1000000 {
+				return fmt.Errorf("Jellyfin series pagination stalled")
+			}
+		}
+	}
+	return nil
+}
+
+func (c Client) seriesEpisodes(ctx context.Context, library, seriesID, seriesName string, emit func(Item) error) error {
+	var seasons struct {
+		Items []struct {
+			ID, Name    string
+			IndexNumber int
+		}
+	}
+	if err := c.json(ctx, "Shows/"+seriesID+"/Seasons", nil, &seasons); err != nil {
+		return err
+	}
+	if len(seasons.Items) > maxSeasonCount {
+		return fmt.Errorf("series %q reports too many seasons", seriesName)
+	}
+	for _, season := range seasons.Items {
+		if season.IndexNumber < 0 {
+			continue
+		}
+		for page := 0; page < maxEpisodePages; page++ {
+			var body struct {
+				TotalRecordCount int
+				Items            []struct {
+					ID, Name, Overview, PremiereDate string
+					IndexNumber, ParentIndexNumber  int
+					RunTimeTicks                    int64
+					ImageTags                       map[string]string
+				}
+			}
+			query := url.Values{"season": {fmt.Sprint(season.IndexNumber)}, "Fields": {"Overview,PremiereDate,RunTimeTicks"},
+				"Limit": {"100"}, "StartIndex": {fmt.Sprint(page * 100)}, "EnableTotalRecordCount": {"true"}}
+			if err := c.json(ctx, "Shows/"+seriesID+"/Episodes", query, &body); err != nil {
+				return err
+			}
+			if body.TotalRecordCount < 0 || len(body.Items) > 100 {
+				return fmt.Errorf("invalid Jellyfin episode page")
+			}
+			for _, episode := range body.Items {
+				if episode.ID == "" || strings.ContainsAny(episode.ID, "/\\.") {
+					return fmt.Errorf("invalid Jellyfin episode id")
+				}
+				seasonNumber := episode.ParentIndexNumber
+				if seasonNumber == 0 && season.IndexNumber != 0 {
+					seasonNumber = season.IndexNumber
+				}
+				title := strings.TrimSpace(episode.Name)
+				if title == "" {
+					title = fmt.Sprintf("S%02dE%02d", seasonNumber, episode.IndexNumber)
+				}
+				item := Item{
+					Library: library, Source: "jellyfin", SourceID: c.Base.Host, ExternalID: episode.ID, Type: "episode",
+					Title: title, Description: episode.Overview,
+					SeriesExternalID: seriesID, SeasonExternalID: season.ID, SeasonNumber: seasonNumber, EpisodeNumber: episode.IndexNumber,
+					PremiereDate: premiereDate(episode.PremiereDate), RuntimeSeconds: int(episode.RunTimeTicks / 10000000),
+				}
+				item.Year = premiereYear(item.PremiereDate)
+				if episode.ImageTags["Primary"] != "" {
+					item.Cover = c.Base.JoinPath("Items", episode.ID, "Images", "Primary")
+					item.Cover.RawQuery = "maxWidth=400"
+					if err := emit(item); err != nil {
+						return err
+					}
+					continue
+				}
+				if err := emit(item); err != nil {
+					return err
+				}
+			}
+			if len(body.Items) == 0 || (page+1)*100 >= body.TotalRecordCount {
+				break
+			}
+		}
+	}
+	return nil
+}
+
+// premiereDate keeps only the calendar day: Jellyfin sends a full timestamp.
+func premiereDate(value string) string {
+	if len(value) >= 10 && value[4] == '-' && value[7] == '-' {
+		return value[:10]
+	}
+	return ""
+}
+
+func premiereYear(date string) int {
+	if len(date) < 4 {
+		return 0
+	}
+	year := 0
+	for _, r := range date[:4] {
+		if r < '0' || r > '9' {
+			return 0
+		}
+		year = year*10 + int(r-'0')
+	}
+	return year
 }

@@ -79,6 +79,8 @@ func NewRouter(cfg config.Config, handler *Handler, webFS fs.FS, userServices ..
 	{
 		if handler.media != nil {
 			api.GET("/library/media", handler.mediaList)
+	api.GET("/library/media/series/:externalID", handler.mediaSeries)
+	api.GET("/library/media/series/:externalID/episodes", handler.mediaEpisodes)
 		}
 		api.POST("/auth/logout", handler.Logout)
 		// Capture credentials: minted and revoked only from an authenticated

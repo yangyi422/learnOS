@@ -67,3 +67,33 @@ OK    player C:\Program Files\DAUM\PotPlayer\PotPlayerMini64.exe
 - 浏览器到自定义协议的结果没有回调：UI 只显示"已提交启动请求"，不代表播放成功；真实结果以 PotPlayer 是否打开为准。
 - `allowed_libraries` 默认 `movies`（Jellyfin 的 CollectionType），与目录名无关；库名不同需自行补。
 - 电视剧单集播放未实现（按任务书属后续扩展），Bridge 本身按单 itemId 工作。
+---
+
+## 电视剧季 / 集与单集播放（2026-11-17）
+
+### 已验证（本地，可复跑）
+
+| 项 | 方法 | 结果 |
+| --- | --- | --- |
+| Agent 季/集扫描 | `internal/source/source_episodes_test.go` 对 Jellyfin 桩（`/Library/VirtualFolders`、`/Shows/{id}/Seasons`、`/Shows/{id}/Episodes`） | ✅ 多季、空季、分页、封面、`PremiereDate`/`RunTimeTicks` 解析、缺名回退 `SxxExx` |
+| R18 排除 | 只传「电视剧」库，桩里另有 R18 库 | ✅ R18 剧集未出现 |
+| 电影库不产剧集 | 只传「电影」库 | ✅ 0 条 |
+| Jellyfin 认证失败 | 桩返回 401 | ✅ 返回错误，不产生数据 |
+| 后端季排序 / 集排序 | `internal/repository/media_episode_test.go` | ✅ S1E1 → S1E2 → S2E1；`?season=` 过滤正确 |
+| 重复扫描去重 | 同一批数据 Upsert 两次 | ✅ 季汇总仍为 2 季 3 集 |
+| 元数据更新不覆盖个人字段 | 改标题后 Upsert | ✅ 收藏/笔记保留 |
+| 扁平列表不夹带剧集 | `List(kind="")` | ✅ 只返回 2 条（剧集被排除），`kind=episode` 时才返回 |
+| 剧集 API | `internal/httpapi/media_series_test.go` | ✅ 200 结构正确、非法 id 400、未知剧集 404、非法 season 400 |
+| 前端季切换 / 播放按钮 / 移动端 | Playwright（临时数据） | ✅ 切季只请求对应 `season=`；桌面端有播放按钮；390px 无按钮并提示“桌面端可播放”；无横向溢出、无控制台错误 |
+| 前端深浅主题 | 截图 `.tmp/series-after/{light,dark}-1440-series.png` | ✅ 两种主题排版一致 |
+
+### 未验证（需要真实环境）
+
+| 项 | 原因 |
+| --- | --- |
+| 真实 Jellyfin 剧集同步（季数、集数与 Jellyfin 一致） | 开发机 `192.168.31.122:8096` 不可达 |
+| 真实单集播放（PotPlayer 打开正确文件 + 自动全屏） | 同上，且本机无 PotPlayer、无 SMB 映射盘 |
+| 重复同步后无重复记录（真实数据） | 依赖真实同步 |
+| 电影播放回归 | 电影链路上次已验证，本次未改动桥接解析逻辑，但未在真实机器复跑 |
+
+清单式验收步骤见仓库根 `docs/ROADMAP.md` 的「电视剧季 / 集」条目。

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isReservedMediaKind, mediaCategoryByRoute, mediaCategoryRoutes, mediaCountLabel, mediaKindBadges, mediaKindName, mediaKindOptions, mediaSortOptions, mediaSources, mediaStatusLabel, mediaSubtitle, recentMediaNames, sortMediaItems } from './mediaHub'
+import { formatEpisodeCode, formatRuntime, isReservedMediaKind, mediaCategoryByRoute, mediaCategoryRoutes, mediaCountLabel, mediaKindBadges, mediaKindName, mediaKindOptions, mediaSortOptions, mediaSources, mediaStatusLabel, mediaSubtitle, recentMediaNames, seasonLabel, sortMediaItems } from './mediaHub'
 
 describe('media hub kinds', () => {
   it('lists the three connected libraries and the reserved game entry in order', () => {
@@ -65,5 +65,25 @@ describe('media categories', () => {
     expect(sortMediaItems(rows, 'year').map(row => row.id)).toEqual([1, 3, 2])
     expect(sortMediaItems(rows, 'title').map(row => row.Title)).toEqual(['没有年份', '沙丘', '深度工作'].sort((a, b) => a.localeCompare(b, 'zh-Hans-CN')))
     expect(rows.map(row => row.id)).toEqual([1, 3, 2])
+  })
+})
+describe('episode presentation', () => {
+  it('formats episode codes with two digits', () => {
+    expect(formatEpisodeCode(1, 1)).toBe('S01E01')
+    expect(formatEpisodeCode(12, 105)).toBe('S12E105')
+    expect(formatEpisodeCode(-1, 3)).toBe('S00E03')
+  })
+
+  it('labels seasons, including specials', () => {
+    expect(seasonLabel(0)).toBe('特别篇')
+    expect(seasonLabel(3)).toBe('第 3 季')
+  })
+
+  it('formats runtimes and skips unknown values', () => {
+    expect(formatRuntime(undefined)).toBe('')
+    expect(formatRuntime(0)).toBe('')
+    expect(formatRuntime(45 * 60)).toBe('45 分钟')
+    expect(formatRuntime(3600)).toBe('1 小时')
+    expect(formatRuntime(96 * 60)).toBe('1 小时 36 分')
   })
 })

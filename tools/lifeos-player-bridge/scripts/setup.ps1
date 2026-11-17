@@ -17,7 +17,7 @@ param(
   [string]$JellyfinPassword = '',
   [string]$MoviesSource = '/media/movies/',
   [string]$MoviesTarget = '',
-  [string]$Library = 'movies',
+  [string[]]$Libraries = @('movies', 'tvshows'),
   [string]$ExePath = '',
   [string]$ConfigPath = ''
 )
@@ -179,7 +179,7 @@ jellyfin:
   user_id: "__USER__"
   credential_target: lifeos-player-bridge/jellyfin
   allowed_libraries:
-    - __LIBRARY__
+__LIBRARY_LINES__
 
 player:
   executable: auto
@@ -198,7 +198,7 @@ playback:
     - mov
     - m4v
 '@
-$yaml = $yaml.Replace('__URL__', $base).Replace('__USER__', $userId).Replace('__LIBRARY__', $Library).Replace('__SRC__', $MoviesSource).Replace('__TGT__', $MoviesTarget)
+$yaml = $yaml.Replace('__URL__', $base).Replace('__USER__', $userId).Replace('__LIBRARY_LINES__', (($Libraries | ForEach-Object { '    - ' + $_ }) -join "`n")).Replace('__SRC__', $MoviesSource).Replace('__TGT__', $MoviesTarget)
 Set-Content -Path $ConfigPath -Value $yaml -Encoding UTF8
 'config written: ' + $ConfigPath
 

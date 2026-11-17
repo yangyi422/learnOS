@@ -19,7 +19,16 @@ type MediaItem struct {
 	Genres      []string  `json:"Genres" gorm:"serializer:json"`
 	Tags        []string  `json:"Tags" gorm:"serializer:json"`
 	Year        int       `json:"Year"`
+	Rating      float64   `json:"Rating,omitempty"`
 	CoverID     string    `json:"cover_id"`
+	// Episode columns: zero values for movies, series and books. Season/Episode
+	// numbers are 1-based except specials (season 0), so 0 is a valid episode number.
+	SeriesExternalID string `json:"series_external_id,omitempty"`
+	SeasonExternalID string `json:"season_external_id,omitempty"`
+	SeasonNumber     int    `json:"season_number,omitempty"`
+	EpisodeNumber    int    `json:"episode_number,omitempty"`
+	PremiereDate     string `json:"premiere_date,omitempty"`
+	RuntimeSeconds   int    `json:"runtime_seconds,omitempty"`
 	Favorite    bool      `json:"favorite"`
 	Notes       string    `json:"notes"`
 	UpdatedAt   time.Time `json:"updated_at"`

@@ -84,6 +84,7 @@ const router = createRouter({
       redirect: '/explore',
     },
     { path: '/explore/library/media', component: () => import('../views/MediaHubView.vue'), meta: { title: '媒体中心' } },
+  { path: '/explore/library/media/series/:externalID', component: () => import('../views/MediaSeriesView.vue'), meta: { title: '电视剧' } },
   { path: '/explore/library/media/:kind(books|movies|series|games)', component: () => import('../views/MediaCategoryView.vue'), meta: { title: '媒体分类' } },
     { path: '/explore/library', component: LibraryView, meta: { title: '我的资料库' } },
  { path: '/explore/library/:collection', component: LibraryCollectionView, meta: { title: '资料专题' } },

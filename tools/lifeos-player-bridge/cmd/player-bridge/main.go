@@ -335,7 +335,7 @@ func runResolve(ctx context.Context, configPath, itemID string) int {
 	}
 	fmt.Println("libs  " + strings.Join(names, " > "))
 	if !jellyfin.LibraryAllowed(ancestors, cfg.Jellyfin.AllowedLibraries) {
-		fmt.Println("FAIL  library — not in allowed_libraries (" + strings.Join(cfg.Jellyfin.AllowedLibraries, ", ") + ")")
+		fmt.Println("FAIL  library — item belongs to " + describeLibraries(ancestors) + ", allowed_libraries is " + strings.Join(cfg.Jellyfin.AllowedLibraries, ", "))
 		return exitLibrary
 	}
 	fmt.Println("OK    library")
@@ -400,6 +400,21 @@ func runProbe(configPath, containerPath string) int {
 	}
 	fmt.Printf("OK    %s (%d bytes)\n", mapped, info.Size())
 	return exitOK
+}
+
+// describeLibraries renders the collection types an item sits in, e.g.
+// "电视剧[tvshows] > Media Folders".
+func describeLibraries(ancestors []jellyfin.Ancestor) string {
+	parts := make([]string, 0, len(ancestors))
+	for _, ancestor := range ancestors {
+		if ancestor.CollectionType != "" {
+			parts = append(parts, ancestor.Name+"["+ancestor.CollectionType+"]")
+		}
+	}
+	if len(parts) == 0 {
+		return "an unknown library"
+	}
+	return strings.Join(parts, " > ")
 }
 
 func messageSuffix(message string) string {

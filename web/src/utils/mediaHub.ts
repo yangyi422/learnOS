@@ -87,3 +87,22 @@ export function sortMediaItems<T extends { id: number; Title: string; Year?: num
   if (sort === 'year') return rows.sort((a, b) => (b.Year || 0) - (a.Year || 0) || b.id - a.id)
   return rows.sort((a, b) => b.id - a.id)
 }
+// 剧集编号固定两位：S01E01，便于和 Jellyfin / 播放器字幕对齐。
+export function formatEpisodeCode(season: number, episode: number): string {
+  const pad = (value: number) => String(Math.max(0, Math.trunc(value))).padStart(2, '0')
+  return `S${pad(season)}E${pad(episode)}`
+}
+
+export function seasonLabel(season: number): string {
+  return season === 0 ? '特别篇' : `第 ${season} 季`
+}
+
+// 时长优先用“1 小时 36 分”，不足一小时只说分钟。
+export function formatRuntime(seconds: number | undefined): string {
+  if (!seconds || seconds <= 0) return ''
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 60) return `${minutes} 分钟`
+  const hours = Math.floor(minutes / 60)
+  const rest = minutes % 60
+  return rest === 0 ? `${hours} 小时` : `${hours} 小时 ${rest} 分`
+}

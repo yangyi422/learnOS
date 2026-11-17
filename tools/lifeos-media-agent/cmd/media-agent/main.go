@@ -103,7 +103,9 @@ func scan(ctx context.Context, name string, emit func(source.Item) error) error 
 		if os.Getenv("JELLYFIN_INCLUDE_R18") == "true" {
 			libraries = append(libraries, "R18")
 		}
-		return client.Jellyfin(ctx, libraries, emit)
+		// Both scans share the library allowlist: a library that is not passed is never
+		// read, so an R18 library stays invisible unless JELLYFIN_INCLUDE_R18 is set.
+		return errors.Join(client.Jellyfin(ctx, libraries, emit), client.JellyfinEpisodes(ctx, libraries, emit))
 	default:
 		return fmt.Errorf("unknown source")
 	}

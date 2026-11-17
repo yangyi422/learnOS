@@ -24,6 +24,10 @@ func (h *Handler) mediaUpsert(c *gin.Context) {
 		Authors, Genres, Tags                                  []string
 		CoverID                                                string `json:"cover_id"`
 		Year                                                   int
+		Rating                                                 float64
+		// Episode fields, ignored for movies, series and books.
+		SeriesExternalID, SeasonExternalID, PremiereDate string
+		SeasonNumber, EpisodeNumber, RuntimeSeconds      int
 	}
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2<<20)
 	if c.ShouldBindJSON(&input) != nil {
@@ -42,7 +46,8 @@ func (h *Handler) mediaUpsert(c *gin.Context) {
 				return
 			}
 		}
-		items[i] = model.MediaItem{Library: v.Library, CoverID: v.CoverID, Source: v.Source, SourceID: v.SourceID, ExternalID: v.ExternalID, Type: v.Type, Title: v.Title, Description: v.Description, Authors: v.Authors, Genres: v.Genres, Tags: v.Tags, Year: v.Year}
+		items[i] = model.MediaItem{Library: v.Library, CoverID: v.CoverID, Source: v.Source, SourceID: v.SourceID, ExternalID: v.ExternalID, Type: v.Type, Title: v.Title, Description: v.Description, Authors: v.Authors, Genres: v.Genres, Tags: v.Tags, Year: v.Year, Rating: v.Rating,
+			SeriesExternalID: v.SeriesExternalID, SeasonExternalID: v.SeasonExternalID, SeasonNumber: v.SeasonNumber, EpisodeNumber: v.EpisodeNumber, PremiereDate: v.PremiereDate, RuntimeSeconds: v.RuntimeSeconds}
 	}
 	err := h.media.Upsert(c.Request.Context(), user, items)
 	if errors.Is(err, service.ErrMediaInput) {
@@ -77,4 +82,71 @@ func (h *Handler) mediaList(c *gin.Context) {
 
 func mediaError(c *gin.Context, status int, message string) {
 	c.JSON(status, gin.H{"error": gin.H{"code": "MEDIA_ERROR", "message": message, "retryable": status >= 500}})
+}
+// mediaSeries serves the TV detail page: the series row plus its season summary.
+func (h *Handler) mediaSeries(c *gin.Context) {
+	user, ok := projectUserID(c)
+	if !ok {
+		return
+	}
+	externalID := strings.TrimSpace(c.Param("externalID"))
+	if !validMediaExternalID(externalID) {
+		mediaError(c, 400, "媒体标识无效")
+		return
+	}
+	detail, err := h.media.Series(c.Request.Context(), user, externalID, c.Query("show_r18") == "true")
+	if errors.Is(err, service.ErrMediaNotFound) {
+		mediaError(c, 404, "剧集不存在")
+		return
+	}
+	if err != nil {
+		mediaError(c, 500, "媒体读取失败")
+		return
+	}
+	c.JSON(200, gin.H{"data": detail})
+}
+
+// mediaEpisodes lists episodes of one series; ?season=N narrows it to one season.
+func (h *Handler) mediaEpisodes(c *gin.Context) {
+	user, ok := projectUserID(c)
+	if !ok {
+		return
+	}
+	externalID := strings.TrimSpace(c.Param("externalID"))
+	if !validMediaExternalID(externalID) {
+		mediaError(c, 400, "媒体标识无效")
+		return
+	}
+	season := -1
+	if raw := strings.TrimSpace(c.Query("season")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 0 || parsed > 999 {
+			mediaError(c, 400, "季参数无效")
+			return
+		}
+		season = parsed
+	}
+	items, err := h.media.Episodes(c.Request.Context(), user, externalID, season, c.Query("show_r18") == "true")
+	if errors.Is(err, service.ErrMediaNotFound) {
+		mediaError(c, 404, "剧集不存在")
+		return
+	}
+	if err != nil {
+		mediaError(c, 500, "媒体读取失败")
+		return
+	}
+	c.JSON(200, gin.H{"data": gin.H{"items": items, "total": len(items)}})
+}
+
+// validMediaExternalID accepts Jellyfin ids only: 32 hex characters, optionally dashed.
+func validMediaExternalID(value string) bool {
+	if value == "" || len(value) > 64 {
+		return false
+	}
+	for _, r := range value {
+		if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'f' || r >= 'A' && r <= 'F' || r == '-') {
+			return false
+		}
+	}
+	return true
 }
