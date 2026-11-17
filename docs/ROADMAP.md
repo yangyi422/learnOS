@@ -11,6 +11,8 @@
   `-resolve` 把 `/media/电影/…mkv` 映射到 `V:\…\media\电影\…mkv`（10330139819 bytes 与 Jellyfin 一致），
   `-play` 成功启动 PotPlayer 播放 NAS 原始文件（详见 `tools/lifeos-player-bridge/docs/TEST-REPORT.md`）
 - [x] 浏览器链路打通：云端页面点「使用 PotPlayer 播放」→ 浏览器确认框 → PotPlayer 播放 NAS 原始文件（真实截图已归档到测试报告）
+- [x] 详情页新增「每次都要确认？让它不再弹窗」：按当前来源生成 `allow-browser-launch.ps1` 命令并一键复制，同时给出 Firefox 免提权方案；
+      协议唤起改为 GUI 子系统构建，不再闪控制台窗口
 - [ ] 电视剧单集播放：延期（Bridge 按单个 itemId 工作，后续从 Jellyfin 取 Season/Episode）
 
 ## 媒体中心重构：内容类型入口页 + 分类详情页（2026-11-17）

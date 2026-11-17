@@ -738,3 +738,10 @@
 .media-play__guide { margin: 0; padding-left: 18px; color: var(--text-secondary); font-size: 12px; line-height: 1.9; }
 .media-play__guide code, .media-play__log code { padding: 1px 5px; border-radius: 4px; background: var(--material-reading-fill); font-size: 11px; }
 .media-play__log { margin: 0; color: var(--text-tertiary); font-size: 12px; line-height: 1.7; }
+
+/* 本地播放：让浏览器不再弹确认的说明块 */
+.media-play__quiet { display: grid; gap: 8px; padding: 12px 14px; border-radius: 10px; background: var(--material-reading-fill); }
+.media-play__quiet p { margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.7; }
+.media-play__cmd { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 10px; border-radius: 8px; background: var(--color-surface); }
+.media-play__cmd code { flex: 1 1 320px; min-width: 0; overflow-wrap: anywhere; font-size: 11px; }
+.media-play__quiet code { padding: 1px 5px; border-radius: 4px; background: var(--material-surface-fill); font-size: 11px; }

@@ -97,6 +97,21 @@
             <li>Jellyfin 可访问：家庭网络内能打开 <code>http://192.168.31.122:8096</code></li>
             <li><code>path_mappings</code> 的容器路径与本机盘符一一对应</li>
           </ol>
+          <div class="media-play__actions">
+            <button type="button" class="media-play__toggle" @click="showQuietGuide = !showQuietGuide">
+              {{ showQuietGuide ? "收起说明" : "每次都要确认？让它不再弹窗" }}
+            </button>
+          </div>
+          <div v-if="showQuietGuide" class="media-play__quiet">
+            <p>「此站点正在尝试打开 player-bridge.exe」是浏览器的安全确认，网页和桥接都无法跳过，只能让浏览器记住这一个来源。</p>
+            <p><strong>Chrome / Edge</strong>：用<strong>管理员</strong> PowerShell 执行下面这条（只对当前来源生效，可撤销），然后完全退出浏览器再打开。</p>
+            <div class="media-play__cmd">
+              <code>{{ quietCommand }}</code>
+              <el-button text @click="copyQuietCommand">复制</el-button>
+            </div>
+            <p class="media-play__log">撤销：把命令末尾的 <code>-Origin ...</code> 换成 <code>-Origin {{ origin }} -Remove</code>。Chrome 88 之后对话框默认不显示「始终允许」勾选框，这条命令会一并打开它。</p>
+            <p class="media-play__log"><strong>Firefox</strong>：<code>about:config</code> 里把 <code>network.protocol-handler.warn-external.lifeos-player</code> 设为 <code>false</code>，不需要管理员。</p>
+          </div>
           <p class="media-play__log">失败原因看 <code>%LOCALAPPDATA%\LifeOS\PlayerBridge\logs\bridge.log</code>，或在 Bridge 目录运行 <code>player-bridge.exe -verify</code>。</p>
         </section>
       </template>
@@ -146,11 +161,27 @@ const mediaTotal = ref(0);
 const error = ref("");
 const loading = ref(false);
 const showGuide = ref(false);
+const showQuietGuide = ref(false);
 const desktop = ref(true);
 const playRequested = ref(false);
 let request = 0;
 
 const PLAY_SCHEME = "lifeos-player://play";
+
+// 弹窗只能在浏览器侧关掉，所以把「针对当前来源」的那条命令生成出来，避免用户自己拼。
+const origin = computed(() => (typeof window === "undefined" ? "" : window.location.origin));
+const quietCommand = computed(
+  () => `tools\\lifeos-player-bridge\\scripts\\allow-browser-launch.ps1 -Origin ${origin.value}`,
+);
+
+async function copyQuietCommand() {
+  try {
+    await navigator.clipboard.writeText(quietCommand.value);
+    ElMessage.success("命令已复制，请在管理员 PowerShell 中执行");
+  } catch {
+    ElMessage.warning("复制失败，请手动选择命令文本");
+  }
+}
 
 // 自定义协议没有回调：只能确认“已提交启动请求”，不能声称播放成功。
 const playState = computed(() =>
