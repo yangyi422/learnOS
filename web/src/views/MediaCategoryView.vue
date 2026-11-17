@@ -21,11 +21,6 @@
     <template v-else>
       <form class="media-toolbar" @submit.prevent="load(1)">
         <el-input v-model="query" aria-label="媒体标题" placeholder="搜索标题" />
-        <el-select v-model="source" aria-label="媒体来源" @change="load(1)">
-          <el-option label="全部来源" value="all" />
-          <el-option label="Calibre" value="calibre" />
-          <el-option label="Jellyfin" value="jellyfin" />
-        </el-select>
         <el-select v-model="sort" aria-label="排序">
           <el-option v-for="option in mediaSortOptions" :key="option.value" :label="option.label" :value="option.value" />
         </el-select>
@@ -79,14 +74,40 @@
         <p v-if="selected.Tags?.length">{{ selected.Tags.join("、") }}</p>
         <p v-if="selected.favorite">已收藏</p>
         <p v-if="selected.notes" class="media-description">{{ selected.notes }}</p>
+
+        <section v-if="canPlayLocally" class="media-play">
+          <header class="media-play__head">
+            <div>
+              <h3>本地播放</h3>
+              <p>由 Windows Player Bridge 调用 PotPlayer，直接播放 NAS 上的原始文件，不经过服务器中转。</p>
+            </div>
+            <el-button type="primary" @click="startLocalPlayback">使用 PotPlayer 播放</el-button>
+          </header>
+          <p class="media-play__state">{{ playState }}</p>
+          <div class="media-play__actions">
+            <el-button text @click="copyPlayLink">复制播放链接</el-button>
+            <button type="button" class="media-play__toggle" @click="showGuide = !showGuide">
+              {{ showGuide ? "收起检查清单" : "没反应？查看检查清单" }}
+            </button>
+          </div>
+          <ol v-if="showGuide" class="media-play__guide">
+            <li>已在本机运行 <code>tools\lifeos-player-bridge\scripts\install.ps1</code>（注册 <code>lifeos-player://</code> 协议）</li>
+            <li>PotPlayer 已安装，或 config 里指定了 <code>player.executable</code></li>
+            <li>NAS 映射盘可访问：资源管理器里能打开对应盘符目录</li>
+            <li>Jellyfin 可访问：家庭网络内能打开 <code>http://192.168.31.122:8096</code></li>
+            <li><code>path_mappings</code> 的容器路径与本机盘符一一对应</li>
+          </ol>
+          <p class="media-play__log">失败原因看 <code>%LOCALAPPDATA%\LifeOS\PlayerBridge\logs\bridge.log</code>，或在 Bridge 目录运行 <code>player-bridge.exe -verify</code>。</p>
+        </section>
       </template>
     </el-dialog>
   </PageShell>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
+import { ElMessage } from "element-plus";
 import PageHeader from "../components/PageHeader.vue";
 import PageShell from "../components/PageShell.vue";
 import { listMedia, mediaCoverURL, type MediaItem } from "@/api/media";
@@ -117,7 +138,6 @@ const subtitle = computed(() => {
 const items = ref<MediaItem[]>([]);
 const selected = ref<MediaItem | null>(null);
 const query = ref("");
-const source = ref("all");
 const sort = ref<MediaSort>("recent");
 const showR18 = ref(false);
 const view = ref<"gallery" | "list">("gallery");
@@ -125,7 +145,47 @@ const page = ref(1);
 const mediaTotal = ref(0);
 const error = ref("");
 const loading = ref(false);
+const showGuide = ref(false);
+const desktop = ref(true);
+const playRequested = ref(false);
 let request = 0;
+
+const PLAY_SCHEME = "lifeos-player://play";
+
+// 自定义协议没有回调：只能确认“已提交启动请求”，不能声称播放成功。
+const playState = computed(() =>
+  playRequested.value
+    ? "已向 Windows 提交启动请求（浏览器可能弹出确认）。协议没有回调，所以这里只表示已提交，播放是否成功请以 PotPlayer 是否打开为准。"
+    : "点击后由 Windows 确认是否启动 PotPlayer；本机需已安装 Player Bridge。",
+);
+
+const canPlayLocally = computed(
+  () => desktop.value && kind.value === "movie" && Boolean(selected.value?.external_id),
+);
+
+const playURL = computed(() =>
+  selected.value?.external_id ? `${PLAY_SCHEME}?itemId=${encodeURIComponent(selected.value.external_id)}` : "",
+);
+
+function startLocalPlayback() {
+  if (!playURL.value) return;
+  playRequested.value = true;
+  window.location.href = playURL.value;
+}
+
+async function copyPlayLink() {
+  if (!playURL.value) return;
+  try {
+    await navigator.clipboard.writeText(playURL.value);
+    ElMessage.success("播放链接已复制");
+  } catch {
+    ElMessage.warning("复制失败，请手动复制： " + playURL.value);
+  }
+}
+
+function syncViewport() {
+  desktop.value = window.matchMedia("(pointer: fine)").matches && window.innerWidth > 820;
+}
 
 const sortedItems = computed(() => sortMediaItems(items.value, sort.value));
 
@@ -145,7 +205,6 @@ async function load(next: number) {
     const result = await listMedia({
       q: query.value,
       type: kind.value,
-      source: source.value === "all" ? "" : source.value,
       page: next,
       showR18: showR18.value,
     });
@@ -162,10 +221,16 @@ async function load(next: number) {
 
 watch(() => route.params.kind, () => {
   selected.value = null;
+  playRequested.value = false;
+  showGuide.value = false;
   query.value = "";
-  source.value = "all";
   sort.value = "recent";
   void load(1);
 });
-onMounted(() => void load(1));
+onMounted(() => {
+  syncViewport();
+  window.addEventListener("resize", syncViewport);
+  void load(1);
+});
+onBeforeUnmount(() => window.removeEventListener("resize", syncViewport));
 </script>

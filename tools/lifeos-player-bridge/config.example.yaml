@@ -1,0 +1,36 @@
+# LifeOS Player Bridge configuration.
+# Install copies this file to %LOCALAPPDATA%\LifeOS\PlayerBridge\config.yaml.
+# The Jellyfin token is NOT stored here: it lives in Windows Credential Manager
+# under jellyfin.credential_target (see docs/README.md).
+
+jellyfin:
+  base_url: http://192.168.31.122:8096
+  # A dedicated non-admin Jellyfin user id (Dashboard → Users → the user → ID).
+  user_id: ""
+  credential_target: lifeos-player-bridge/jellyfin
+  # Ancestor collection types or library names this bridge may play.
+  allowed_libraries:
+    - movies
+
+player:
+  # auto = search the usual PotPlayer install folders.
+  executable: auto
+  type: potplayer
+
+# Container path (inside the Jellyfin Docker container) → Windows mapped drive.
+# Confirm both sides before installing; there is no guessing in the bridge:
+# an unmatched path is refused instead of being opened.
+path_mappings:
+  - source: /media/movies/
+    target: Z:\Movies\
+  - source: /media/tvshows/
+    target: Z:\TVShows\
+
+playback:
+  check_file_exists: true
+  allowed_extensions:
+    - mkv
+    - mp4
+    - avi
+    - mov
+    - m4v

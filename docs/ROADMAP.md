@@ -1,5 +1,15 @@
 # LearnOS Roadmap
 
+## Windows 本地播放器桥接（Player Bridge，2026-11-17）
+
+- [x] P1 独立 Go 程序 `tools/lifeos-player-bridge`：`lifeos-player://play?itemId=` 解析（仅 play + 32 位 itemId）、配置校验、Jellyfin PlaybackInfo、Windows 凭据管理器读取、日志脱敏
+- [x] P2 路径映射：多规则前缀边界（`/media/movies/` 不匹配 `/media/movies2/`）、大小写不敏感、拒绝 `..` 与越界、扩展名白名单、文件/盘符存在性检查并区分「文件缺失」与「映射盘不可用」
+- [x] P3 代码完成 PotPlayer 检测与 `exec.Command` 启动（独立传参、不经 shell、启动后退出）；**真实播放未验证**（见下）
+- [x] P4 LifeOS 前端：电影详情新增「本地播放」区块（桌面端显示、移动端隐藏），含协议 URL、状态说明、检查清单、复制链接；后端以增量字段 `external_id` 暴露 Jellyfin itemId（认证体系未改）
+- [x] 构建与自检：`player-bridge.exe -verify` 逐项检查配置/凭据/Jellyfin/PotPlayer/映射盘；`install.ps1`（HKCU 协议注册 + 回读校验 + 自检）、`uninstall.ps1`（只删协议）
+- [ ] **端到端真实播放：阻塞** — 本机 `192.168.31.122:8096` 不可达、`net use` 无任何 SMB 映射盘、Program Files 下无 PotPlayer；三项均非代码问题，需在目标 Windows 机器上安装后验证
+- [ ] 电视剧单集播放：延期（Bridge 按单个 itemId 工作，后续从 Jellyfin 取 Season/Episode）
+
 ## 媒体中心重构：内容类型入口页 + 分类详情页（2026-11-17）
 
 - [x] 媒体中心首页改为四类内容入口（2×2 大卡片）：电子书 / 电影 / 电视剧 / 游戏；卡片含预览拼图、标题、来源（Calibre · OPDS / Jellyfin / Steam · Windows）、状态标签（已接入 / 即将接入）、数量

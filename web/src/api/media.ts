@@ -1,4 +1,5 @@
 export interface MediaItem {
+  external_id?: string
   id: number
   Type: string
   Title: string

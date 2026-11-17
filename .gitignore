@@ -39,3 +39,7 @@ desktop/build/darwin/
 desktop/.task/
 desktop/portable/
 desktop/*.zip
+
+# Player Bridge build output (build locally via scripts/build.ps1)
+tools/lifeos-player-bridge/dist/
+tools/lifeos-player-bridge/package/

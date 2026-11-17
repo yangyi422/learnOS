@@ -702,3 +702,39 @@
 .library-empty h3 { margin: 0; font-size: 15px; font-weight: 600; }
 .library-empty p { margin: 4px 0 0; color: var(--text-secondary); font-size: var(--font-meta); }
 @media (max-width: 700px) { .library-empty { flex-direction: column; align-items: flex-start; gap: 10px; } }
+
+/* 分类页工具栏：无边框输入与紧凑排序，弱化控件存在感，只留一条基线。 */
+.media-toolbar .el-input__wrapper,
+.media-toolbar .el-select__wrapper {
+  min-height: 32px;
+  padding-inline: 2px;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none !important;
+  border-bottom: 1px solid var(--material-surface-edge);
+  transition: border-color var(--motion-base) var(--motion-ease-standard);
+}
+.media-toolbar .el-input__wrapper:hover,
+.media-toolbar .el-select__wrapper:hover { border-bottom-color: var(--home-reflection); }
+.media-toolbar .el-input__wrapper.is-focus,
+.media-toolbar .el-select__wrapper.is-focused { border-bottom-color: var(--color-primary); }
+.media-toolbar .el-input__inner { font-size: var(--font-meta); }
+.media-toolbar .el-select { flex: 0 1 132px; }
+.media-toolbar .el-select__placeholder,
+.media-toolbar .el-select__selected-item { font-size: var(--font-meta); color: var(--text-secondary); }
+.media-toolbar .el-input__wrapper:focus-within { outline: none; }
+.media-toolbar > .el-button { min-height: 32px; padding-inline: 16px; font-size: var(--font-meta); }
+.media-toolbar .el-checkbox { color: var(--text-secondary); font-size: var(--font-meta); }
+
+/* 电影详情里的本地播放区块（Player Bridge）。 */
+.media-play { display: grid; gap: 10px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border-subtle); }
+.media-play__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.media-play__head h3 { margin: 0; font-size: var(--font-card-title); font-weight: 600; }
+.media-play__head p { margin: 4px 0 0; max-width: 46ch; color: var(--text-secondary); font-size: 12px; line-height: 1.7; }
+.media-play__state { margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.7; }
+.media-play__actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.media-play__toggle { padding: 0; border: 0; background: transparent; color: var(--color-link); font: inherit; font-size: 12px; cursor: pointer; }
+.media-play__toggle:hover { text-decoration: underline; text-underline-offset: 3px; }
+.media-play__guide { margin: 0; padding-left: 18px; color: var(--text-secondary); font-size: 12px; line-height: 1.9; }
+.media-play__guide code, .media-play__log code { padding: 1px 5px; border-radius: 4px; background: var(--material-reading-fill); font-size: 11px; }
+.media-play__log { margin: 0; color: var(--text-tertiary); font-size: 12px; line-height: 1.7; }

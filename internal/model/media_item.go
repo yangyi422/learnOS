@@ -8,7 +8,10 @@ type MediaItem struct {
 	UserID      uint      `json:"-" gorm:"not null;uniqueIndex:media_origin"`
 	Source      string    `json:"Source" gorm:"not null;uniqueIndex:media_origin"`
 	SourceID    string    `json:"-" gorm:"not null;uniqueIndex:media_origin"`
-	ExternalID  string    `json:"-" gorm:"not null;uniqueIndex:media_origin"`
+	// external_id is the Jellyfin/Calibre item id. The player bridge needs it to
+	// resolve PlaybackInfo, and it is not a credential: authorization stays on the
+	// Jellyfin side, gated by the bridge library allowlist.
+	ExternalID  string    `json:"external_id" gorm:"not null;uniqueIndex:media_origin"`
 	Type        string    `json:"Type"`
 	Title       string    `json:"Title"`
 	Description string    `json:"Description"`
