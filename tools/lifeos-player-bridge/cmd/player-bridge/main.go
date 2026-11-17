@@ -44,6 +44,9 @@ const (
 )
 
 func main() {
+	// Built as a GUI binary so a protocol launch shows no console window; attach to the
+	// parent console when one exists so manual runs still print.
+	attachParentConsole()
 	configPath := flag.String("config", "", "path to config.yaml (default: %LOCALAPPDATA%\\LifeOS\\PlayerBridge\\config.yaml)")
 	verify := flag.Bool("verify", false, "check config, credential, Jellyfin, mappings and PotPlayer, then exit")
 	showVersion := flag.Bool("version", false, "print the bridge version")

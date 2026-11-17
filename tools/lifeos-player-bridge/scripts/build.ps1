@@ -18,7 +18,9 @@ if (-not (Get-Command $go -ErrorAction SilentlyContinue)) {
 
 Push-Location $root
 try {
-  & $go build -trimpath -ldflags '-s -w' -o (Join-Path $dist 'player-bridge.exe') ./cmd/player-bridge
+  # -H=windowsgui: a protocol launch must not flash a console window; the binary re-attaches
+  # to a parent console when started from a terminal, so -verify / -play still print.
+  & $go build -trimpath -ldflags '-s -w -H=windowsgui' -o (Join-Path $dist 'player-bridge.exe') ./cmd/player-bridge
   if ($LASTEXITCODE -ne 0) { throw 'go build failed' }
   $exe = Join-Path $dist 'player-bridge.exe'
   'built: ' + $exe

@@ -8,8 +8,8 @@
 | --- | --- | --- | --- |
 | P1 | 配置读取、PotPlayer 检测、凭据读取、Jellyfin PlaybackInfo、容器路径解析 | ✅ 已通过（真实机器） | `-verify` 5 项全 OK：config / credential / jellyfin(10.10.7) / player(PotPlayerMini64.exe) / mapping |
 | P2 | 容器路径 → 盘符映射、文件存在性、错误路径拒绝 | ✅ 已通过（真实机器 + 单元测试） | `-resolve` 输出 `src /media/电影/…mkv (size=10330139819)` → `OK path V:\…\media\电影\…mkv (10330139819 bytes)`；`pathmap` 包测试覆盖前缀边界、`..`、扩展名、盘符不可用 |
-| P3 | PotPlayer 真实启动播放 NAS 文件 | ✅ 已通过（真实机器） | 用户机器执行 `-play <itemId>` 后 PotPlayer 正常打开并播放 |
-| P4 | LifeOS 电影详情播放入口（桌面显示、移动隐藏） | ⏳ 部分：UI 已验证，浏览器→协议→播放待用户在页面确认 | 本地 Playwright：1440 宽显示区块、390 宽不渲染、无控制台错误；云端部署含该入口（commit `b86ef51`） |
+| P3 | PotPlayer 真实启动播放 NAS 文件 | ✅ 已通过（真实机器） | 用户机器执行 `-play <itemId>` 后 PotPlayer 正常打开并播放；随后从 LifeOS 页面点按钮再次验证通过 |
+| P4 | LifeOS 电影详情播放入口 → 浏览器 → 协议 → 播放 | ✅ 已通过（真实浏览器） | 云端页面点「使用 PotPlayer 播放」→ 浏览器弹出「此站点正在尝试打开 player-bridge.exe / 43.138.202.56:8888 想打开此应用程序」→ PotPlayer 打开并播放 `Love.Letter.1995.REPACK.1080p…mkv`（进度 01:36:23）；页面状态文案显示「已向 Windows 提交启动请求…播放是否成功请以 PotPlayer 是否打开为准」 |
 | P5 | 稳定性用例 | ⏳ 部分 | 见下表 |
 
 ## P5 稳定性用例
@@ -28,6 +28,7 @@
 | PotPlayer 不存在 | 开发机（无 PotPlayer） | ✅ 退出码 9，`PotPlayer not found` |
 | API 密钥访问 `/Users/Me` | Jellyfin 返回 400 | ✅ `setup.ps1` 自动退到 `/Users`，或指定 `-JellyfinUser` |
 | 凭据 UTF-16 | `cmdkey` 写入 | ✅ 修复后 `DecodeBlob` 正确解码（此前导致 `invalid header field value`） |
+| 协议唤起时闪控制台窗口 | 以 `-H=windowsgui` 构建 + `AttachConsole(ATTACH_PARENT_PROCESS)` | ✅ 协议启动不再分配控制台；终端里 `-verify`/`-play` 仍能打印（PE subsystem=GUI 实测） |
 
 ## 单元测试
 

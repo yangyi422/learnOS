@@ -10,7 +10,7 @@
 - [x] 目标 Windows 机器打通：`-verify` 5 项全 OK（config / credential / jellyfin 10.10.7 / PotPlayer / mapping），
   `-resolve` 把 `/media/电影/…mkv` 映射到 `V:\…\media\电影\…mkv`（10330139819 bytes 与 Jellyfin 一致），
   `-play` 成功启动 PotPlayer 播放 NAS 原始文件（详见 `tools/lifeos-player-bridge/docs/TEST-REPORT.md`）
-- [ ] 浏览器 → `lifeos-player://` → LifeOS 页面按钮的最终确认（待用户在部署后的详情页点一次）
+- [x] 浏览器链路打通：云端页面点「使用 PotPlayer 播放」→ 浏览器确认框 → PotPlayer 播放 NAS 原始文件（真实截图已归档到测试报告）
 - [ ] 电视剧单集播放：延期（Bridge 按单个 itemId 工作，后续从 Jellyfin 取 Season/Episode）
 
 ## 媒体中心重构：内容类型入口页 + 分类详情页（2026-11-17）
@@ -565,6 +565,3 @@ Phase 6 不实现探索雷达、问题池、Agent 导航、知识来源可信度
 - [x] Apply 事务、DAG 校验、旧 Lesson ID / CurrentLesson / 学习历史安全边界
 - [x] Course Archive 课程覆盖度与扩充草案审核界面
 - [x] 主线 CurrentLesson 显式切换、规则型下一课推荐和 Knowledge Structure 学习入口
-- [x] Blueprint Unit Expansion 与按 Unit 生成 Curriculum Draft 的渐进式课程生长入口
-- [x] 知识结构页按 Unit 剩余重要性选择课程草案生成范围，避免继续生成节点的空草案请求
-- [x] LearningView 下一步、首页继续/选择/展开知识世界联动
