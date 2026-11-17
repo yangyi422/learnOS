@@ -29,6 +29,7 @@ type Config struct {
 		UserID           string   `yaml:"user_id"`
 		CredentialTarget string   `yaml:"credential_target"`
 		AllowedLibraries []string `yaml:"allowed_libraries"`
+		TimeoutSeconds   int      `yaml:"timeout_seconds"`
 	} `yaml:"jellyfin"`
 	Player struct {
 		Executable string `yaml:"executable"`
@@ -80,6 +81,9 @@ func (c *Config) normalize() error {
 	}
 	if strings.TrimSpace(c.Jellyfin.CredentialTarget) == "" {
 		c.Jellyfin.CredentialTarget = DefaultCredentialTarget
+	}
+	if c.Jellyfin.TimeoutSeconds <= 0 {
+		c.Jellyfin.TimeoutSeconds = 20
 	}
 	if len(c.Jellyfin.AllowedLibraries) == 0 {
 		c.Jellyfin.AllowedLibraries = []string{"movies"}

@@ -49,6 +49,7 @@ func main() {
 	showVersion := flag.Bool("version", false, "print the bridge version")
 	probe := flag.String("probe", "", "map one Jellyfin container path through the configured mappings and report it")
 	resolve := flag.String("resolve", "", "resolve one Jellyfin item id end to end (library, path, file) without launching the player")
+	play := flag.String("play", "", "play one Jellyfin item id exactly as the protocol would, but from the console")
 	flag.Parse()
 
 	if *showVersion {
@@ -65,12 +66,16 @@ func main() {
 	if closeLog != nil {
 		defer closeLog()
 	}
+	// Console output is produced here, not by the file logger: a protocol launch has no
+	// console, but a manual invocation must always show why it stopped.
 	info := func(step, message string, secrets ...string) {
+		fmt.Fprintf(os.Stdout, "info  %s — %s\n", step, logger.Redact(message, secrets...))
 		if log != nil {
 			log.Info(step, message, secrets...)
 		}
 	}
 	fail := func(step, message string, secrets ...string) {
+		fmt.Fprintf(os.Stderr, "FAIL  %s — %s\n", step, logger.Redact(message, secrets...))
 		if log != nil {
 			log.Fail(step, message, secrets...)
 		}
@@ -81,6 +86,11 @@ func main() {
 	}
 	if *probe != "" {
 		os.Exit(runProbe(*configPath, *probe))
+	}
+	if *play != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		os.Exit(run(ctx, *configPath, "lifeos-player://play?itemId="+*play, info, fail))
 	}
 	if *resolve != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -114,7 +124,7 @@ func run(ctx context.Context, configPath, rawURL string, info, fail logFunc) int
 		fail("credential", credentialHint(err))
 		return exitCredential
 	}
-	client := jellyfin.New(cfg.Jellyfin.BaseURL, strings.TrimSpace(credential.Secret), 12*time.Second)
+	client := jellyfin.New(cfg.Jellyfin.BaseURL, strings.TrimSpace(credential.Secret), time.Duration(cfg.Jellyfin.TimeoutSeconds)*time.Second)
 
 	ancestors, err := client.Ancestors(ctx, request.ItemID, cfg.Jellyfin.UserID)
 	if err != nil {
@@ -193,6 +203,9 @@ func errorHint(err error) string {
 	case errors.Is(err, jellyfin.ErrNotFound):
 		return "Jellyfin has no such item (deleted, or not visible to the dedicated user)"
 	case errors.Is(err, jellyfin.ErrUnavailable):
+		if strings.Contains(err.Error(), "Timeout exceeded") || strings.Contains(err.Error(), "deadline exceeded") {
+			return "Jellyfin did not answer in time — the server may be busy or indexing, or the NAS is slow (" + err.Error() + "); raise jellyfin.timeout_seconds if this repeats"
+		}
 		// Keep the transport cause: "unreachable" alone hides DNS, TLS and proxy errors.
 		return "Jellyfin is unreachable — check the home network and NAS (" + err.Error() + ")"
 	}
@@ -232,7 +245,7 @@ func runVerify(configPath string, info, fail logFunc) int {
 			report(true, "credential", cfg.Jellyfin.CredentialTarget, exitOK)
 		}
 
-		if err := pingJellyfin(cfg.Jellyfin.BaseURL, token); err != nil {
+		if err := pingJellyfin(cfg.Jellyfin.BaseURL, token, time.Duration(cfg.Jellyfin.TimeoutSeconds)*time.Second); err != nil {
 			report(false, "jellyfin", errorHint(err), exitJellyfin)
 		} else {
 			report(true, "jellyfin", cfg.Jellyfin.BaseURL, exitOK)
@@ -282,7 +295,7 @@ func runResolve(ctx context.Context, configPath, itemID string) int {
 		fmt.Println("FAIL  credential — " + credentialHint(err))
 		return exitCredential
 	}
-	client := jellyfin.New(cfg.Jellyfin.BaseURL, strings.TrimSpace(credential.Secret), 12*time.Second)
+	client := jellyfin.New(cfg.Jellyfin.BaseURL, strings.TrimSpace(credential.Secret), time.Duration(cfg.Jellyfin.TimeoutSeconds)*time.Second)
 	ancestors, err := client.Ancestors(ctx, request.ItemID, cfg.Jellyfin.UserID)
 	if err != nil {
 		fmt.Println("FAIL  jellyfin — " + errorHint(err))
@@ -369,8 +382,11 @@ func messageSuffix(message string) string {
 	return " — " + message
 }
 
-func pingJellyfin(baseURL, token string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+func pingJellyfin(baseURL, token string, timeout time.Duration) error {
+	if timeout <= 0 {
+		timeout = 8 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	endpoint := strings.TrimRight(baseURL, "/") + "/System/Info"
 	if strings.TrimSpace(token) == "" {

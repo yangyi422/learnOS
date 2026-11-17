@@ -11,9 +11,10 @@ import (
 	"time"
 )
 
-// A Jellyfin token, API key or cookie value is a long opaque string; redact
-// anything that looks like one so a log line can be shared safely.
-var opaquePattern = regexp.MustCompile(`[A-Za-z0-9_\-\.]{24,}`)
+// Only real secrets are masked: the values the caller passes explicitly plus the
+// usual token fields. Item ids and user ids are 32-char hex as well, and blanking
+// them makes a log line useless for diagnosis.
+var secretFieldPattern = regexp.MustCompile(`(?i)(x-emby-token\s*[:=]\s*|api_key=|token=|accesstoken["']?\s*[:=]\s*["']?)([^\s&"',]+)`)
 
 type Logger struct {
 	w io.Writer
@@ -30,7 +31,7 @@ func New(dir string) (*Logger, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	return &Logger{w: io.MultiWriter(file, os.Stderr)}, func() { _ = file.Close() }, nil
+	return &Logger{w: file}, func() { _ = file.Close() }, nil
 }
 
 // Redact masks opaque secrets and the given exact secret values.
@@ -41,7 +42,7 @@ func Redact(message string, secrets ...string) string {
 		}
 		message = strings.ReplaceAll(message, secret, "***")
 	}
-	return opaquePattern.ReplaceAllString(message, "***")
+	return secretFieldPattern.ReplaceAllString(message, "${1}***")
 }
 
 func (l *Logger) Info(step, message string, secrets ...string) {
