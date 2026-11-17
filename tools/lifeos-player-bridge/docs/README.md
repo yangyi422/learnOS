@@ -102,6 +102,28 @@ OK    Q:\Movies\Dune.mkv (26843545600 bytes)
 退化为 `media file is missing on the mapped drive`（退出码 8）说明前缀对了但文件不在，通常是
 target 少一层目录；`no path mapping matched`（退出码 7）说明 source 前缀与 Jellyfin 返回的容器路径不一致。
 
+## 浏览器确认框（能否去掉）
+
+点击播放时 Chrome/Edge 会弹「此站点正在尝试打开 player-bridge.exe」——这是**浏览器的安全边界**，
+网页和桥接都无法绕过，只能由浏览器策略或用户选择处理。三条路：
+
+| 方案 | 管理员 | 效果 | 做法 |
+| --- | --- | --- | --- |
+| 浏览器策略（推荐） | 需要 | 之后完全无弹窗 | `allow-browser-launch.ps1`（需提权；Windows 对 Policies 键做了 ACL 保护） |
+| Firefox 免管理员 | 不需要 | 完全无弹窗 | `about:config` → `network.protocol-handler.warn-external.lifeos-player` = false |
+| 保持现状 | 不需要 | 每次点一次「打开」 | 浏览器不再记住该选择，无法持久关闭 |
+
+```powershell
+# 用管理员 PowerShell 执行；只对指定的一个来源生效
+.\scripts\allow-browser-launch.ps1 -Origin https://43.138.202.56:8888
+# 撤销
+.\scripts\allow-browser-launch.ps1 -Origin https://43.138.202.56:8888 -Remove
+```
+
+写入的两个策略：`AutoLaunchProtocolsFromOrigins`（该来源 + 该协议直接启动）与
+`ExternalProtocolDialogShowAlwaysOpenCheckbox`（让对话框出现「始终允许」勾选框）。改完要**完全退出浏览器**再开，
+并在 `chrome://policy` / `edge://policy` 里点「重新加载策略」确认。
+
 ## 自检与排错
 
 ```powershell
