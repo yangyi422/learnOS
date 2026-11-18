@@ -8,15 +8,13 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
+	"lifeos/player-bridge/internal/pathmap"
 )
 
 var ErrInvalid = errors.New("invalid configuration")
-
-var windowsTargetPattern = regexp.MustCompile(`^[A-Za-z]:\\`)
 
 type Mapping struct {
 	Source string `yaml:"source"`
@@ -40,7 +38,7 @@ type Config struct {
 		CheckFileExists   bool     `yaml:"check_file_exists"`
 		AllowedExtensions []string `yaml:"allowed_extensions"`
 	} `yaml:"playback"`
-}	
+}
 
 const DefaultCredentialTarget = "lifeos-player-bridge/jellyfin"
 
@@ -111,19 +109,13 @@ func (c *Config) normalize() error {
 	}
 	for i := range c.PathMappings {
 		mapping := &c.PathMappings[i]
-		mapping.Source = strings.TrimSpace(mapping.Source)
-		mapping.Target = strings.TrimSpace(mapping.Target)
-		if !strings.HasPrefix(mapping.Source, "/") {
-			return fmt.Errorf("%w: path_mappings[%d].source must be an absolute container path", ErrInvalid, i)
+		mapping.Source, err = pathmap.NormalizeSource(mapping.Source)
+		if err != nil {
+			return fmt.Errorf("%w: path_mappings[%d].source: %v", ErrInvalid, i, err)
 		}
-		if !strings.HasSuffix(mapping.Source, "/") {
-			mapping.Source += "/"
-		}
-		if !windowsTargetPattern.MatchString(mapping.Target) {
-			return fmt.Errorf("%w: path_mappings[%d].target must be a Windows drive path like Z:\\Movies\\", ErrInvalid, i)
-		}
-		if !strings.HasSuffix(mapping.Target, "\\") {
-			mapping.Target += "\\"
+		mapping.Target, err = pathmap.NormalizeTarget(mapping.Target)
+		if err != nil {
+			return fmt.Errorf("%w: path_mappings[%d].target: %v", ErrInvalid, i, err)
 		}
 	}
 	return nil

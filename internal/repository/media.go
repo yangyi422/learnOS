@@ -68,6 +68,29 @@ func (r *MediaRepository) List(ctx context.Context, user uint, kind, source, sea
 	return items, count, err
 }
 
+// DeleteMovies removes only the explicitly selected local catalog rows. A mixed
+// batch (missing, foreign-owned or non-movie IDs) fails atomically. No requests
+// are made to Jellyfin and no media or shared cover files are removed.
+func (r *MediaRepository) DeleteMovies(ctx context.Context, user uint, ids []uint) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var count int64
+		if err := tx.Model(&model.MediaItem{}).Where("user_id = ? AND type = ? AND id IN ?", user, "movie", ids).Count(&count).Error; err != nil {
+			return err
+		}
+		if count != int64(len(ids)) {
+			return ErrMediaNotFound
+		}
+		result := tx.Where("user_id = ? AND type = ? AND id IN ?", user, "movie", ids).Delete(&model.MediaItem{})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != count {
+			return ErrMediaNotFound
+		}
+		return nil
+	})
+}
+
 // Series loads one series row by its Jellyfin id.
 func (r *MediaRepository) Series(ctx context.Context, user uint, externalID string) (model.MediaItem, error) {
 	var item model.MediaItem

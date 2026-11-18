@@ -17,9 +17,11 @@ player:
   executable: auto
   type: potplayer
 
-# Container path (inside the Jellyfin Docker container) → Windows mapped drive.
+# Absolute POSIX container path → Windows mapped drive or SMB UNC directory.
 # Confirm both sides before installing; there is no guessing in the bridge:
 # an unmatched path is refused instead of being opened.
+# Trailing separators are optional. Use YAML single quotes for UNC paths to
+# preserve backslashes, e.g. target: '\\192.168.31.122\share\Movies\'
 path_mappings:
   - source: /media/movies/
     target: Z:\Movies\

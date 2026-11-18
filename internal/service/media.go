@@ -46,6 +46,26 @@ func (s *MediaService) List(ctx context.Context, user uint, kind, source, search
 	return s.repo.List(ctx, user, kind, source, search, page, showR18)
 }
 
+// DeleteMovies only deletes catalog records; a later agent sync may import them
+// again. Keep the payload bounded and reject ambiguous/duplicate selections.
+func (s *MediaService) DeleteMovies(ctx context.Context, user uint, ids []uint) error {
+	if len(ids) == 0 || len(ids) > 100 {
+		return ErrMediaInput
+	}
+	seen := make(map[uint]bool, len(ids))
+	for _, id := range ids {
+		if id == 0 || seen[id] {
+			return ErrMediaInput
+		}
+		seen[id] = true
+	}
+	err := s.repo.DeleteMovies(ctx, user, ids)
+	if errors.Is(err, repository.ErrMediaNotFound) {
+		return ErrMediaNotFound
+	}
+	return err
+}
+
 // SeriesDetail is the payload behind the TV detail page.
 type SeriesDetail struct {
 	Series       model.MediaItem            `json:"series"`

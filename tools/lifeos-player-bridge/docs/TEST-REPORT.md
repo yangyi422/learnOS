@@ -2,6 +2,26 @@
 
 记录时间：2026-11-17 · 版本：`player-bridge 0.1.0`
 
+## Windows SMB UNC 支持（2026-11-18）
+
+- 配置与映射：保留盘符 target，新增普通 SMB UNC target（必须有 server/share）；source 维持 POSIX 绝对容器路径。统一 target 分隔符和末尾斜杠，使用 Windows `filepath.Join` 保留 UNC volume，以 `filepath.Rel` 检查目标目录边界。
+- 安全：清理前检查原始 `..`，避免先清理再校验造成漏检；继续使用完整路径段前缀、扩展名白名单和文件存在性校验，拒绝 Windows 设备路径、ADS、控制字符与尾部点/空格别名。
+- 自检：`-verify` 检查目标存在、是目录且能读取目录项，空目录有效；适用于盘符和 UNC。
+
+| 验证 | 结果 |
+| --- | --- |
+| `go test ./... -count=1 -v`（Windows amd64，含显式启用的真实 UNC / verify 集成测试） | 8 个包全部通过；覆盖盘符/UNC、根共享、混合分隔符、末尾斜杠、中文/空格/emoji、前缀边界、原始穿越、非法配置、目录与文件检查；原有协议、Jellyfin、凭据解码、日志、播放器测试通过 |
+| `go vet ./...` | 通过 |
+| 真实 NAS 只读检查 | NAS 445 端口可连通；发现当前配置共享名与 NAS 实际公布名不同，原配置的 mapping 自检失败（退出码 7）；更正为实际共享名后目录可读，`TestUNCShareAccessible` 通过 |
+| 正式配置自检 | 备份后仅修正本机 target 的共享名；config / credential / jellyfin / player / mapping 五项 OK；发布 EXE 使用默认配置执行 `-verify`，退出码 0 |
+| 构建 | 使用现有 `scripts/build.ps1`；`go version -m` 确认 `GOOS=windows`、`GOARCH=amd64`、`CGO_ENABLED=0`；仓库 `dist/player-bridge.exe` 已生成 |
+| 本机发布 | 更新协议实际指向的 `D:\Project\player-bridge\dist\player-bridge.exe`，与构建产物 SHA256 一致；旧 EXE / 配置备份于已忽略的 `.tmp/bridge-unc-before/` |
+| LifeOS 浏览器 → PotPlayer | **本轮未完成验收**。已读到真实电影详情的播放按钮；点击时浏览器连接断开，恢复后仍失败；随后自动化因无法可靠识别 Windows 浏览器地址而停止，未观察到 PotPlayer 启动，不据此宣称播放通过 |
+
+构建 / 发布 EXE SHA256：`236992D3F01176A5FCF5CDDA5B74ED134EA02488A82A4543DA460776F6B8D587`。
+HTTP、自定义协议、Jellyfin 鉴权和 PotPlayer 启动代码未改；未修改 Jellyfin 服务端路径、媒体库或文件。
+本节记录本轮结果，下面的历史播放证据不代表 UNC 浏览器播放已重新验收。
+
 ## 结论摘要
 
 | 阶段 | 内容 | 状态 | 证据 |

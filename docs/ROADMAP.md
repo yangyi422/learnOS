@@ -1,5 +1,13 @@
 # LearnOS Roadmap
 
+## 电影手动批量删除（2026-11-18）
+
+- [x] 电影分类页增加「批量删除」选择模式：画廊/列表共用勾选、全选当前页、选择数量和退出；翻页/筛选清空选择，删除前确认数量及收藏/笔记影响，提交期间禁止重复操作，失败保留选择，删空末页自动回退。
+- [x] `POST /api/v1/library/media/batch-delete`：沿用网页认证，按当前身份和电影 ID 在事务内整批删除 LifeOS 记录；1–100 个唯一正整数 ID，混入不存在/越权/非电影记录整批失败；错误不泄漏数据库细节。
+- [x] 仅删除 LifeOS 记录，不调用 Jellyfin 删除接口、不移除 NAS 或共享封面文件；无数据库结构变更。下次 Agent 同步仍可能重新导入，确认框明确说明；本轮不增加永久屏蔽规则，也不扩展电子书/电视剧删除入口。
+- [x] 前端类型检查、95 项单元测试与隔离构建通过；资料库 28 项 E2E 通过（含电影批量删除和 light/dark × 1440/1024/390 截图）；Go 媒体专项测试、受影响包 `go vet` 通过。完整 Go 包回归未全通过，观察到 Windows SQLite 临时文件占用导致清理失败，未修改无关测试。
+- [x] 本机 Windows 使用 `run-local.ps1 -RebuildWeb -Detached` 更新；`/health` 正常，首页及电影页资源与构建一致，已部署前端的 13 项电影 E2E 通过（fixture 拦截 API，不删除真实记录）。截图中的云端服务本轮未部署。
+
 ## 电视剧季 / 集与单集播放（2026-11-17）
 
 - [x] 数据：`media_items` 增量列 `series_external_id / season_external_id / season_number / episode_number / premiere_date / runtime_seconds / rating`（GORM AutoMigrate，无手工 SQL、无删数据）
@@ -11,6 +19,7 @@
 
 ## Windows 本地播放器桥接（Player Bridge，2026-11-17）
 
+- [x] 2026-11-18：target 支持 Windows 盘符和 SMB UNC（保留双反斜杠、空格、Unicode、自动补齐末尾分隔符）；source 维持 POSIX 绝对路径；清理路径前拒绝 `..`，按完整路径段匹配并检查目标内相对路径；`-verify` 检查目录存在和可读性。测试与真实环境验证结果见 Bridge 测试报告。
 - [x] P1 独立 Go 程序 `tools/lifeos-player-bridge`：`lifeos-player://play?itemId=` 解析（仅 play + 32 位 itemId）、配置校验、Jellyfin PlaybackInfo、Windows 凭据管理器读取、日志脱敏
 - [x] P2 路径映射：多规则前缀边界（`/media/movies/` 不匹配 `/media/movies2/`）、大小写不敏感、拒绝 `..` 与越界、扩展名白名单、文件/盘符存在性检查并区分「文件缺失」与「映射盘不可用」
 - [x] P3 代码完成 PotPlayer 检测与 `exec.Command` 启动（独立传参、不经 shell、启动后退出）；**真实播放未验证**（见下）

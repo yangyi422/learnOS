@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -31,6 +32,53 @@ func writeConfig(t *testing.T, body string) string {
 	return path
 }
 
+func TestLoadWindowsTargets(t *testing.T) {
+	for _, tc := range []struct{ target, want string }{
+		{`Z:\Movies`, `Z:\Movies\`},
+		{`z:/Movies//`, `z:\Movies\`},
+		{`Z:\`, `Z:\`},
+		{`\\192.168.31.122\share\Movies\`, `\\192.168.31.122\share\Movies\`},
+		{`\\nas\share`, `\\nas\share\`},
+		{`//nas/share/电影 目录/`, `\\nas\share\电影 目录\`},
+		{`\\nas\共享\电影 目录\\`, `\\nas\共享\电影 目录\`},
+	} {
+		t.Run(tc.target, func(t *testing.T) {
+			body := strings.Replace(sample, `Z:\Movies`, tc.target, 1)
+			cfg, err := Load(writeConfig(t, body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.PathMappings[0].Target != tc.want {
+				t.Fatalf("got %q, want %q", cfg.PathMappings[0].Target, tc.want)
+			}
+		})
+	}
+}
+
+func TestLoadRejectsInvalidMappingPaths(t *testing.T) {
+	for _, target := range []string{
+		`Z:Movies`, `\Movies`, `/tmp`, `\\nas`, `\\nas\`, `\\\share\Movies`,
+		`\\nas\\Movies`, `\\?\UNC\nas\share`, `\\.\C$\Movies`,
+		`Z:\Movies\..\Other`, `\\nas\share\..\Other`, `\\nas\..\Movies`,
+		`Z:\Movies\.. \Other`, `Z:\Movies:stream`, `\\nas\share\bad?name`,
+	} {
+		t.Run(target, func(t *testing.T) {
+			body := strings.Replace(sample, `Z:\Movies`, target, 1)
+			if _, err := Load(writeConfig(t, body)); err == nil {
+				t.Fatal("invalid target accepted")
+			}
+		})
+	}
+	for _, source := range []string{`media/movies`, `C:\Movies`, `\\nas\share`, `/media/../movies`, `/media\movies`} {
+		t.Run(source, func(t *testing.T) {
+			body := strings.Replace(sample, `/media/movies/`, source, 1)
+			if _, err := Load(writeConfig(t, body)); err == nil {
+				t.Fatal("invalid source accepted")
+			}
+		})
+	}
+}
+
 func TestLoadNormalizesAndValidates(t *testing.T) {
 	cfg, err := Load(writeConfig(t, sample))
 	if err != nil {
@@ -56,11 +104,11 @@ func TestLoadNormalizesAndValidates(t *testing.T) {
 func TestLoadRejectsUnsafeConfiguration(t *testing.T) {
 	cases := map[string]string{
 		"missing mapping": "jellyfin:\n  base_url: http://x\n  user_id: u\n",
-		"ftp base url": "jellyfin:\n  base_url: ftp://x\n  user_id: u\npath_mappings:\n  - source: /media/\n    target: \"Z:\\\\\"\n",
+		"ftp base url":    "jellyfin:\n  base_url: ftp://x\n  user_id: u\npath_mappings:\n  - source: /media/\n    target: \"Z:\\\\\"\n",
 		"missing user id": "jellyfin:\n  base_url: http://x\npath_mappings:\n  - source: /media/\n    target: \"Z:\\\\\"\n",
 		"relative source": "jellyfin:\n  base_url: http://x\n  user_id: u\npath_mappings:\n  - source: media/\n    target: \"Z:\\\\\"\n",
-		"posix target": "jellyfin:\n  base_url: http://x\n  user_id: u\npath_mappings:\n  - source: /media/\n    target: /tmp\n",
-		"wrong player": "jellyfin:\n  base_url: http://x\n  user_id: u\nplayer:\n  type: vlc\npath_mappings:\n  - source: /media/\n    target: \"Z:\\\\\"\n",
+		"posix target":    "jellyfin:\n  base_url: http://x\n  user_id: u\npath_mappings:\n  - source: /media/\n    target: /tmp\n",
+		"wrong player":    "jellyfin:\n  base_url: http://x\n  user_id: u\nplayer:\n  type: vlc\npath_mappings:\n  - source: /media/\n    target: \"Z:\\\\\"\n",
 	}
 	for name, body := range cases {
 		if _, err := Load(writeConfig(t, body)); err == nil {

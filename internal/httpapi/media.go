@@ -83,6 +83,33 @@ func (h *Handler) mediaList(c *gin.Context) {
 func mediaError(c *gin.Context, status int, message string) {
 	c.JSON(status, gin.H{"error": gin.H{"code": "MEDIA_ERROR", "message": message, "retryable": status >= 500}})
 }
+
+func (h *Handler) mediaBatchDelete(c *gin.Context) {
+	user, ok := projectUserID(c)
+	if !ok {
+		return
+	}
+	var input struct {
+		IDs []uint `json:"ids"`
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 8<<10)
+	if c.ShouldBindJSON(&input) != nil {
+		mediaError(c, http.StatusBadRequest, "请选择有效的电影记录（每次 1–100 项）")
+		return
+	}
+	err := h.media.DeleteMovies(c.Request.Context(), user, input.IDs)
+	switch {
+	case errors.Is(err, service.ErrMediaInput):
+		mediaError(c, http.StatusBadRequest, "请选择有效且不重复的电影记录（每次 1–100 项）")
+	case errors.Is(err, service.ErrMediaNotFound):
+		mediaError(c, http.StatusNotFound, "部分电影记录已不存在或不可删除，请刷新后重选。")
+	case err != nil:
+		mediaError(c, http.StatusInternalServerError, "媒体删除失败，请重试。")
+	default:
+		c.JSON(http.StatusOK, gin.H{"data": gin.H{"deleted": len(input.IDs)}})
+	}
+}
+
 // mediaSeries serves the TV detail page: the series row plus its season summary.
 func (h *Handler) mediaSeries(c *gin.Context) {
 	user, ok := projectUserID(c)

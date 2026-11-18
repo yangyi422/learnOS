@@ -261,8 +261,8 @@ func runVerify(configPath string, info, fail logFunc) int {
 		}
 
 		for _, mapping := range cfg.PathMappings {
-			if _, err := os.Stat(mapping.Target); err != nil {
-				report(false, "mapping", mapping.Target+" is not accessible — check the SMB drive mapping", exitPathMap)
+			if err := pathmap.CheckTargetDirectory(mapping.Target); err != nil {
+				report(false, "mapping", mapping.Target+" is not an accessible directory — check the SMB share or drive mapping and permissions", exitPathMap)
 				continue
 			}
 			report(true, "mapping", mapping.Target, exitOK)
@@ -305,6 +305,7 @@ func fetchItem(ctx context.Context, client *jellyfin.Client, itemID, userID stri
 	playbackOutcome := <-playbackCh
 	return ancestorsOutcome.value, playbackOutcome.value, ancestorsOutcome.err, playbackOutcome.err
 }
+
 // runResolve walks the same steps as a real playback but stops before launching the
 // player, so a failing item can be diagnosed without touching PotPlayer.
 func runResolve(ctx context.Context, configPath, itemID string) int {

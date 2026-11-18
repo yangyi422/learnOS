@@ -1,7 +1,7 @@
 # LifeOS Player Bridge（Windows）
 
 把 LifeOS 媒体中心里的电影交给本机 PotPlayer 播放：浏览器只发出一个自定义协议，
-Bridge 用专用 Jellyfin 用户凭证换取 PlaybackInfo，把容器路径映射成本机盘符路径，
+Bridge 用专用 Jellyfin 用户凭证换取 PlaybackInfo，把容器路径映射成本机盘符或 SMB UNC 路径，
 校验文件真实存在后启动 PotPlayer。视频不经过 LifeOS 服务器，也不经过 Mac mini。
 
 ## 运行模型
@@ -11,7 +11,7 @@ LifeOS（Vue）--lifeos-player://play?itemId=<JellyfinItemId>--> player-bridge.e
                                                                   |  Jellyfin PlaybackInfo
                                                                   |  + 媒体库白名单校验
                                                                   v
-                                                    路径映射（容器路径 → 盘符）
+                                                    路径映射（容器路径 → 盘符 / UNC）
                                                                   v
                                                      PotPlayer <file on NAS SMB>
 ```
@@ -51,7 +51,7 @@ cd tools\lifeos-player-bridge
 | `jellyfin.credential_target` | 凭据管理器条目名，默认 `lifeos-player-bridge/jellyfin` |
 | `jellyfin.allowed_libraries` | 允许播放的媒体库：CollectionType（如 `movies`）或库名（如 `电影`） |
 | `player.executable` | `auto` 自动搜索 PotPlayer，或写绝对路径 |
-| `path_mappings[]` | 容器内路径前缀 → 本机盘符前缀，**必须**以 `/` 和 `\` 结尾 |
+| `path_mappings[]` | POSIX 绝对容器路径前缀 → Windows 绝对盘符或 SMB UNC 目录；末尾分隔符自动补齐，target 的 `/` 会转为 `\` |
 | `playback.check_file_exists` | 启动前检查文件存在（建议 `true`） |
 | `playback.allowed_extensions` | 允许的容器扩展名 |
 
@@ -59,9 +59,19 @@ cd tools\lifeos-player-bridge
 
 1. 在 NAS 上查看 Jellyfin 容器的挂载：`docker inspect jellyfin --format '{{json .Mounts}}'`，
    记下宿主机目录与容器内目录（例如 `/volume1/media/movies` → `/media/movies`）。
-2. 在 Windows 上确认 SMB 映射：`net use` 或 `Get-PSDrive -PSProvider FileSystem`，
-   记下盘符对应的共享（例如 `Z:` → `\\192.168.31.122\media`）。
-3. 把**容器内**前缀写进 `source`，把**盘符**前缀写进 `target`。
+2. 在 Windows 上确认 SMB 目录可访问：可用盘符（`net use` 或 `Get-PSDrive -PSProvider FileSystem`），
+   也可直接使用 `\\192.168.31.122\share\Movies\`，无需映射盘符；SMB 身份验证沿用当前 Windows 用户会话。
+3. 把**容器内**前缀写进 `source`，把对应的盘符或 UNC 目录写进 `target`。不要修改 Jellyfin 服务端目录或媒体库。
+
+```yaml
+path_mappings:
+  - source: /media/movies/
+    target: '\\192.168.31.122\share\Movies\'
+```
+
+UNC 必须同时包含服务器和共享名；不接受 `\\nas`、设备路径 `\\?\` / `\\.\`、相对路径或 `..`。
+YAML 使用单引号或不加引号来保留反斜杠，双引号内则需要逐个转义。目录和文件名支持空格、中文及其他 Unicode 字符。
+映射按完整路径段匹配，`/media/movies/` 不会匹配 `/media/movies2/`。source 仍只接受 POSIX 绝对路径。
 
 Bridge 不做任何猜测：前缀不匹配、路径含 `..`、扩展名不在白名单、映射盘不可达、
 文件不存在，都会以明确错误退出，不会退化成“随便打开一个路径”。
@@ -87,7 +97,7 @@ cmdkey /generic:lifeos-player-bridge/jellyfin /user:<jellyfin-user-id> /pass:<ap
 
 ### 用 -probe 验证配对是否正确
 
-`-verify` 只检查目标根目录存在，**不证明路径配对正确**。配对是否成立，用一条真实路径试：
+`-verify` 检查目标是存在且可读取的目录（含 UNC；空目录也有效），**不证明路径配对正确**。配对是否成立，用一条真实路径试：
 
 ```powershell
 # 容器路径从 Jellyfin 某个条目的 PlaybackInfo 里取
@@ -200,6 +210,16 @@ $env:GOPATH='..\..\.tmp\gopath'; go test ./...
 覆盖：协议白名单与非法参数拒绝、配置校验与路径规范、路径映射边界与穿越拒绝、
 扩展名白名单、Jellyfin 状态码到错误类型的映射、媒体库白名单、日志脱敏、PotPlayer 检测。
 凭据读取依赖 Windows API，由 `-verify` 与真实播放验证，不写单元测试。
+
+可选的只读 SMB 集成测试（使用当前 Windows 会话凭据，不创建文件）：
+
+```powershell
+$env:PLAYER_BRIDGE_TEST_UNC = '\\192.168.31.122\share\Movies\'
+go test ./internal/pathmap -run TestUNCShareAccessible -v
+# 可选：以真实配置和凭据执行与 -verify 相同的检查（不启动播放器）
+$env:PLAYER_BRIDGE_TEST_CONFIG = "$env:LOCALAPPDATA\LifeOS\PlayerBridge\config.yaml"
+go test ./cmd/player-bridge -run TestVerifyUNCConfiguration -v
+```
 
 ## 未包含（延期）
 
