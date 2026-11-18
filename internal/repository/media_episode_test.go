@@ -22,6 +22,22 @@ func newMediaRepo(t *testing.T) *MediaRepository {
 	return NewMediaRepository(db)
 }
 
+func TestMediaDeleteEmptySelectionKeepsEpisodes(t *testing.T) {
+	repo := newMediaRepo(t)
+	ctx := t.Context()
+	rows := []model.MediaItem{episode("s1", "a", 1, 1, "S1E1")}
+	if err := repo.Upsert(ctx, rows); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Delete(ctx, 1, "series", nil); err != ErrMediaNotFound {
+		t.Fatalf("empty selection should be rejected: %v", err)
+	}
+	items, err := repo.Episodes(ctx, 1, "s1", -1, false)
+	if err != nil || len(items) != 1 {
+		t.Fatalf("empty selection changed episodes: count=%d err=%v", len(items), err)
+	}
+}
+
 func episode(series, season string, seasonNo, episodeNo int, title string) model.MediaItem {
 	return model.MediaItem{UserID: 1, Library: "电视剧", Source: "jellyfin", SourceID: "host", ExternalID: series + "-" + season + "-" + title,
 		Type: "episode", Title: title, SeriesExternalID: series, SeasonExternalID: season, SeasonNumber: seasonNo, EpisodeNumber: episodeNo}

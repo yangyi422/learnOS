@@ -68,23 +68,37 @@ func (r *MediaRepository) List(ctx context.Context, user uint, kind, source, sea
 	return items, count, err
 }
 
-// DeleteMovies removes only the explicitly selected local catalog rows. A mixed
-// batch (missing, foreign-owned or non-movie IDs) fails atomically. No requests
-// are made to Jellyfin and no media or shared cover files are removed.
-func (r *MediaRepository) DeleteMovies(ctx context.Context, user uint, ids []uint) error {
+// Delete removes the explicitly selected local catalog rows of one kind. Series
+// episodes are removed in the same transaction, matching their full origin so
+// another user's or another source's copy of the series remains untouched.
+// No source media, remote catalog entries or shared cover files are removed.
+func (r *MediaRepository) Delete(ctx context.Context, user uint, kind string, ids []uint) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var count int64
-		if err := tx.Model(&model.MediaItem{}).Where("user_id = ? AND type = ? AND id IN ?", user, "movie", ids).Count(&count).Error; err != nil {
+		var items []model.MediaItem
+		if err := tx.Where("user_id = ? AND type = ? AND id IN ?", user, kind, ids).Find(&items).Error; err != nil {
 			return err
 		}
-		if count != int64(len(ids)) {
+		if len(items) == 0 || len(items) != len(ids) {
 			return ErrMediaNotFound
 		}
-		result := tx.Where("user_id = ? AND type = ? AND id IN ?", user, "movie", ids).Delete(&model.MediaItem{})
+		if kind == "series" {
+			origins := make([]clause.Expression, 0, len(items))
+			for _, item := range items {
+				origins = append(origins, clause.And(
+					clause.Eq{Column: "source", Value: item.Source},
+					clause.Eq{Column: "source_id", Value: item.SourceID},
+					clause.Eq{Column: "series_external_id", Value: item.ExternalID},
+				))
+			}
+			if err := tx.Where("user_id = ? AND type = ?", user, "episode").Where(clause.Or(origins...)).Delete(&model.MediaItem{}).Error; err != nil {
+				return err
+			}
+		}
+		result := tx.Where("user_id = ? AND type = ? AND id IN ?", user, kind, ids).Delete(&model.MediaItem{})
 		if result.Error != nil {
 			return result.Error
 		}
-		if result.RowsAffected != count {
+		if result.RowsAffected != int64(len(ids)) {
 			return ErrMediaNotFound
 		}
 		return nil

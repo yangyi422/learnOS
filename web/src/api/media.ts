@@ -49,14 +49,16 @@ export async function listMedia(query: { q?: string; type?: string; source?: str
   return { items: Array.isArray(data.items) ? data.items : [], total: Number(data.total ?? 0) }
 }
 
-export async function deleteMovies(ids: number[]): Promise<number> {
+export type MediaDeleteKind = 'movie' | 'series' | 'book'
+
+export async function deleteMedia(ids: number[], type: MediaDeleteKind = 'movie'): Promise<number> {
   const response = await fetch('/api/v1/library/media/batch-delete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ids }),
+    body: JSON.stringify({ ids, type }),
   })
   if (response.status === 401) throw new Error('登录已失效，请重新登录后再删除。')
-  if (response.status === 404) throw new Error('部分电影记录已不存在或不可删除，请刷新后重选。')
+  if (response.status === 404) throw new Error('部分媒体记录已不存在或不可删除，请刷新后重选。')
   if (!response.ok) throw new Error('媒体删除失败，请重试。')
   const payload = await response.json()
   if (payload?.data?.deleted !== ids.length) throw new Error('删除响应异常，请刷新列表确认结果。')

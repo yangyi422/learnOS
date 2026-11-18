@@ -2,16 +2,19 @@ import { expect, test, type Page } from "@playwright/test";
 import type { Collection, LibraryPage, Section } from "../src/api/library";
 import type { MediaItem } from "../src/api/media";
 
-// Movie fixtures never modify the user's media catalog or contact Jellyfin.
-async function mockMovies(page: Page, count = 6) {
+// Media fixtures never modify the user's catalog or contact Jellyfin/Calibre.
+async function mockMovies(page: Page, count = 6, kind: "movie" | "series" | "book" = "movie") {
+  const label = { movie: "电影", series: "电视剧", book: "电子书" }[kind];
   const state = {
     items: Array.from({ length: count }, (_, index): MediaItem => ({
-      id: index + 1, Type: "movie", Source: "jellyfin",
-      Title: index === 0 ? "很长的电影名称：中文与 Unicode 🎬，用于检查选择框和换行" : `合成电影 ${index + 1}`,
+      id: index + 1, Type: kind, Source: kind === "book" ? "calibre" : "jellyfin",
+      external_id: kind === "series" ? (index + 1).toString(16).padStart(32, "0") : undefined,
+      Title: index === 0 ? `很长的${label}名称：中文与 Unicode 🎬，用于检查选择框和换行` : `合成${label} ${index + 1}`,
       Description: "电影简介，包含空格和中文。这里只是固定的测试数据。",
       Year: 2020 + index, updated_at: "2026-11-18T08:00:00Z",
     })),
     deletes: [] as number[][],
+    deleteTypes: [] as string[],
     failDelete: false,
     failList: false,
     delayDelete: 0,
@@ -22,21 +25,47 @@ async function mockMovies(page: Page, count = 6) {
     if (url.pathname === "/api/v1/auth/me") return reply({ id: 1, username: "fixture", role: "admin", status: "active" });
     if (url.pathname === "/api/v1/library/media/batch-delete") {
       const ids = route.request().postDataJSON().ids as number[];
+      const type = route.request().postDataJSON().type || "movie";
       state.deletes.push(ids);
+      state.deleteTypes.push(type);
       if (state.delayDelete) await new Promise(resolve => setTimeout(resolve, state.delayDelete));
       if (state.failDelete) return route.fulfill({ status: 500, json: { error: { message: "媒体删除失败，请重试。" } } });
+      if (ids.some(id => !state.items.some(item => item.id === id && item.Type === type))) {
+        return route.fulfill({ status: 404, json: { error: { message: "媒体记录已变化" } } });
+      }
       state.items = state.items.filter(item => !ids.includes(item.id));
       return reply({ deleted: ids.length });
     }
     if (url.pathname === "/api/v1/library/media") {
       if (state.failList) return route.fulfill({ status: 500, json: { error: { message: "读取失败" } } });
-      const items = state.items.filter(item => item.Title.includes(url.searchParams.get("q") || ""));
+      const items = state.items.filter(item => item.Type === url.searchParams.get("type") && item.Title.includes(url.searchParams.get("q") || ""));
       const start = (Number(url.searchParams.get("page") || 1) - 1) * 24;
       return reply({ items: items.slice(start, start + 24), total: items.length });
     }
     return reply([]);
   });
   return state;
+}
+
+for (const kind of ["series", "book"] as const) {
+  const route = kind === "series" ? "series" : "books";
+  const label = kind === "series" ? "电视剧" : "电子书";
+  for (const theme of ["light", "dark"] as const) {
+    for (const width of [1440, 390]) {
+      test(`扩展分类页面外观 ${kind} ${theme} ${width}`, async ({ page }, info) => {
+        await page.setViewportSize({ width, height: 1000 });
+        await page.emulateMedia({ reducedMotion: "reduce", colorScheme: theme });
+        await page.addInitScript(theme => localStorage.setItem("learnos-theme", theme), theme);
+        await page.clock.setFixedTime(new Date("2026-11-18T08:00:00Z"));
+        await mockMovies(page, 6, kind);
+        await page.goto(`/explore/library/media/${route}`);
+        await expect(page.locator(".media-card")).toHaveCount(6);
+        await expect(page.getByRole("heading", { name: label, exact: true })).toBeVisible();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+        await page.screenshot({ path: info.outputPath(`${kind}-${theme}-${width}.png`), fullPage: true });
+      });
+    }
+  }
 }
 
 async function setMovieCheck(page: Page, name: string | RegExp, checked = true) {
@@ -46,6 +75,102 @@ async function setMovieCheck(page: Page, name: string | RegExp, checked = true) 
   if (await input.isChecked() !== checked) await input.locator("xpath=ancestor::label").click();
   await expect(input).toBeChecked({ checked });
 }
+
+for (const kind of ["series", "book"] as const) {
+  const category = kind === "series" ? "series" : "books";
+  const label = kind === "series" ? "电视剧" : "电子书";
+  for (const theme of ["light", "dark"] as const) {
+    for (const width of [1440, 390]) {
+      test(`扩展分类批量选择 ${kind} ${theme} ${width}`, async ({ page }, info) => {
+        await page.setViewportSize({ width, height: 1000 });
+        await page.emulateMedia({ reducedMotion: "reduce", colorScheme: theme });
+        await page.addInitScript(theme => localStorage.setItem("learnos-theme", theme), theme);
+        await page.clock.setFixedTime(new Date("2026-11-18T08:00:00Z"));
+        const state = await mockMovies(page, 6, kind);
+        await page.goto(`/explore/library/media/${category}`);
+        await page.getByRole("button", { name: "批量删除", exact: true }).click();
+        const first = page.getByRole("checkbox", { name: `勾选《合成${label} 6》`, exact: true });
+        await first.focus();
+        await page.keyboard.press("Space");
+        await expect(first).toBeChecked();
+        await setMovieCheck(page, new RegExp(`勾选《很长的${label}名称`));
+        await expect(page.getByRole("checkbox", { name: "全选当前页", exact: true })).toHaveJSProperty("indeterminate", true);
+        await page.evaluate(() => window.scrollTo(0, 0));
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+        await page.screenshot({ path: info.outputPath(`${kind}-selected-${theme}-${width}.png`), fullPage: true, animations: "disabled" });
+        await page.getByRole("button", { name: "删除所选（2）" }).click();
+        const confirmation = page.getByRole("dialog", { name: `删除 2 条${label}记录？` });
+        await expect(confirmation).toBeVisible();
+        // Wait for the teleported overlay's enter transition as well as its
+        // child dialog; a visible child can still have a transparent ancestor.
+        await expect(page.locator(".el-overlay.is-message-box")).not.toHaveClass(/fade-in-linear-enter/);
+        await expect(confirmation).toContainText(kind === "series" ? "同时删除这些电视剧在 LifeOS 中的分集记录" : "不会删除源电子书文件或修改 Calibre 图书库");
+        await expect(confirmation).toContainText("下次同步可能重新导入");
+        await page.screenshot({ path: info.outputPath(`${kind}-confirm-${theme}-${width}.png`), animations: "disabled" });
+        await confirmation.getByRole("button", { name: "取消", exact: true }).click();
+        expect(state.deletes).toHaveLength(0);
+        await expect(page.getByRole("button", { name: "删除所选（2）" })).toBeEnabled();
+      });
+    }
+  }
+
+  test(`扩展分类删除流程 ${kind} 保留失败选择并清理末页`, async ({ page }) => {
+    const state = await mockMovies(page, 25, kind);
+    await page.goto(`/explore/library/media/${category}`);
+    await page.getByRole("button", { name: "批量删除", exact: true }).click();
+    await page.getByRole("button", { name: `选择《合成${label} 24》`, exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/media/${category}$`));
+    await expect(page.locator(".el-dialog")).toHaveCount(0);
+    await page.getByRole("button", { name: "列表", exact: true }).click();
+    await expect(page.getByRole("checkbox", { name: `勾选《合成${label} 24》`, exact: true })).toBeChecked();
+    await setMovieCheck(page, "全选当前页");
+    await expect(page.getByRole("button", { name: "删除所选（24）" })).toBeEnabled();
+    await page.locator(".el-pager").getByText("2", { exact: true }).click();
+    await expect(page.locator(".media-list__row")).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "删除所选（0）" })).toBeDisabled();
+    await setMovieCheck(page, "全选当前页");
+    state.failDelete = true;
+    await page.getByRole("button", { name: "删除所选（1）" }).click();
+    await page.getByRole("button", { name: "确认删除", exact: true }).click();
+    await expect(page.locator(".media-batch").getByRole("alert")).toContainText("媒体删除失败");
+    await expect(page.getByRole("checkbox", { name: "全选当前页", exact: true })).toBeChecked();
+    state.failDelete = false;
+    state.delayDelete = 300;
+    await page.getByRole("button", { name: "删除所选（1）" }).click();
+    await page.getByRole("button", { name: "确认删除", exact: true }).click();
+    await expect(page.getByRole("button", { name: "删除所选（1）" })).toBeDisabled();
+    await expect(page.locator(".media-list__row")).toHaveCount(24);
+    expect(state.deletes).toEqual([[25], [25]]);
+    expect(state.deleteTypes).toEqual([kind, kind]);
+    await expect(page.locator(".el-pagination")).toHaveCount(0);
+    await setMovieCheck(page, "全选当前页");
+    await page.getByRole("textbox", { name: "媒体标题" }).fill("很长");
+    await page.getByRole("button", { name: "搜索", exact: true }).click();
+    await expect(page.locator(".media-list__row")).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "删除所选（0）" })).toBeDisabled();
+    await setMovieCheck(page, "全选当前页");
+    await page.getByRole("button", { name: "删除所选（1）" }).click();
+    await page.getByRole("button", { name: "确认删除", exact: true }).click();
+    await expect(page.getByText("暂无媒体", { exact: true })).toBeVisible();
+    await expect(page.getByRole("checkbox", { name: "全选当前页", exact: true })).toBeDisabled();
+  });
+}
+
+test("扩展分类切换清空旧选择，游戏仍为预留入口", async ({ page }) => {
+  const state = await mockMovies(page, 6, "book");
+  await page.goto("/explore/library/media/books");
+  await page.getByRole("button", { name: "批量删除", exact: true }).click();
+  await setMovieCheck(page, "全选当前页");
+  await page.getByRole("link", { name: "返回媒体中心", exact: true }).click();
+  await page.locator('a[href="/explore/library/media/series"]').click();
+  await expect(page.locator(".media-batch")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "批量删除", exact: true })).toBeDisabled();
+  await page.getByRole("link", { name: "返回媒体中心", exact: true }).click();
+  await page.locator('a[href="/explore/library/media/games"]').click();
+  await expect(page.getByText("游戏库即将接入", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "批量删除", exact: true })).toHaveCount(0);
+  expect(state.deletes).toHaveLength(0);
+});
 
 for (const theme of ["light", "dark"] as const) {
   for (const width of [1440, 390]) {

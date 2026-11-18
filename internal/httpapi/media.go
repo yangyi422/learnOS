@@ -90,19 +90,20 @@ func (h *Handler) mediaBatchDelete(c *gin.Context) {
 		return
 	}
 	var input struct {
-		IDs []uint `json:"ids"`
+		IDs  []uint `json:"ids"`
+		Type string `json:"type"`
 	}
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 8<<10)
 	if c.ShouldBindJSON(&input) != nil {
-		mediaError(c, http.StatusBadRequest, "请选择有效的电影记录（每次 1–100 项）")
+		mediaError(c, http.StatusBadRequest, "请选择有效的媒体记录（每次 1–100 项）")
 		return
 	}
-	err := h.media.DeleteMovies(c.Request.Context(), user, input.IDs)
+	err := h.media.Delete(c.Request.Context(), user, input.Type, input.IDs)
 	switch {
 	case errors.Is(err, service.ErrMediaInput):
-		mediaError(c, http.StatusBadRequest, "请选择有效且不重复的电影记录（每次 1–100 项）")
+		mediaError(c, http.StatusBadRequest, "请选择有效类别及不重复的媒体记录（每次 1–100 项）")
 	case errors.Is(err, service.ErrMediaNotFound):
-		mediaError(c, http.StatusNotFound, "部分电影记录已不存在或不可删除，请刷新后重选。")
+		mediaError(c, http.StatusNotFound, "部分媒体记录已不存在或不可删除，请刷新后重选。")
 	case err != nil:
 		mediaError(c, http.StatusInternalServerError, "媒体删除失败，请重试。")
 	default:

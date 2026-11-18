@@ -30,10 +30,10 @@
           <button type="button" :aria-pressed="view === 'list'" :disabled="batchBusy" @click="view = 'list'">列表</button>
         </div>
         <el-button native-type="submit" :disabled="batchBusy">搜索</el-button>
-        <el-button v-if="kind === 'movie' && !batchMode" :disabled="loading || !!error || !items.length" @click="batchMode = true">批量删除</el-button>
+        <el-button v-if="batchKind && !batchMode" :disabled="loading || !!error || !items.length" @click="batchMode = true">批量删除</el-button>
       </form>
 
-      <section v-if="batchMode" class="media-batch" aria-label="批量选择电影">
+      <section v-if="batchMode" class="media-batch" :aria-label="`批量选择${label}`">
         <div class="media-batch__controls">
           <el-checkbox :model-value="allSelected" :indeterminate="selectedIDs.length > 0 && !allSelected" :disabled="loading || batchBusy || !items.length" @change="selectPage(Boolean($event))">全选当前页</el-checkbox>
           <span class="media-muted" role="status">已选择 {{ selectedIDs.length }} 项</span>
@@ -144,7 +144,7 @@ import { useRoute, useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 import PageHeader from "../components/PageHeader.vue";
 import PageShell from "../components/PageShell.vue";
-import { deleteMovies, listMedia, mediaCoverURL, type MediaItem } from "@/api/media";
+import { deleteMedia, listMedia, mediaCoverURL, type MediaItem } from "@/api/media";
 import {
   isReservedMediaKind,
   mediaCategoryByRoute,
@@ -160,6 +160,7 @@ import "@/library.css";
 const route = useRoute();
 const router = useRouter();
 const kind = computed<MediaCategoryKind | undefined>(() => mediaCategoryByRoute[String(route.params.kind ?? "")]);
+const batchKind = computed(() => kind.value === "movie" || kind.value === "series" || kind.value === "book" ? kind.value : undefined);
 const label = computed(() => (kind.value ? mediaKindName(kind.value) : "媒体分类"));
 const reserved = computed(() => (kind.value ? isReservedMediaKind(kind.value) : false));
 const r18Relevant = computed(() => kind.value === "movie" || kind.value === "series");
@@ -233,14 +234,18 @@ function exitBatchMode() {
 }
 
 async function confirmDelete() {
-  if (batchBusy.value || loading.value || !selectedIDs.value.length) return;
+  if (!batchKind.value || batchBusy.value || loading.value || !selectedIDs.value.length) return;
   const ids = [...selectedIDs.value];
+  const type = batchKind.value;
+  const itemLabel = label.value;
+  const episodeNotice = type === "series" ? "同时删除这些电视剧在 LifeOS 中的分集记录。" : "";
+  const sourceNotice = type === "book" ? "不会删除源电子书文件或修改 Calibre 图书库" : "不会删除 NAS 文件或 Jellyfin 媒体";
   const context = request;
   confirming.value = true;
   try {
     await ElMessageBox.confirm(
-      `将从 LifeOS 删除所选 ${ids.length} 条电影记录及其收藏、笔记，无法撤销。不会删除 NAS 文件或 Jellyfin 媒体；下次同步可能重新导入。`,
-      `删除 ${ids.length} 条电影记录？`,
+      `将从 LifeOS 删除所选 ${ids.length} 条${itemLabel}记录及其收藏、笔记，无法撤销。${episodeNotice}${sourceNotice}；下次同步可能重新导入。`,
+      `删除 ${ids.length} 条${itemLabel}记录？`,
       { confirmButtonText: "确认删除", cancelButtonText: "取消", type: "warning", confirmButtonClass: "el-button--danger" },
     );
   } catch {
@@ -252,10 +257,10 @@ async function confirmDelete() {
   deleting.value = true;
   deleteError.value = "";
   try {
-    const deleted = await deleteMovies(ids);
+    const deleted = await deleteMedia(ids, type);
     if (context !== request) return;
     selectedIDs.value = [];
-    ElMessage.success(`已删除 ${deleted} 条电影记录`);
+    ElMessage.success(`已删除 ${deleted} 条${itemLabel}记录${type === "series" ? "及其分集" : ""}`);
     const lastPage = Math.max(1, Math.ceil((mediaTotal.value - deleted) / 24));
     await load(Math.min(page.value, lastPage));
   } catch (cause) {

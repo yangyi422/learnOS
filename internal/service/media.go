@@ -46,10 +46,13 @@ func (s *MediaService) List(ctx context.Context, user uint, kind, source, search
 	return s.repo.List(ctx, user, kind, source, search, page, showR18)
 }
 
-// DeleteMovies only deletes catalog records; a later agent sync may import them
-// again. Keep the payload bounded and reject ambiguous/duplicate selections.
-func (s *MediaService) DeleteMovies(ctx context.Context, user uint, ids []uint) error {
-	if len(ids) == 0 || len(ids) > 100 {
+// Delete only deletes catalog records; a later agent sync may import them again.
+// An omitted kind retains the original movie-only API behavior.
+func (s *MediaService) Delete(ctx context.Context, user uint, kind string, ids []uint) error {
+	if kind == "" {
+		kind = "movie"
+	}
+	if (kind != "movie" && kind != "series" && kind != "book") || len(ids) == 0 || len(ids) > 100 {
 		return ErrMediaInput
 	}
 	seen := make(map[uint]bool, len(ids))
@@ -59,7 +62,7 @@ func (s *MediaService) DeleteMovies(ctx context.Context, user uint, ids []uint) 
 		}
 		seen[id] = true
 	}
-	err := s.repo.DeleteMovies(ctx, user, ids)
+	err := s.repo.Delete(ctx, user, kind, ids)
 	if errors.Is(err, repository.ErrMediaNotFound) {
 		return ErrMediaNotFound
 	}
